@@ -15,6 +15,12 @@ einen eigenen Versionsabschnitt verschieben.
   wenn `e3dc_rscp` verbunden war – auf einem Testsystem ~24 s, in denen die
   Oberfläche schon lud und das Modul mit 404 scheiterte. `e3dc_rscp` ist keine
   Manifest-Abhängigkeit mehr; der Config-Entry wartet stattdessen selbst darauf.
+- **Einspeisebegrenzung pendelte im Regeltakt** zwischen `feed_in_limit` und
+  der Folgephase (Korridor/Spreading): Die Phase regelt die Einspeisung genau
+  auf das Limit und wurde dann mangels Überschuss sofort beendet, die
+  Folgephase lud weniger, die Einspeisung stieg wieder über das Limit.
+  Gehalten wird jetzt über den Überschuss ohne Akkuladung und nur, solange die
+  übrige Kaskade ihn nicht selbst aufnimmt.
 
 ---
 

@@ -1159,6 +1159,7 @@ def _decide_core(
     previous_phase_since: datetime | None = None,
     previous_battery_priority: bool = False,
     price_plan: PricePlanAction | None = None,
+    skip_feed_in: bool = False,
 ) -> MaestroDecision:
     """Determine the desired action for this control cycle.
 
@@ -1324,14 +1325,45 @@ def _decide_core(
     # Hysterese: Neuaktivierung erst ab FEED_IN_TRIGGER_EXCESS_W über dem Limit.
     # Phase wird gehalten solange excess > FEED_IN_RELEASE_EXCESS_W (verhindert
     # sofortigen Abbruch durch Messrauschen, z.B. 4–150 W Schwankungen).
+    #
+    # Halten: grid_power ist die Einspeisung *nach* dem eigenen Ladebefehl,
+    # den diese Phase genau auf das Limit regelt – excess ≈ 0 beendet sie im
+    # nächsten Takt, die Folgephase lädt weniger, und das Spiel beginnt von
+    # vorn. Gehalten wird deshalb über den Überschuss ohne Akkuladung, und nur
+    # solange die übrige Kaskade ihn nicht selbst aufnimmt.
     _feed_in_excess = state.grid_power - feed_in_limit
-    _feed_in_active = (
-        _feed_in_excess >= FEED_IN_TRIGGER_EXCESS_W
-        or (
-            previous_phase == PHASE_FEED_IN_LIMIT
-            and _feed_in_excess > FEED_IN_RELEASE_EXCESS_W
+    _feed_in_needed = state.battery_power + _feed_in_excess
+    _feed_in_active = not skip_feed_in and _feed_in_excess >= FEED_IN_TRIGGER_EXCESS_W
+    if (
+        not skip_feed_in
+        and not _feed_in_active
+        and previous_phase == PHASE_FEED_IN_LIMIT
+        and _feed_in_needed > FEED_IN_RELEASE_EXCESS_W
+    ):
+        fallback = _decide_core(
+            state,
+            params,
+            now,
+            regelung_aktiv=regelung_aktiv,
+            curtailment_guard_active=curtailment_guard_active,
+            current_price=current_price,
+            grid_charged_today_kwh=grid_charged_today_kwh,
+            hp_running=hp_running,
+            hp_last_change_minutes=hp_last_change_minutes,
+            force_discharge=force_discharge,
+            previous_phase=previous_phase,
+            previous_phase_since=previous_phase_since,
+            previous_battery_priority=previous_battery_priority,
+            price_plan=price_plan,
+            skip_feed_in=True,
         )
-    )
+        if fallback.charge_power_limit is None:
+            absorbs = fallback.power_mode == POWER_MODE_NORMAL
+        else:
+            absorbs = fallback.charge_power_limit >= _feed_in_needed
+        if absorbs:
+            return fallback
+        _feed_in_active = True
     if _feed_in_active:
         # Akku-voll-Schutz: bei (nahezu) vollem Akku kann eine zusätzliche
         # Ladeanforderung den Überschuss nicht aufnehmen → Wechselrichter
@@ -1350,7 +1382,7 @@ def _decide_core(
                 target_soc=target,
             )
         excess = _feed_in_excess
-        boost = min(state.battery_power + excess, params.max_charge_power)
+        boost = min(_feed_in_needed, params.max_charge_power)
         return MaestroDecision(
             phase=PHASE_FEED_IN_LIMIT,
             reason=(
