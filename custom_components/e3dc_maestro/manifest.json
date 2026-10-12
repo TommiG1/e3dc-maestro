@@ -1,10 +1,10 @@
 {
   "domain": "e3dc_maestro",
   "name": "E3DC Maestro",
-  "after_dependencies": ["e3dc_rscp", "lovelace", "energy", "recorder"],
+  "after_dependencies": ["lovelace", "energy", "recorder"],
   "codeowners": ["@TommiG1"],
   "config_flow": true,
-  "dependencies": ["e3dc_rscp", "frontend", "http", "lovelace"],
+  "dependencies": ["frontend", "http", "lovelace"],
   "documentation": "https://github.com/TommiG1/hacs-e3dc-maestro",
   "integration_type": "hub",
   "iot_class": "local_polling",
