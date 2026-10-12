@@ -9,6 +9,14 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Behoben
+- **Einspeisebegrenzung pendelte im Regeltakt** zwischen `feed_in_limit` und
+  der Folgephase (Korridor/Spreading): Die Phase regelt die Einspeisung genau
+  auf das Limit und wurde dann mangels Überschuss sofort beendet, die
+  Folgephase lud weniger, die Einspeisung stieg wieder über das Limit.
+  Gehalten wird jetzt über den Überschuss ohne Akkuladung und nur, solange die
+  übrige Kaskade ihn nicht selbst aufnimmt.
+
 ---
 
 ## [0.4.0-beta.6] – Netzladung im Tiefpreis ohne künstliche Bremse (2026-10-10)

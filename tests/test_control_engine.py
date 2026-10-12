@@ -168,6 +168,31 @@ class TestFeedInLimit:
         decision = decide(state, params, _now(7, 15, 13), previous_phase="corridor")
         assert decision.phase != PHASE_FEED_IN_LIMIT
 
+    def test_holds_while_own_charge_pins_export_to_limit(self):
+        """Export sits exactly at the limit because of the phase's own boost:
+        releasing would hand over to spreading (~700 W) and export jumps back
+        above the limit on the next cycle."""
+        state = MaestroState(soc=50, pv_power=9600, house_power=600, grid_power=7000, battery_power=2000)
+        params = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "ht_enabled": False})
+        decision = decide(state, params, _now(7, 15, 11), previous_phase=PHASE_FEED_IN_LIMIT)
+        assert decision.phase == PHASE_FEED_IN_LIMIT
+        assert decision.charge_power_limit == pytest.approx(2000)
+
+    def test_releases_when_cascade_absorbs_the_excess(self):
+        """Late corridor charges more than the feed-in boost would → hand over."""
+        state = MaestroState(soc=50, pv_power=9600, house_power=600, grid_power=7000, battery_power=2000)
+        params = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "ht_enabled": False})
+        decision = decide(state, params, _now(7, 15, 19), previous_phase=PHASE_FEED_IN_LIMIT)
+        assert decision.phase != PHASE_FEED_IN_LIMIT
+        assert decision.charge_power_limit >= 2000
+
+    def test_releases_when_surplus_drops_below_limit(self):
+        """Without any charging the export would stay below the limit → release."""
+        state = MaestroState(soc=50, pv_power=7500, house_power=600, grid_power=6500, battery_power=400)
+        params = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "ht_enabled": False})
+        decision = decide(state, params, _now(7, 15, 11), previous_phase=PHASE_FEED_IN_LIMIT)
+        assert decision.phase != PHASE_FEED_IN_LIMIT
+
 
 class TestHTProtection:
     def test_active_in_window_when_soc_at_or_below_reserve(self):
