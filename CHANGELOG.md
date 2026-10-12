@@ -15,6 +15,8 @@ einen eigenen Versionsabschnitt verschieben.
   wenn `e3dc_rscp` verbunden war – auf einem Testsystem ~24 s, in denen die
   Oberfläche schon lud und das Modul mit 404 scheiterte. `e3dc_rscp` ist keine
   Manifest-Abhängigkeit mehr; der Config-Entry wartet stattdessen selbst darauf.
+  **Teil-Fix:** Auf einem Live-System sank das 404-Fenster nach Frontend-Start
+  von ~58 s auf ~33–50 s; das Lovelace-Limit liegt bei 5 s. Siehe PR #19.
 - **Einspeisebegrenzung pendelte im Regeltakt** zwischen `feed_in_limit` und
   der Folgephase (Korridor/Spreading): Die Phase regelt die Einspeisung genau
   auf das Limit und wurde dann mangels Überschuss sofort beendet, die
