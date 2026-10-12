@@ -9,6 +9,13 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Behoben
+- **Dashboard-Timeout nach Neustart** (`Timeout waiting for strategy element
+  ll-strategy-dashboard-e3dc-maestro`): Das Strategy-JS war erst erreichbar,
+  wenn `e3dc_rscp` verbunden war – auf einem Testsystem ~24 s, in denen die
+  Oberfläche schon lud und das Modul mit 404 scheiterte. `e3dc_rscp` ist keine
+  Manifest-Abhängigkeit mehr; der Config-Entry wartet stattdessen selbst darauf.
+
 ---
 
 ## [0.4.0-beta.6] – Netzladung im Tiefpreis ohne künstliche Bremse (2026-10-10)

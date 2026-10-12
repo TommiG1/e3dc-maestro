@@ -160,11 +160,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up E3DC Maestro from a config entry."""
     # Verify that e3dc_rscp is configured
-    if not hass.config_entries.async_entries(E3DC_RSCP_DOMAIN):
+    rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
+    if not rscp_entries:
         raise ConfigEntryNotReady(
             f"E3DC Maestro requires the '{E3DC_RSCP_DOMAIN}' integration to be "
             "configured first. Please add the E3DC RSCP integration and restart."
         )
+    # e3dc_rscp ist bewusst keine Manifest-Abhängigkeit: sonst startet
+    # async_setup erst nach dem RSCP-Verbindungsaufbau, und Browser, die in
+    # der Zwischenzeit laden, bekommen für das Strategy-JS ein 404 (Lovelace-
+    # Timeout bis zum nächsten vollständigen Reload). Hier also selbst warten.
+    loaded = [
+        await hass.config_entries.async_wait_component(rscp_entry)
+        for rscp_entry in rscp_entries
+    ]
+    if not any(loaded):
+        raise ConfigEntryNotReady(f"'{E3DC_RSCP_DOMAIN}' is not loaded yet")
 
     # Ensure strategy is available even if async_setup was skipped (edge cases).
     from .dashboard_frontend import async_setup_frontend

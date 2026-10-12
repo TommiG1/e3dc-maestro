@@ -63,3 +63,8 @@ def test_dashboard_frontend_module_and_assets() -> None:
     assert "http" in manifest["dependencies"]
     assert "lovelace" in manifest["dependencies"]
     assert "lovelace" in manifest["after_dependencies"]
+    # A dependency on e3dc_rscp delays async_setup (and the static path)
+    # until RSCP has connected; async_setup_entry waits for it instead.
+    assert "e3dc_rscp" not in manifest["dependencies"]
+    assert "e3dc_rscp" not in manifest["after_dependencies"]
+    assert "async_wait_component" in init_py
