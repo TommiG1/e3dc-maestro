@@ -10,6 +10,7 @@ class MaestroPanel extends LitElement {
   private _range: number = 24;
   private _chart?: ForecastChart;
   private _chartInput?: [HassEntity | undefined, HassEntity | undefined];
+  private _error?: string;
   private _stats = { hassUpdates: 0, renders: 0, chartDraws: 0, chartMs: 0 };
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
@@ -105,6 +106,7 @@ class MaestroPanel extends LitElement {
           </div>
         </div>
         <div id="chart" ?hidden=${!hasTrajectory}></div>
+        ${this._error ? html`<p class="empty err">Chart konnte nicht geladen werden: ${this._error}</p>` : nothing}
         ${hasTrajectory
           ? nothing
           : html`<p class="empty">
@@ -126,7 +128,10 @@ class MaestroPanel extends LitElement {
     const target = this._state(ENTITIES.targetSoc);
     if (this._chartInput?.[0] === traj && this._chartInput?.[1] === target) return;
     this._chartInput = [traj, target];
-    void this._drawChart(traj, target);
+    this._drawChart(traj, target).catch((err: unknown) => {
+      this._error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      this.requestUpdate();
+    });
   }
 
   private async _drawChart(traj: HassEntity | undefined, target: HassEntity | undefined) {
@@ -141,6 +146,7 @@ class MaestroPanel extends LitElement {
     this._chart ??= new ForecastChart(el);
     await this._chart.update(traj.attributes, num(target));
     if (this._range !== 24) this._chart.zoomHours(this._range);
+    this._error = undefined;
     this._stats.chartDraws++;
     this._stats.chartMs = performance.now() - t0;
     if (DEBUG) this.requestUpdate();
@@ -281,6 +287,12 @@ class MaestroPanel extends LitElement {
       color: var(--muted);
       padding: 48px 0;
       text-align: center;
+    }
+    .err {
+      color: #f87171;
+      padding: 12px 0;
+      font-size: 13px;
+      word-break: break-word;
     }
     footer {
       margin-top: 12px;

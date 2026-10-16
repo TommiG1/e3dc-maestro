@@ -33,6 +33,7 @@ import{i as e,n as t,r as n,t as r}from"./entities-B-vYTcEP.js";var i=globalThis
           </div>
         </div>
         <div id="chart" ?hidden=${!o}></div>
+        ${this._error?z`<p class="empty err">Chart konnte nicht geladen werden: ${this._error}</p>`:V}
         ${o?V:z`<p class="empty">
               Noch keine Prognose verfügbar. Maestro braucht mindestens 7 Tage Verlauf.
             </p>`}
@@ -42,7 +43,7 @@ import{i as e,n as t,r as n,t as r}from"./entities-B-vYTcEP.js";var i=globalThis
             hass-Updates ${this._stats.hassUpdates} · Renders ${this._stats.renders} · Chart-Draws
             ${this._stats.chartDraws} · letzter Chart ${this._stats.chartMs.toFixed(0)} ms
           </footer>`:V}
-    `}updated(){let e=this._state(r.trajectory),t=this._state(r.targetSoc);(this._chartInput?.[0]!==e||this._chartInput?.[1]!==t)&&(this._chartInput=[e,t],this._drawChart(e,t))}async _drawChart(t,n){let r=this.renderRoot.querySelector(`#chart`),{ForecastChart:i,isTrajectory:a}=await we(async()=>{let{ForecastChart:e,isTrajectory:t}=await import(`./forecast-chart-wcxHgeEJ.js`);return{ForecastChart:e,isTrajectory:t}},[],import.meta.url);if(!r||!a(t?.attributes)){this._chart?.destroy(),this._chart=void 0;return}let o=performance.now();this._chart??=new i(r),await this._chart.update(t.attributes,e(n)),this._range!==24&&this._chart.zoomHours(this._range),this._stats.chartDraws++,this._stats.chartMs=performance.now()-o,Q&&this.requestUpdate()}_zoom(e){this._range=e,this._chart?.zoomHours(e),this.requestUpdate()}};Z=$,Z.styles=u`
+    `}updated(){let e=this._state(r.trajectory),t=this._state(r.targetSoc);(this._chartInput?.[0]!==e||this._chartInput?.[1]!==t)&&(this._chartInput=[e,t],this._drawChart(e,t).catch(e=>{this._error=e instanceof Error?`${e.name}: ${e.message}`:String(e),this.requestUpdate()}))}async _drawChart(t,n){let r=this.renderRoot.querySelector(`#chart`),{ForecastChart:i,isTrajectory:a}=await we(async()=>{let{ForecastChart:e,isTrajectory:t}=await import(`./forecast-chart-wcxHgeEJ.js`);return{ForecastChart:e,isTrajectory:t}},[],import.meta.url);if(!r||!a(t?.attributes)){this._chart?.destroy(),this._chart=void 0;return}let o=performance.now();this._chart??=new i(r),await this._chart.update(t.attributes,e(n)),this._range!==24&&this._chart.zoomHours(this._range),this._error=void 0,this._stats.chartDraws++,this._stats.chartMs=performance.now()-o,Q&&this.requestUpdate()}_zoom(e){this._range=e,this._chart?.zoomHours(e),this.requestUpdate()}};Z=$,Z.styles=u`
     :host {
       --bg: #070b14;
       --glass: rgba(255, 255, 255, 0.045);
@@ -171,6 +172,12 @@ import{i as e,n as t,r as n,t as r}from"./entities-B-vYTcEP.js";var i=globalThis
       color: var(--muted);
       padding: 48px 0;
       text-align: center;
+    }
+    .err {
+      color: #f87171;
+      padding: 12px 0;
+      font-size: 13px;
+      word-break: break-word;
     }
     footer {
       margin-top: 12px;
