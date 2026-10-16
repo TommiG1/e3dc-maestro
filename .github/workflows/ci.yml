@@ -43,6 +43,7 @@ jobs:
           cache: npm
           cache-dependency-path: panel-src/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
       - name: Committed panel bundle matches source
         run: git diff --exit-code -- ../custom_components/e3dc_maestro/frontend/panel
