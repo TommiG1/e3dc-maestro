@@ -1,10 +1,11 @@
-// Fixed entity_ids: Maestro pins them on first registration (sensor_device.set_stable_entity_id),
-// the Lovelace dashboards rely on the same ids.
+// Default entity_ids as Maestro pins them on first registration (sensor_device.set_stable_entity_id).
+// At runtime the backend resolves the keys through the entity registry (panel.PANEL_ENTITIES),
+// so renamed entities keep working; keys must match that map.
 const sensor = (k: string) => `sensor.e3dc_maestro_${k}`;
 const binary = (k: string) => `binary_sensor.e3dc_maestro_${k}`;
 const sw = (k: string) => `switch.e3dc_maestro_${k}`;
 
-export const E = {
+export const DEFAULT_IDS = {
   phase: sensor("regelphase"),
   lastAction: sensor("letzte_aktion"),
   explanation: sensor("entscheidungserklarung"),
@@ -36,26 +37,37 @@ export const E = {
   sentChargeLimit: sensor("gesendetes_lade_limit"),
   sentDischargeLimit: sensor("gesendetes_entlade_limit"),
   forceDischargePower: "number.e3dc_maestro_erzwungene_entladungsleistung",
-} as const;
+  ctrlActive: sw("regelung_aktiv"),
+  ctrlPredictive: sw("vorausschauende_ladung"),
+  ctrlPvDelay: sw("pv_prognose_verzogerung"),
+  ctrlPlanControls: sw("preisplan_steuert_akku"),
+  ctrlPlanShadow: sw("preisplan_schattenmodus"),
+  forceDischarge: sw("erzwungene_entladung"),
+}
 
-/** Switches shown in the quick-control sheet (order = display order). */
-export const CONTROL_SWITCHES = [
-  { id: sw("regelung_aktiv"), key: "ctrlActive" },
-  { id: sw("vorausschauende_ladung"), key: "ctrlPredictive" },
-  { id: sw("pv_prognose_verzogerung"), key: "ctrlPvDelay" },
-  { id: sw("preisplan_steuert_akku"), key: "ctrlPlanControls" },
-  { id: sw("preisplan_schattenmodus"), key: "ctrlPlanShadow" },
-] as const;
-export const FORCE_DISCHARGE_SWITCH = sw("erzwungene_entladung");
-export const PREDICTIVE_SWITCH = sw("vorausschauende_ladung");
-export const PLAN_SHADOW_SWITCH = sw("preisplan_schattenmodus");
+export type EntityKey = keyof typeof DEFAULT_IDS;
+
+/** Current entity_ids; starts with the defaults and is updated by applyEntityMap(). */
+export const E: Record<EntityKey, string> = { ...DEFAULT_IDS };
+
+export interface EntityMap {
+  entry_id: string | null;
+  entities: Partial<Record<EntityKey, string>>;
+  disabled: EntityKey[];
+}
+
+/** Take over the registry-resolved ids; keys the backend did not find keep their default. */
+export function applyEntityMap(map: EntityMap): void {
+  for (const key of Object.keys(DEFAULT_IDS) as EntityKey[]) {
+    E[key] = map.entities[key] ?? DEFAULT_IDS[key];
+  }
+}
+
+/** Switches shown in the quick-control sheet (order = display order); key doubles as i18n key. */
+export const CONTROL_SWITCHES = ["ctrlActive", "ctrlPredictive", "ctrlPvDelay", "ctrlPlanControls", "ctrlPlanShadow"] as const;
 
 /** Only these entities cause a re-render; hass changes on every state change in the house. */
-export const WATCHED: readonly string[] = [
-  ...Object.values(E),
-  ...CONTROL_SWITCHES.map((c) => c.id),
-  FORCE_DISCHARGE_SWITCH,
-];
+export const watched = (): string[] => Object.values(E);
 
 export interface HassEntity {
   entity_id: string;

@@ -4,7 +4,7 @@
   "after_dependencies": ["lovelace", "energy", "recorder"],
   "codeowners": ["@TommiG1"],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "lovelace", "panel_custom"],
+  "dependencies": ["frontend", "http", "lovelace", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/TommiG1/hacs-e3dc-maestro",
   "integration_type": "hub",
   "iot_class": "local_polling",

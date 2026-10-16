@@ -2,7 +2,7 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 import "./maestro-chart";
 import type { MaestroChart } from "./maestro-chart";
 import { controlsSheet } from "./controls";
-import { E, WATCHED, isOn, type Hass } from "./entities";
+import { applyEntityMap, DEFAULT_IDS, E, isOn, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import { makeFmt } from "./format";
 import { loadIst, loadSparks, loadTimeline, type IstSeries, type SparkKey } from "./history";
 import { makeI18n, type Key } from "./i18n";
@@ -24,6 +24,8 @@ const MOBILE = "(max-width: 960px)";
 const HISTORY_TTL = 5 * 60e3;
 const HISTORY_RETRY = 60e3;
 const IST_HOURS = 6;
+const RESOLVE_RETRY = 30e3;
+const MISSING_SHOWN = 6;
 
 const icon = (paths: string, cls = "") =>
   html`<svg class=${cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" .innerHTML=${paths}></svg>`;
@@ -55,13 +57,16 @@ class MaestroPanel extends LitElement {
   private _zoomKey?: string;
   private _timer?: number;
   private _stats = { hassUpdates: 0, renders: 0 };
+  private _entityMap?: EntityMap;
+  private _resolvedAt = 0;
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
   set hass(hass: Hass) {
     this._stats.hassUpdates++;
     const prev = this._hass;
     this._hass = hass;
-    if (!prev || prev.language !== hass.language || WATCHED.some((id) => prev.states[id] !== hass.states[id])) {
+    if (!prev || this._missingKeys(hass).length) void this._resolveEntities();
+    if (!prev || prev.language !== hass.language || watched().some((id) => prev.states[id] !== hass.states[id])) {
       this.requestUpdate();
     } else if (DEBUG) {
       this.requestUpdate();
@@ -105,6 +110,43 @@ class MaestroPanel extends LitElement {
     this._chartError = e.detail;
     this.requestUpdate();
   };
+
+  // ------------------------------------------------------------ entities
+
+  /** Ask the backend for the registry-resolved entity_ids (renamed entities keep working). */
+  private async _resolveEntities(): Promise<void> {
+    const hass = this._hass;
+    if (!hass || Date.now() - this._resolvedAt < RESOLVE_RETRY) return;
+    this._resolvedAt = Date.now();
+    try {
+      const map = await hass.callWS<EntityMap>({ type: "e3dc_maestro/panel_entities" });
+      const before = JSON.stringify(E);
+      applyEntityMap(map);
+      this._entityMap = map;
+      if (JSON.stringify(E) !== before) this._loadedAt.clear(); // history was loaded for other ids
+      this.requestUpdate();
+      void this._ensureHistory();
+    } catch {
+      // backend without the command: keep the default ids
+    }
+  }
+
+  private _missingKeys(hass: Hass): EntityKey[] {
+    return (Object.keys(DEFAULT_IDS) as EntityKey[]).filter((k) => !hass.states[E[k]]);
+  }
+
+  private _entityNotice(hass: Hass, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
+    const map = this._entityMap;
+    if (map && map.entry_id === null) return html`<p class="err">${t("notSetUp")}</p>`;
+    const missing = this._missingKeys(hass);
+    if (!missing.length) return nothing;
+    const disabled = new Set(map?.disabled ?? []);
+    const names = missing
+      .slice(0, MISSING_SHOWN)
+      .map((k) => (disabled.has(k) ? `${E[k]} (${t("entityDisabled")})` : E[k]));
+    const more = missing.length > MISSING_SHOWN ? ` +${missing.length - MISSING_SHOWN}` : "";
+    return html`<p class="err">${t("entitiesMissing", { list: names.join(", ") + more })}</p>`;
+  }
 
   // ------------------------------------------------------------ history
 
@@ -215,7 +257,7 @@ class MaestroPanel extends LitElement {
       },
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
-    const regulation = isOn(hass.states["switch.e3dc_maestro_regelung_aktiv"]);
+    const regulation = isOn(hass.states[E.ctrlActive]);
     const phase = hass.states[E.phase]?.state;
     const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView }[current.id](ctx);
 
@@ -250,6 +292,7 @@ class MaestroPanel extends LitElement {
             </div>
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
+          ${this._entityNotice(hass, t)}
           ${this._chartError ? html`<p class="err">${t("chartError", { err: this._chartError })}</p>` : nothing}
           <section class="screen" id=${`screen-${current.id}`}>${view}</section>
           ${DEBUG

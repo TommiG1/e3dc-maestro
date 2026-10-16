@@ -36,7 +36,13 @@ class _Platform:
 
 _HA_STUBS = [
     ("homeassistant", {}),
-    ("homeassistant.config_entries", {"ConfigEntry": object}),
+    (
+        "homeassistant.config_entries",
+        {
+            "ConfigEntry": object,
+            "ConfigEntryState": type("ConfigEntryState", (), {"LOADED": "loaded", "NOT_LOADED": "not_loaded"}),
+        },
+    ),
     ("homeassistant.const", {"Platform": _Platform}),
     ("homeassistant.core", {"callback": lambda f: f}),
     ("homeassistant.exceptions", {"ConfigEntryNotReady": Exception}),
@@ -58,6 +64,13 @@ _HA_STUBS = [
     ("homeassistant.components.select", {}),
     ("homeassistant.components.switch", {}),
     ("homeassistant.components.button", {}),
+    (
+        "homeassistant.components.websocket_api",
+        {
+            "websocket_command": lambda _schema: (lambda f: f),
+            "async_register_command": lambda _hass, _handler: None,
+        },
+    ),
     ("homeassistant.util", {}),
     ("homeassistant.util.dt", {
         "utcnow": __import__("datetime").datetime.utcnow,
@@ -68,6 +81,9 @@ _HA_STUBS = [
     ("homeassistant.components.recorder", {}),
     ("homeassistant.components.recorder.statistics", {}),
 ]
+
+# Only the decorator schema of the panel websocket command needs it.
+_HA_STUBS.append(("voluptuous", {"Required": lambda key, **_kw: key}))
 
 for _name, _attrs in _HA_STUBS:
     sys.modules.setdefault(_name, _auto(_name, **_attrs))
@@ -138,4 +154,7 @@ _sensor_mod.SensorEntity = type("SensorEntity", (), {"__init__": lambda self, *a
 sys.modules["homeassistant.util"].dt = sys.modules["homeassistant.util.dt"]  # type: ignore[attr-defined]
 sys.modules["homeassistant.helpers"].config_validation = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.helpers.config_validation"
+]
+sys.modules["homeassistant.components"].websocket_api = sys.modules[  # type: ignore[attr-defined]
+    "homeassistant.components.websocket_api"
 ]

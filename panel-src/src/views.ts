@@ -1,6 +1,9 @@
 import { html, nothing, type TemplateResult } from "lit";
 import "./maestro-chart";
-import { E, isOn, num, PLAN_SHADOW_SWITCH, PREDICTIVE_SWITCH, type Hass, type HassEntity } from "./entities";
+import { E, isOn, num, type Hass, type HassEntity } from "./entities";
+
+const shown = (e: HassEntity | undefined): string =>
+  !e || e.state === "unknown" || e.state === "unavailable" ? "–" : e.state;
 import {
   brushOptions,
   COLORS,
@@ -58,8 +61,8 @@ export function liveView(c: Ctx): TemplateResult {
     [t("chipHt"), on(E.htProtect), "warn"],
     [t("chipCurtail"), on(E.curtail), "warn"],
     [t("chipEmergency"), on(E.emergency), "warn"],
-    [t("chipPredictive"), on(PREDICTIVE_SWITCH), "on"],
-    [t("chipShadow"), on(PLAN_SHADOW_SWITCH), "on"],
+    [t("chipPredictive"), on(E.ctrlPredictive), "on"],
+    [t("chipShadow"), on(E.ctrlPlanShadow), "on"],
   ];
   const sp = (key: SparkKey, color: string) =>
     c.sparks?.[key]?.length ? html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>` : nothing;
@@ -88,7 +91,7 @@ export function liveView(c: Ctx): TemplateResult {
           : html`<p class="empty">${t("unavailable")}</p>`}
         <div class="soc-meta">
           <div class="meta"><b>${target !== undefined ? `${Math.round(target)}%` : "–"}</b><span>${t("targetSoc")}</span></div>
-          <div class="meta"><b>${st(c, E.autonomy)?.state ?? "–"}</b><span>${t("autonomy")}</span></div>
+          <div class="meta"><b>${shown(st(c, E.autonomy))}</b><span>${t("autonomy")}</span></div>
           <div class="meta"><b>${c.fmt.w(bat)}</b><span>${bat !== undefined && bat < 0 ? t("discharging") : t("charging")}</span></div>
         </div>
       </div>
@@ -221,7 +224,7 @@ export function planView(c: Ctx): TemplateResult {
       <div class="card plan-kpi">
         <div>
           <h3>${t("planTitle")}</h3>
-          <div class="plan-state">${st(c, E.plan)?.state ?? "–"}</div>
+          <div class="plan-state">${shown(st(c, E.plan))}</div>
           <div class="sub msg">${typeof a.message === "string" ? a.message : ""}</div>
         </div>
         <div>

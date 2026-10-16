@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit";
-import { CONTROL_SWITCHES, E, FORCE_DISCHARGE_SWITCH, isOn, num, type Hass } from "./entities";
+import { CONTROL_SWITCHES, E, isOn, num, type Hass } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 
@@ -58,14 +58,14 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
       </div>
       ${c.error ? html`<p class="err">${c.error}</p>` : nothing}
       ${CONTROL_SWITCHES.map(
-        (s) => html`<div class="ctrl">
-          <div class="txt"><b>${t(s.key)}</b><span>${t(SUBS[s.key])}</span></div>
-          ${toggle(s.id, t(s.key))}
+        (key) => html`<div class="ctrl">
+          <div class="txt"><b>${t(key)}</b><span>${t(SUBS[key])}</span></div>
+          ${toggle(E[key], t(key))}
         </div>`,
       )}
       <div class="ctrl wrap">
         <div class="txt"><b>${t("ctrlForce")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
-        ${toggle(FORCE_DISCHARGE_SWITCH, t("ctrlForce"))}
+        ${toggle(E.forceDischarge, t("ctrlForce"))}
         <input
           type="range"
           min=${min}

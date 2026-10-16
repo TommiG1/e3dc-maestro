@@ -34,23 +34,18 @@ const startOfToday = (): number => {
 };
 
 export type SparkKey = "costNet" | "saving" | "selfUse" | "chargedToday";
-const SPARKS: Record<SparkKey, string> = {
-  costNet: E.costNet,
-  saving: E.saving,
-  selfUse: E.selfUse,
-  chargedToday: E.chargedToday,
-};
+const SPARK_KEYS: SparkKey[] = ["costNet", "saving", "selfUse", "chargedToday"];
 
 /** Cumulative daily counters since midnight, 30-minute grid. */
 export async function loadSparks(hass: Hass): Promise<Record<SparkKey, Point[]>> {
-  const raw = await fetchRaw(hass, Object.values(SPARKS), startOfToday(), {
+  const raw = await fetchRaw(hass, SPARK_KEYS.map((k) => E[k]), startOfToday(), {
     minimal_response: true,
     no_attributes: true,
     significant_changes_only: false,
   });
   const out = {} as Record<SparkKey, Point[]>;
-  for (const [key, id] of Object.entries(SPARKS) as [SparkKey, string][]) {
-    out[key] = bucket(numericPoints(normalizeHistory(raw[id])), 30 * 60e3, "last");
+  for (const key of SPARK_KEYS) {
+    out[key] = bucket(numericPoints(normalizeHistory(raw[E[key]])), 30 * 60e3, "last");
   }
   return out;
 }
