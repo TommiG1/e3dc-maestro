@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.4.0-beta.7] – Feste Entity-IDs, Einspeisebegrenzung stabil (2026-10-16)
+
+> **Beta.** Inhalt von beta.6 plus die Fixes unten.
+
 ### Behoben
 - **Entity-IDs mit Bereichs-Präfix** (z. B. `sensor.keller_e3dc_maestro_…`,
   wenn das Gerät in einem Bereich liegt): Dashboards verweisen fest auf
