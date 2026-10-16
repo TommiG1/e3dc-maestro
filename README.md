@@ -21,7 +21,7 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 6. [Setup (Config Flow)](#setup-config-flow)
 7. [Provided Entities](#provided-entities)
    - [Sensors – Standard (enabled)](#sensors--standard-enabled)
-   - [Sensors – Diagnostic (enable manually)](#sensors--diagnostic-enable-manually)
+   - [Sensors – Diagnostic](#sensors--diagnostic)
    - [How to enable disabled entities](#how-to-enable-disabled-entities)
    - [Binary Sensors](#binary-sensors)
    - [Switches](#switches)
@@ -65,17 +65,16 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 | **Wallbox control** | Current limiting for third-party wallboxes via EVCC/generic; optional discharge guard so EV load is covered from the battery instead of the grid |
 | **Heat-pump control** | On/off based on PV surplus with minimum run and pause times |
 | **Forced discharge** | Dashboard switch for manual discharge, e.g. before a Tibber low-price window |
+| **Maestro Cockpit (sidebar panel, beta)** | Own sidebar panel without custom cards: live energy flow, 24 h forecast, price plan, decision explanation and quick controls – [guide](#maestro-cockpit-sidebar-panel-beta) |
 | **Control cockpit** | Live command centre with hero status, KPI tiles, active-now chips, 24 h phase history and "Why this decision?" |
 | **Decision explanation** | `sensor.e3dc_maestro_entscheidungserklarung` with a full plain-text explanation for every phase |
 | **Anti-flapping** | EWMA smoothing of PV/load (τ = 60 s, jump-reset at 2 kW) + feed-in-limit hysteresis + pv-delay cooldown to prevent rapid phase oscillation |
 | **Battery & PV Sizing Advisor (v0.3.7)** | 2D simulation (additional battery × additional PV) on historical hourly data — calculates savings, payback time, self-sufficiency and three recommendations (economic / technical / balanced) |
-| **Automated tests + CI** | Control engine, forecast/PV parser, optimiser and sizing advisor covered; GitHub Actions runs pytest, Ruff and hassfest |
+| **Automated tests + CI** | Control engine, forecast/PV parser, optimiser and sizing advisor covered; GitHub Actions runs pytest, Ruff, hassfest and the panel build and tests (Vitest) |
 
 ---
 
 ## Screenshots
-
-Current live UI (v0.3.26).
 
 ### Maestro Cockpit (sidebar panel, since 0.4.0-beta.8)
 
@@ -88,7 +87,7 @@ A dedicated sidebar panel, no custom cards needed. Guide:
 
 ### Modern dashboard
 
-Four views: overview, cockpit, charging, and 24 h charts.
+Screenshots from v0.3.26. Four views: overview, cockpit, charging, and 24 h charts.
 
 ![Modern overview](Screenshots/modern_01_uebersicht.png)
 
@@ -351,7 +350,8 @@ Uses the price curve (today + tomorrow), the PV forecast and your consumption
 profile to work out when **grid charging** and **holding discharge** pay off. The
 plan is visible as a sensor (`sensor.e3dc_maestro_preisplan`). The second switch,
 **Price plan controls the battery**, makes Maestro actually execute it – without
-it the plan stays display-only (shadow mode).
+it the plan stays display-only (shadow mode). It is calculated as long as
+**Price plan (shadow mode)** is switched on.
 
 **Setup** (Settings → Devices & services → E3DC Maestro → Configure):
 
@@ -362,7 +362,7 @@ it the plan stays display-only (shadow mode).
 3. **PV forecast:** enable a forecast sensor (Solcast / Forecast.Solar) – without
    one the plan falls back conservatively to history.
 4. **Season & charge corridor:** charge threshold and emergency reserve (floor of the plan).
-5. Enable **Calculate price plan** – also available as a switch in the dashboard.
+5. Enable **Calculate price plan** (switch **Price plan (shadow mode)**; “on” means: the plan is calculated but not yet executed) – also available in the dashboard.
    Review the recommendations for a day or two (tab **Grid & Tariff**).
 6. Enable **Price plan controls the battery**: Maestro then charges from the grid in
    cheap slots (phase `grid_charge`, reason "Preisplan: …") and blocks discharge when
@@ -536,6 +536,26 @@ All entities appear under the device **E3DC Maestro** in *Settings → Devices &
 | `sensor.e3dc_maestro_auto_geschatzte_einsparung` | Auto: Estimated savings | % | Simulated improvement vs. baseline |
 | `sensor.e3dc_maestro_soll_lade_limit` | Target charge limit | W | Currently set charge limit (e.g. 0 W when blocked, 3000 W during curtailment guard); `unknown` if no limit active |
 | `sensor.e3dc_maestro_soll_entlade_limit` | Target discharge limit | W | Currently set discharge limit (e.g. 0 W during EVCC pause); `unknown` if no limit active |
+| `sensor.e3dc_maestro_preisplan` | Price plan | – | Summary of the price plan (beta); slots, shadow mode and expected saving as attributes |
+| `sensor.e3dc_maestro_wallbox_leistung` | Wallbox power | W | Current wallbox charging power (see step 7) |
+| `sensor.e3dc_maestro_gesamtlast_haus_wallbox` | Total load (house + wallbox) | W | House power plus wallbox power |
+| `sensor.e3dc_maestro_wallbox_energie_heute` | Wallbox energy today | kWh | Energy charged into the wallbox today (usable in the Energy dashboard) |
+| `sensor.e3dc_maestro_pv_power` | PV power | W | Stable mirror of the PV measurement, independent of the source entity (sign: [Sensor Sign Conventions](#sensor-sign-conventions)); used by dashboards and the cockpit |
+| `sensor.e3dc_maestro_house_power` | House power | W | Stable mirror of house consumption (always ≥ 0) |
+| `sensor.e3dc_maestro_grid_power` | Grid power | W | Stable mirror of grid power (positive = feed-in, negative = import) |
+| `sensor.e3dc_maestro_battery_power` | Battery power | W | Stable mirror of battery power (positive = charging, negative = discharging) |
+| `sensor.e3dc_maestro_netzbezug_heute` | Grid import today | kWh | Energy imported from the grid today |
+| `sensor.e3dc_maestro_netzeinspeisung_heute` | Grid feed-in today | kWh | Energy fed into the grid today |
+| `sensor.e3dc_maestro_stromkosten_heute` | Electricity cost today | EUR | Cost of grid import today |
+| `sensor.e3dc_maestro_einspeise_erlos_heute` | Feed-in revenue today | EUR | Feed-in remuneration today |
+| `sensor.e3dc_maestro_netto_stromkosten_heute` | Net electricity cost today | EUR | Import cost minus feed-in revenue |
+| `sensor.e3dc_maestro_pv_eigenverbrauch_heute` | PV self-consumption today | kWh | Self-consumed PV energy today |
+| `sensor.e3dc_maestro_pv_ersparnis_heute` | PV savings today | EUR | Savings compared with buying everything from the grid |
+| `sensor.e3dc_maestro_akku_verschleiss_heute` | Battery wear today | EUR | Share of battery cost for today's cycles (from purchase cost and lifetime) |
+| `sensor.e3dc_maestro_energiebilanz_heute` | Energy balance today | EUR | Feed-in revenue + PV savings − electricity cost − battery wear |
+| `sensor.e3dc_maestro_netz_akku_heute` | Grid → battery today | kWh | Energy charged from the grid into the battery today (basis for *Grid charge without justification*) |
+| `sensor.e3dc_maestro_pv_tagesprognose` | PV day forecast | kWh | PV yield forecast for today (basis of low-yield-day detection) |
+| `sensor.e3dc_maestro_pv_restprognose_p10` | PV remaining forecast (P10) | kWh | Conservative remaining PV forecast for today (P10), e.g. for dynamic spreading |
 
 #### Sizing Advisor sensors (v0.3.7)
 
@@ -559,12 +579,14 @@ Scenario sensors (live, follow the two sliders):
 | `sensor.e3dc_maestro_advisor_investition` | Investment (scenario) | EUR | Live from price entities |
 | `sensor.e3dc_maestro_advisor_amortisationszeit` | Payback time (scenario) | years | Live from price entities |
 | `sensor.e3dc_maestro_advisor_zyklen_jahr_virt_akku` | Cycles per year (scenario) | – | Battery wear indicator |
+| `sensor.e3dc_maestro_advisor_sizing_matrix` | Sizing matrix | – | Result of the 2D simulation (full matrix and recommendations as attributes; only updated after “Start analysis”) |
+| `sensor.e3dc_maestro_advisor_szenario` | Scenario | EUR | Key figures of the current slider scenario as attributes |
 
 ---
 
-### Sensors – Diagnostic (enable manually)
+### Sensors – Diagnostic
 
-These sensors are **disabled** by default (shown greyed out in the entity list). Enable them manually if needed.
+Diagnostic sensors are grouped under the **Diagnostic** category in the entity list. All sensors are **enabled** after installation. The `debug_log` sensor is only useful with debug logging switched on.
 
 | Entity ID | Name | Description |
 |---|---|---|
@@ -573,11 +595,20 @@ These sensors are **disabled** by default (shown greyed out in the entity list).
 | `sensor.e3dc_maestro_notstromreserve_aktuell` | Emergency reserve (current) | Currently calculated reserve SoC (seasonally interpolated) |
 | `sensor.e3dc_maestro_notstromreserve_adaptiv` | Emergency reserve (adaptive) | Consumption-adaptive calculated reserve |
 | `sensor.e3dc_maestro_ht_reserve_adaptiv` | HT reserve (adaptive) | Adaptively calculated HT reserve |
+| `sensor.e3dc_maestro_gesendetes_lade_limit` | Sent charge limit | Charge limit actually sent to the E3DC, in W (counterpart of *Target charge limit*) |
+| `sensor.e3dc_maestro_gesendetes_entlade_limit` | Sent discharge limit | Discharge limit actually sent to the E3DC, in W |
+| `sensor.e3dc_maestro_pv_referenz_ertrag` | PV reference yield | Reference daily yield (kWh) for low-yield-day detection |
+| `sensor.e3dc_maestro_pv_tag_quote` | PV day ratio | Ratio of day forecast to reference yield |
+| `sensor.e3dc_maestro_ladestart_morgen_prognose` | Charge start tomorrow (forecast) | Expected charge start tomorrow (HH:MM, astro mode only) |
+| `sensor.e3dc_maestro_ladeende_morgen_prognose` | Charge end tomorrow (forecast) | Expected charge end tomorrow (HH:MM) |
+| `sensor.e3dc_maestro_verzogerter_ladestart_heute` | Delayed charge start today | Expected charge start while PV delay is active (HH:MM, otherwise `unknown`) |
 | `sensor.e3dc_maestro_debug_log` | Debug log | Last 5 rule log entries; only useful with debug logging enabled |
 
 ---
 
 ### How to enable disabled entities
+
+If you disabled entities yourself (or an older version created them disabled):
 
 1. **Settings → Devices & Services → E3DC Maestro → Show device**
 2. Scroll to the entity list, click **"Show disabled entities"** (link at the bottom)
@@ -601,6 +632,7 @@ Alternatively via *Settings → Entities*: filter by "E3DC Maestro" + tick "Show
 | `binary_sensor.e3dc_maestro_netzladung_aktiv` | Grid charge active | `grid_charge` phase active |
 | `binary_sensor.e3dc_maestro_schwacher_pv_tag` | Low-yield day | Today classified as a weak PV day (all-day flag) |
 | `binary_sensor.e3dc_maestro_akku_prioritat_aktiv` | Battery priority active | Remaining-need gate is currently forcing battery-first charging |
+| `binary_sensor.e3dc_maestro_netzladung_ohne_rechtfertigung` | Grid charge without justification | `on` with a fixed tariff when more than 0.5 kWh were charged from the grid into the battery today (plausibility check, problem sensor) |
 | `binary_sensor.e3dc_maestro_ladesperre_aktiv` | Charge block active | `on` when Maestro has set a charge limit ≤ 0 W |
 | `binary_sensor.e3dc_maestro_entladesperre_aktiv` | Discharge block active | `on` when Maestro has set a discharge limit ≤ 0 W (e.g. during EVCC pause) |
 | `binary_sensor.e3dc_maestro_advisor_wr_upgrade_empfohlen` | Inverter upgrade recommended (Advisor) | `on` when the current slider scenario **or** the economic recommendation requires an inverter upgrade |
@@ -636,6 +668,14 @@ Alternatively via *Settings → Entities*: filter by "E3DC Maestro" + tick "Show
 | `switch.e3dc_maestro_vorausschauende_ladung` | Forward-looking charging | Raises today's charge target if tomorrow's PV is expected to be low |
 | `switch.e3dc_maestro_schwacher_pv_tag_prioritat` | Low-yield-day priority | Battery-first charging on weak PV days |
 | `switch.e3dc_maestro_schnelllade_boden` | Fast-charge floor | Full PV surplus until the floor SoC |
+| `switch.e3dc_maestro_dynamische_tarife` | Dynamic tariffs | Enables cheap grid charging (see step 6) |
+| `switch.e3dc_maestro_aktive_netzladung_im_low_slot` | Active grid charge in low slot | Actively charges from the grid in the `low` slot up to the target SoC |
+| `switch.e3dc_maestro_netzlade_menge_prognosebasiert` | Grid-charge amount forecast-based | Grid-charge amount from tomorrow's PV/consumption forecast instead of a fixed target SoC |
+| `switch.e3dc_maestro_entladung_im_low_slot_nach_ziel_sperren` | Block discharge in low slot after target | Blocks discharge once the grid-charge target is reached (phase `grid_hold`) |
+| `switch.e3dc_maestro_pv_prognose_verzogerung` | PV forecast delay | Postpones the charge start when the PV forecast is enough for charging |
+| `switch.e3dc_maestro_erweiterter_ladekorridor` | Advanced charge corridor | Extended power-factor calculation of the charge corridor |
+| `switch.e3dc_maestro_preisplan_schattenmodus` | Price plan (shadow mode) | **On = plan is calculated** and shown as a sensor/in the dashboard but not yet executed (shadow mode). This is the “Calculate price plan” switch |
+| `switch.e3dc_maestro_preisplan_steuert_akku` | Price plan controls the battery | Actually executes the calculated price plan (grid charge in cheap slots, hold discharge). Off = shadow mode only |
 
 ---
 
@@ -692,6 +732,26 @@ All Config Flow parameters are also available as Number entities and can be **ch
 | `number.e3dc_maestro_schonladung_faktor` | Gentle charge factor | – |
 | `number.e3dc_maestro_hard_soc_limit_akku_deckel` | Hard SoC limit | % |
 | `number.e3dc_maestro_vorausschauende_ladung_max_soc` | Forward-looking charge max SoC | % |
+| `number.e3dc_maestro_aktualisierungsintervall` | Update interval | s |
+| `number.e3dc_maestro_soc_hysterese` | SoC hysteresis | % |
+| `number.e3dc_maestro_schnelllade_boden_soc` | Fast-charge floor SoC | % |
+| `number.e3dc_maestro_mindest_soc_vor_verzogerung` | Minimum SoC before delay | % |
+| `number.e3dc_maestro_pv_forecast_schwelle` | PV forecast threshold | kWh |
+| `number.e3dc_maestro_pv_forecast_sicherheitsfaktor` | PV forecast safety factor | – |
+| `number.e3dc_maestro_schwacher_pv_tag_schwelle` | Low-yield-day threshold | – |
+| `number.e3dc_maestro_pv_referenz_manuell_0_automatisch` | PV reference manual (0 = automatic) | kWh |
+| `number.e3dc_maestro_pv_referenz_faktor_kwh_kwp` | PV reference factor | kWh/kWp |
+| `number.e3dc_maestro_wallbox_entladeschutz_schwelle` | Wallbox grid-guard threshold | W |
+| `number.e3dc_maestro_evcc_now_modus_entladungslimit` | EVCC now-mode discharge limit | W |
+| `number.e3dc_maestro_strompreis_bezug_fest` | Electricity price import (fixed) | €/kWh |
+| `number.e3dc_maestro_einspeisevergutung` | Feed-in tariff | €/kWh |
+| `number.e3dc_maestro_netzlade_ziel_im_low_slot` | Grid-charge target in low slot | % |
+| `number.e3dc_maestro_akku_anschaffungskosten` | Battery purchase cost | € |
+| `number.e3dc_maestro_akku_lebensdauer_zyklen` | Battery lifetime (cycles) | cycles |
+| `number.e3dc_maestro_preisplan_ziel_soc_obergrenze` | Price plan target SoC cap | % |
+| `number.e3dc_maestro_preisplan_mindest_preisspanne` | Price plan minimum price spread | €/kWh |
+| `number.e3dc_maestro_preisplan_wirkungsgrad` | Price plan efficiency | – |
+| `number.e3dc_maestro_preisplan_verbrauchs_sicherheitsfaktor` | Price plan consumption safety factor | – |
 
 #### Sizing Advisor numbers (v0.3.7)
 
@@ -713,6 +773,7 @@ All Config Flow parameters are also available as Number entities and can be **ch
 | `select.e3dc_maestro_wallbox_typ` | Wallbox type | `e3dc`, `generic` |
 | `select.e3dc_maestro_vorentladungs_modus` | Pre-discharge mode | `off`, `passive`, `active_house`, `active_grid` |
 | `select.e3dc_maestro_auto_optimierung_ziel` | Auto-optimisation objective | `self_consumption`, `cost`, `co2` |
+| `select.e3dc_maestro_tarif_modus` | Tariff mode | `fixed`, `dynamic` |
 
 ---
 
@@ -956,10 +1017,28 @@ Only active if either `curtailment_guard` or `feed_in_limit` was triggered. Chec
 - `switch.e3dc_maestro_abregelschutz` is enabled
 - The curtailment guard activation threshold (`number.e3dc_maestro_abregelschutz_einschaltschwelle`) is correctly configured
 
+### The Maestro Cockpit shows notices or stays empty
+
+- **"Not available: …" with entity IDs:** These Maestro entities are missing or
+  disabled. Open *Settings → Entities*, filter for "E3DC Maestro" and enable the
+  named entity. It can take up to 30 s to show values.
+- **"E3DC Maestro is not set up or has not started yet":** The integration is not
+  loaded yet (e.g. right after a restart) or failed – check the integration page
+  and the log.
+- **Red notice "Chart failed to load":** Hard-reload the page (Ctrl+Shift+R;
+  in the companion app reset the frontend cache). If it persists, please open an
+  issue with a screenshot and browser/device.
+- **Panel still shows the old version after an update:** Clear the frontend cache
+  (see above); the panel URL contains the version number, so a hard reload is
+  normally enough.
+- **Curves/sparklines empty:** Maestro entities are excluded from the recorder or
+  the history is still too short.
+- **Autonomy "–":** Expected for the first ~10 minutes after a restart.
+
 ### Debug log is empty
 
 1. Enable `switch.e3dc_maestro_debug_logging`
-2. Manually enable `sensor.e3dc_maestro_debug_log` (disabled by default)
+2. Check `sensor.e3dc_maestro_debug_log` in the Diagnostic group (re-enable it if you disabled it)
 
 To get detailed `[decide]` log lines (one per control tick, including EWMA-smoothed PV/load values, current phase and reason), also add this to `configuration.yaml` and restart HA:
 
