@@ -15,7 +15,16 @@ interface ApexStatic {
   getChartByID(id: string): ChartApi | undefined;
 }
 
+type ApexModule = typeof import("./apex");
+
 const roots = new WeakMap<Node, string>();
+let apexModule: ApexModule | undefined;
+let connected = 0;
+
+async function loadApex(): Promise<ApexModule> {
+  apexModule ??= await import("./apex");
+  return apexModule;
+}
 
 /**
  * Thin ApexCharts host. Renders into itself (no shadow root) so the panel's
@@ -49,12 +58,15 @@ export class MaestroChart extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    connected++;
+    apexModule?.claimSVG();
     // Re-attached (e.g. after switching dashboards): the chart was destroyed on disconnect.
     if (this.hasUpdated && this.options && !this._chart) this.requestUpdate("options");
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (--connected === 0) apexModule?.releaseSVG();
     this._run++;
     try {
       this._chart?.destroy();
@@ -93,8 +105,10 @@ export class MaestroChart extends LitElement {
     if (!raw) return;
     const opts = this._scoped(raw);
     const run = ++this._run;
-    const Apex = (await import("./apex")).default as unknown as ApexStatic;
+    const mod = await loadApex();
+    const Apex = mod.default as unknown as ApexStatic;
     if (run !== this._run || !this.isConnected) return;
+    mod.claimSVG();
 
     const target = opts.chart?.brush?.target;
     if (target) {
