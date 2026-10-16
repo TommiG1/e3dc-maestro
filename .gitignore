@@ -75,3 +75,6 @@ ROADMAP.md
 
 # Lokales Archiv (nicht Teil des Repos; Release-Historie → CHANGELOG.md)
 archive/
+
+# Panel build toolchain (the built bundle in frontend/panel is committed)
+panel-src/node_modules/

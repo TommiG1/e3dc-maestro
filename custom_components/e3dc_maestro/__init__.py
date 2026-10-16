@@ -220,6 +220,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    from .panel import async_register_panel
+
+    await async_register_panel(hass)
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -247,5 +251,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+        if not hass.data[DOMAIN]:
+            from .panel import async_unregister_panel
+
+            async_unregister_panel(hass)
 
     return unload_ok
