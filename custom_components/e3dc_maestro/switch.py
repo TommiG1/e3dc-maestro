@@ -45,6 +45,7 @@ from .const import (
 )
 from .coordinator import E3DCMaestroCoordinator
 from .sensor import _device_info
+from .sensor_device import set_stable_entity_id
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -357,6 +358,7 @@ class MaestroSwitch(CoordinatorEntity[E3DCMaestroCoordinator], SwitchEntity):
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{description.key}"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "switch")
 
     @property
     def is_on(self) -> bool:

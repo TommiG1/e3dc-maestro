@@ -88,6 +88,7 @@ from .const import (
 )
 from .coordinator import E3DCMaestroCoordinator
 from .sensor import _device_info
+from .sensor_device import set_stable_entity_id
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -775,6 +776,7 @@ class MaestroNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntity):
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{description.key}"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "number")
         self._attr_native_min_value = description.min_value
         self._attr_native_step = description.step_value
         self._attr_mode = description.mode
@@ -838,6 +840,7 @@ class MaestroSizingNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntit
         self._attr_native_max_value = max_value
         self._attr_native_step = step
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "number")
         self._attr_mode = mode
         self._sizing_attr = attr
 

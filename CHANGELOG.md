@@ -10,6 +10,12 @@ einen eigenen Versionsabschnitt verschieben.
 ## [Unreleased]
 
 ### Behoben
+- **Entity-IDs mit Bereichs-Präfix** (z. B. `sensor.keller_e3dc_maestro_…`,
+  wenn das Gerät in einem Bereich liegt): Dashboards verweisen fest auf
+  `…e3dc_maestro_…` und zeigten „Entität nicht gefunden“. Alle Entitäten
+  bekommen ihre ID jetzt fest als `<domain>.e3dc_maestro_<name>` (auch
+  `sensor.e3dc_maestro_aktueller_soc`). Bestehende Installationen werden beim
+  Start automatisch zurückbenannt, sofern die Ziel-ID frei ist.
 - **Dashboard-Timeout nach Neustart** (`Timeout waiting for strategy element
   ll-strategy-dashboard-e3dc-maestro`): Das Strategy-JS war erst erreichbar,
   wenn `e3dc_rscp` verbunden war – auf einem Testsystem ~24 s, in denen die

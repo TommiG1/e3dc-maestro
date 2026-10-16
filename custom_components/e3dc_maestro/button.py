@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, E3DC_RSCP_DOMAIN, SERVICE_CLEAR_POWER_LIMITS, SERVICE_MANUAL_CHARGE
 from .coordinator import E3DCMaestroCoordinator
 from .sensor import _device_info
+from .sensor_device import set_stable_entity_id
 
 
 async def async_setup_entry(
@@ -35,6 +36,7 @@ class MaestroClearLimitsButton(CoordinatorEntity[E3DCMaestroCoordinator], Button
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_clear_limits"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "button")
 
     async def async_press(self) -> None:
         await self.coordinator._async_release_limits("Manuell über Button")
@@ -49,6 +51,7 @@ class MaestroManualChargeButton(CoordinatorEntity[E3DCMaestroCoordinator], Butto
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_manual_charge"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "button")
 
     async def async_press(self) -> None:
         if self.coordinator._can_manual_charge():
@@ -69,6 +72,7 @@ class MaestroResetStatsButton(CoordinatorEntity[E3DCMaestroCoordinator], ButtonE
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_reset_stats"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "button")
 
     async def async_press(self) -> None:
         for key in self.coordinator.stats:
@@ -88,6 +92,7 @@ class MaestroRunSizingButton(CoordinatorEntity[E3DCMaestroCoordinator], ButtonEn
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_run_sizing"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "button")
 
     async def async_press(self) -> None:
         await self.coordinator.async_run_sizing_analysis()

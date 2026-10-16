@@ -26,6 +26,7 @@ from .const import (
 )
 from .coordinator import E3DCMaestroCoordinator
 from .sensor import _device_info
+from .sensor_device import set_stable_entity_id
 
 
 async def async_setup_entry(
@@ -52,6 +53,7 @@ class MaestroWallboxTypeSelect(CoordinatorEntity[E3DCMaestroCoordinator], Select
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_wallbox_type"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
 
     @property
     def current_option(self) -> str | None:
@@ -77,6 +79,7 @@ class MaestroMorningDischargeModeSelect(CoordinatorEntity[E3DCMaestroCoordinator
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_morning_discharge_mode"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
 
     @property
     def current_option(self) -> str | None:
@@ -99,6 +102,7 @@ class MaestroAutoModeObjectiveSelect(CoordinatorEntity[E3DCMaestroCoordinator], 
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_auto_mode_objective"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
 
     @property
     def current_option(self) -> str | None:
@@ -121,6 +125,7 @@ class MaestroTariffModeSelect(CoordinatorEntity[E3DCMaestroCoordinator], SelectE
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_tariff_mode"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
 
     @property
     def current_option(self) -> str | None:

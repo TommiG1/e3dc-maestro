@@ -22,7 +22,7 @@ from homeassistant.util import dt as dt_util
 from .const import ALL_PHASES, DOMAIN
 from .coordinator import E3DCMaestroCoordinator
 from .explanation import decision_explanation as _decision_explanation
-from .sensor_device import device_info as _device_info
+from .sensor_device import device_info as _device_info, set_stable_entity_id
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -826,6 +826,8 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
             # on it regardless of display-name translations or the device
             # name. Does not rename an already-registered entity.
             self.entity_id = f"sensor.{description.stable_object_id}"
+        else:
+            set_stable_entity_id(self, "sensor")
         self._last_write_fp: Any = None
 
     @callback
@@ -1153,6 +1155,7 @@ class MaestroSizingSensor(CoordinatorEntity["E3DCMaestroCoordinator"], SensorEnt
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_sizing_matrix"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "sensor")
         self._last_computed_at: Any = None
         self._last_running: bool | None = None
 
@@ -1267,6 +1270,7 @@ class MaestroSizingScenarioSensor(CoordinatorEntity["E3DCMaestroCoordinator"], S
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_sizing_scenario"
         self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "sensor")
         self._interp_cache_key: tuple[Any, ...] | None = None
         self._interp_cache: Any = None
 

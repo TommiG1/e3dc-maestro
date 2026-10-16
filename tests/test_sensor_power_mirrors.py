@@ -81,13 +81,10 @@ def test_mirror_sensor_value_fn_returns_none_without_state():
         assert _description(key).value_fn(coord) is None
 
 
-def test_current_soc_mirror_unchanged():
-    """Guard against accidentally touching the pre-existing SoC mirror entity_id."""
+def test_current_soc_mirror_is_pinned_to_maestro_prefix():
+    """SoC dashboards rely on sensor.e3dc_maestro_*, never an area-prefixed id."""
     desc = _description("current_soc")
-    assert desc.stable_object_id is None
     coordinator = SimpleNamespace(entry=SimpleNamespace(entry_id="abc123"), data=None)
     entity = MaestroSensor(coordinator, desc)
-    # No stable_object_id set -> entity_id is never explicitly assigned, so HA
-    # derives it from the (translatable) display name, exactly as before this
-    # change.
-    assert "entity_id" not in vars(entity)
+    assert entity.entity_id.startswith("sensor.e3dc_maestro_")
+

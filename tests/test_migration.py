@@ -255,3 +255,69 @@ def test_device_info_uses_manifest_version():
     info = device_info(coord)
     assert info["sw_version"] == VERSION
     assert info["sw_version"] != "0.1.5"
+
+
+@pytest.mark.asyncio
+async def test_migrate_strips_area_prefix(monkeypatch):
+    """Device in area 'Keller' -> HA prefixed ids; dashboards need the plain ones."""
+    entry = SimpleNamespace(entry_id="abc123")
+    prefixed = _registry_entry(
+        "abc123_pv_restprognose_p10", "sensor.keller_e3dc_maestro_pv_restprognose_p10"
+    )
+    plain = _registry_entry("abc123_current_soc", "sensor.e3dc_maestro_aktueller_soc")
+    taken = _registry_entry("abc123_x", "sensor.keller_e3dc_maestro_x")
+
+    fake_registry = MagicMock()
+    fake_registry.async_get.side_effect = lambda eid: (
+        SimpleNamespace() if eid == "sensor.e3dc_maestro_x" else None
+    )
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(return_value=[prefixed, plain, taken]),
+        raising=False,
+    )
+
+    await _async_migrate_entity_ids(MagicMock(), entry)
+
+    fake_registry.async_update_entity.assert_called_once_with(
+        "sensor.keller_e3dc_maestro_pv_restprognose_p10",
+        new_entity_id="sensor.e3dc_maestro_pv_restprognose_p10",
+    )
+
+
+def test_dashboard_entity_ids_are_produced_by_the_integration():
+    """Every `<domain>.e3dc_maestro_*` a dashboard references must be created."""
+    import re
+    from pathlib import Path
+
+    import unicodedata
+
+    def slugify(text: str) -> str:
+        # conftest stubs homeassistant, so approximate HA's slugify.
+        text = re.sub(r"\\u([0-9a-f]{4})", lambda m: chr(int(m[1], 16)), text).replace("€", " eur ")
+        ascii_ = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+        return re.sub(r"[^a-z0-9]+", "_", ascii_.lower()).strip("_")
+
+    root = Path(maestro_init.__file__).parents[2]
+    domains = ("sensor", "binary_sensor", "number", "switch", "select", "button")
+    produced: set[str] = set()
+    for domain in domains:
+        text = (Path(maestro_init.__file__).parent / f"{domain}.py").read_text()
+        names = re.findall(r'\bname="([^"]+)"', text) + re.findall(
+            r'_attr_name = "([^"]+)"', text
+        )
+        stable = re.findall(r'stable_object_id="([^"]+)"', text)
+        produced |= {f"{domain}.e3dc_maestro_{slugify(n)}" for n in names}
+        produced |= {f"{domain}.{s}" for s in stable}
+
+    pattern = re.compile(r"\b(%s)\.(e3dc_maestro_\w+)" % "|".join(domains))
+    missing: set[str] = set()
+    for dash in (root / "dashboards").glob("maestro_dashboard*.yaml"):
+        for domain, obj in pattern.findall(dash.read_text()):
+            if f"{domain}.{obj}" not in produced:
+                missing.add(f"{dash.name}: {domain}.{obj}")
+    assert not missing, sorted(missing)

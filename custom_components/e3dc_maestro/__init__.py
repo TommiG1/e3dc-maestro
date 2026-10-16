@@ -54,6 +54,34 @@ def _is_disabled_by_integration(entity_entry: Any) -> bool:
     return getattr(disabled_by, "value", disabled_by) == "integration"
 
 
+def _strip_area_prefix(ent_reg: Any, entity_entry: Any) -> str:
+    """Rename ``sensor.keller_e3dc_maestro_x`` back to ``sensor.e3dc_maestro_x``.
+
+    Installs whose device sits in an area got an area prefix from HA, which
+    breaks the hardcoded dashboard entity_ids. Skipped when the target is taken.
+    """
+    domain, object_id = entity_entry.entity_id.split(".", 1)
+    idx = object_id.find("e3dc_maestro_")
+    if idx <= 0:
+        return entity_entry.entity_id
+    new_entity_id = f"{domain}.{object_id[idx:]}"
+    if ent_reg.async_get(new_entity_id) is not None:
+        _LOGGER.warning(
+            "E3DC Maestro: kann %s nicht nach %s migrieren – Ziel-entity_id "
+            "ist bereits belegt",
+            entity_entry.entity_id,
+            new_entity_id,
+        )
+        return entity_entry.entity_id
+    _LOGGER.info(
+        "E3DC Maestro: entferne Bereichs-Präfix %s -> %s",
+        entity_entry.entity_id,
+        new_entity_id,
+    )
+    ent_reg.async_update_entity(entity_entry.entity_id, new_entity_id=new_entity_id)
+    return new_entity_id
+
+
 async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Repair registry entries that code changes alone cannot fix.
 
@@ -80,29 +108,31 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
             )
             ent_reg.async_update_entity(entity_entry.entity_id, disabled_by=None)
 
+        current_id = _strip_area_prefix(ent_reg, entity_entry)
+
         new_object_id = _ENTITY_ID_RENAMES.get(key)
         if new_object_id is None:
             continue
 
-        domain = entity_entry.entity_id.split(".", 1)[0]
+        domain = current_id.split(".", 1)[0]
         new_entity_id = f"{domain}.e3dc_maestro_{new_object_id}"
-        if entity_entry.entity_id == new_entity_id:
+        if current_id == new_entity_id:
             continue
         if ent_reg.async_get(new_entity_id) is not None:
             _LOGGER.warning(
                 "E3DC Maestro: kann %s nicht nach %s migrieren – Ziel-entity_id "
                 "ist bereits belegt",
-                entity_entry.entity_id,
+                current_id,
                 new_entity_id,
             )
             continue
 
         _LOGGER.info(
             "E3DC Maestro: migriere entity_id %s -> %s (Dashboard-Rename-Nachzug)",
-            entity_entry.entity_id,
+            current_id,
             new_entity_id,
         )
-        ent_reg.async_update_entity(entity_entry.entity_id, new_entity_id=new_entity_id)
+        ent_reg.async_update_entity(current_id, new_entity_id=new_entity_id)
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
