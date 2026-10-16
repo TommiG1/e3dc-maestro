@@ -15,6 +15,8 @@ interface ApexStatic {
   getChartByID(id: string): ChartApi | undefined;
 }
 
+const roots = new WeakMap<Node, string>();
+
 /**
  * Thin ApexCharts host. Renders into itself (no shadow root) so the panel's
  * styles reach tooltips, and loads ApexCharts only when the first chart appears.
@@ -45,11 +47,40 @@ export class MaestroChart extends LitElement {
     }
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    // Re-attached (e.g. after switching dashboards): the chart was destroyed on disconnect.
+    if (this.hasUpdated && this.options && !this._chart) this.requestUpdate("options");
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._run++;
-    this._chart?.destroy();
+    try {
+      this._chart?.destroy();
+    } catch {
+      /* chart already torn down */
+    }
     this._chart = undefined;
+    this.replaceChildren();
+  }
+
+  /** Make chart ids unique per instance so stale registry entries of a previous panel cannot collide. */
+  private _scoped(o: Opts): Opts {
+    const id = o.chart?.id;
+    const target = o.chart?.brush?.target;
+    const root = this.getRootNode();
+    let uid = roots.get(root);
+    if (!uid) roots.set(root, (uid = Math.random().toString(36).slice(2, 8)));
+    const sfx = uid;
+    return {
+      ...o,
+      chart: {
+        ...o.chart,
+        ...(id ? { id: `${id}-${sfx}` } : {}),
+        ...(target ? { brush: { ...o.chart?.brush, target: `${target}-${sfx}` } } : {}),
+      },
+    } as Opts;
   }
 
   zoomX(min: number, max: number): void {
@@ -58,8 +89,9 @@ export class MaestroChart extends LitElement {
   }
 
   private async _apply(): Promise<void> {
-    const opts = this.options;
-    if (!opts) return;
+    const raw = this.options;
+    if (!raw) return;
+    const opts = this._scoped(raw);
     const run = ++this._run;
     const Apex = (await import("./apex")).default as unknown as ApexStatic;
     if (run !== this._run || !this.isConnected) return;
