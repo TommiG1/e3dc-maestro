@@ -33,7 +33,7 @@ async def test_register_panel_once_for_all_users(ha_frontend):
 
     register.assert_awaited_once()
     kwargs = register.await_args.kwargs
-    assert kwargs["frontend_url_path"] == "e3dc-maestro"
+    assert kwargs["frontend_url_path"] == "maestro-cockpit"
     assert kwargs["webcomponent_name"] == "e3dc-maestro-panel"
     assert kwargs["require_admin"] is False
     assert kwargs["module_url"] == f"/{DOMAIN}/frontend/panel/maestro-panel.js?v={VERSION}"
@@ -49,7 +49,19 @@ async def test_unregister_panel_only_when_registered(ha_frontend):
 
     await panel.async_register_panel(hass)
     panel.async_unregister_panel(hass)
-    remove.assert_called_once_with(hass, "e3dc-maestro")
+    remove.assert_called_once_with(hass, "maestro-cockpit")
+
+
+@pytest.mark.asyncio
+async def test_register_panel_conflict_does_not_break_setup(ha_frontend):
+    register, remove = ha_frontend
+    register.side_effect = ValueError("Overwriting panel maestro-cockpit owned by lovelace")
+    hass = SimpleNamespace(data={})
+
+    await panel.async_register_panel(hass)
+    panel.async_unregister_panel(hass)
+
+    remove.assert_not_called()
 
 
 def test_panel_bundle_and_manifest_dependency():
