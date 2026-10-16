@@ -29,13 +29,14 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
    - [Selects](#selects)
    - [Buttons](#buttons)
 8. [Rule Logic & Phase Priority](#rule-logic--phase-priority)
-9. [Set up Dashboard](#set-up-dashboard)
-10. [Sensor Sign Conventions](#sensor-sign-conventions)
-11. [Troubleshooting & FAQ](#troubleshooting--faq)
-12. [Known Compatibility](#known-compatibility)
-13. [Acknowledgements](#acknowledgements)
-14. [Changelog](CHANGELOG.md)
-15. [License](#license)
+9. [Maestro Cockpit (sidebar panel, beta)](#maestro-cockpit-sidebar-panel-beta)
+10. [Set up Dashboard](#set-up-dashboard)
+11. [Sensor Sign Conventions](#sensor-sign-conventions)
+12. [Troubleshooting & FAQ](#troubleshooting--faq)
+13. [Known Compatibility](#known-compatibility)
+14. [Acknowledgements](#acknowledgements)
+15. [Changelog](CHANGELOG.md)
+16. [License](#license)
 
 ---
 
@@ -75,6 +76,15 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 ## Screenshots
 
 Current live UI (v0.3.26).
+
+### Maestro Cockpit (sidebar panel, since 0.4.0-beta.8)
+
+A dedicated sidebar panel, no custom cards needed. Guide:
+[Maestro Cockpit](#maestro-cockpit-sidebar-panel-beta).
+
+![Cockpit live](Screenshots/cockpit_01_live.png)
+
+![Cockpit forecast](Screenshots/cockpit_02_prognose.png)
 
 ### Modern dashboard
 
@@ -744,6 +754,68 @@ Maestro decides **every tick** (default: 30 s) in descending priority. The first
 | 19 | `idle` | No action needed | clear_power_limits (E3DC takes over) |
 
 > **Note on `idle`:** In idle state Maestro sends `clear_power_limits`. The E3DC then autonomously routes PV surplus into the battery, even if the target SoC has already been reached. This is intentional.
+
+---
+
+## Maestro Cockpit (sidebar panel, beta)
+
+Since **0.4.0-beta.8** Maestro ships its own panel. After updating and restarting
+Home Assistant it appears automatically as **Maestro** in the sidebar (path
+`/maestro-cockpit`). It needs **no custom cards** and no setup; the classic and
+modern dashboards stay as they are.
+
+### Views
+
+| View | Content |
+|---|---|
+| **Live** | Animated energy flow (PV, house, grid, battery), state of charge with target SoC and autonomy, status chips (locks, peak-tariff protection, curtailment guard, emergency charge, forward-looking, price plan) and today's counters with a curve since midnight |
+| **Forecast** | SoC trajectory and power for the next 24 h with control phases, now marker and target SoC. Drag to zoom, overview bar below, 6/12/24 h. **Actuals** overlays the measured values of the last 6 h |
+| **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures (planned grid charge, expected saving, cheapest/most expensive slot). Clearly marked in shadow mode |
+| **Decision** | Current control phase with its reason, charge/discharge limit "target vs. sent" and the phase changes of the last 24 h |
+
+![Cockpit price plan](Screenshots/cockpit_03_preisplan.png)
+
+![Cockpit decision](Screenshots/cockpit_04_entscheidung.png)
+
+### Quick controls
+
+**Controls** (in the navigation) opens a sheet with the most important switches:
+regulation active, predictive charging, PV forecast delay, price plan controls
+battery, price plan shadow mode and forced discharge with a power slider. Changes
+take effect **immediately** (same entities as in the dashboard). The slider only
+sends when released. **Open all settings** jumps to the community dashboard at
+`/e3dc-maestro`.
+
+![Cockpit quick controls](Screenshots/cockpit_05_steuerung.png)
+
+### Phone and tablet
+
+On narrow screens (≤ 960 px, e.g. the companion app) the navigation moves to the
+bottom, the energy flow is laid out vertically and the quick controls open from
+the bottom.
+
+<img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobile" width="300">
+
+### Good to know
+
+- **Visible to all users.** Non-admins see the panel too and can use the quick
+  controls (like the switches in the dashboard). To hide it, use *Edit sidebar*
+  in the user profile – this only hides it, it does not lock it.
+- **Entities are found by their unique ID.** Renamed Maestro entities keep
+  working. If an entity is missing or disabled, the panel shows a notice with the
+  affected ID at the top.
+- **Curves need the recorder.** Daily curves, actuals and the decision history come
+  from the HA history. If Maestro entities are excluded from the recorder these
+  areas stay empty; everything else works.
+- **After an update** the browser normally loads the new version by itself. If the
+  companion app still shows the old one, reset its frontend cache (iOS:
+  *Settings → Companion App → Debugging*).
+- **Language:** German and English (follows the HA language). Times are shown in
+  the device's time zone.
+- **Autonomy "–"** right after a restart is expected: Maestro needs about 10 minutes
+  of consumption data before it computes the autonomy time.
+- The panel is **beta**. Please report problems as an issue with a screenshot,
+  device/browser and – if shown – the red error message in the panel.
 
 ---
 

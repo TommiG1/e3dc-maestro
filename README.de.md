@@ -29,13 +29,14 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
    - [Auswahlen (Selects)](#auswahlen-selects)
    - [Schaltflächen (Buttons)](#schaltflächen-buttons)
 8. [Regellogik & Phasenpriorität](#regellogik--phasenpriorität)
-9. [Dashboard einrichten](#dashboard-einrichten)
-10. [Sensor-Vorzeichen-Konventionen](#sensor-vorzeichen-konventionen)
-11. [Fehlerbehebung & FAQ](#fehlerbehebung--faq)
-12. [Bekannte Kompatibilität](#bekannte-kompatibilität)
-13. [Danksagung](#danksagung)
-14. [Changelog](CHANGELOG.md)
-15. [Lizenz](#lizenz)
+9. [Maestro-Cockpit (Sidebar-Panel, Beta)](#maestro-cockpit-sidebar-panel-beta)
+10. [Dashboard einrichten](#dashboard-einrichten)
+11. [Sensor-Vorzeichen-Konventionen](#sensor-vorzeichen-konventionen)
+12. [Fehlerbehebung & FAQ](#fehlerbehebung--faq)
+13. [Bekannte Kompatibilität](#bekannte-kompatibilität)
+14. [Danksagung](#danksagung)
+15. [Changelog](CHANGELOG.md)
+16. [Lizenz](#lizenz)
 
 ---
 
@@ -75,6 +76,15 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 ## Screenshots
 
 Aktuelle Live-Oberfläche (v0.3.26).
+
+### Maestro-Cockpit (Sidebar-Panel, ab 0.4.0-beta.8)
+
+Eigenes Panel in der Seitenleiste, ohne Custom Cards. Anleitung:
+[Maestro-Cockpit](#maestro-cockpit-sidebar-panel-beta).
+
+![Cockpit Live](Screenshots/cockpit_01_live.png)
+
+![Cockpit Prognose](Screenshots/cockpit_02_prognose.png)
 
 ### Modernes Dashboard
 
@@ -792,6 +802,71 @@ Maestro entscheidet **jeden Tick** (Standard: 30 s) in absteigender Priorität. 
 | 19 | `idle` | Kein Handlungsbedarf | clear_power_limits (E3DC übernimmt) |
 
 > **Hinweis zu `idle`:** Im Idle-Zustand sendet Maestro `clear_power_limits`. Der E3DC lädt danach eigenständig PV-Überschuss in den Akku, auch wenn der Ziel-SoC bereits erreicht ist. Das ist beabsichtigt — der Akku wird dabei nicht durch Maestro gestoppt.
+
+---
+
+## Maestro-Cockpit (Sidebar-Panel, Beta)
+
+Seit **0.4.0-beta.8** bringt Maestro ein eigenes Panel mit. Es erscheint nach dem
+Update und einem Neustart von Home Assistant automatisch als **Maestro** in der
+Seitenleiste (Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards** und
+keine Einrichtung; das Classic- und das Moderne Dashboard bleiben unverändert
+bestehen.
+
+### Ansichten
+
+| Ansicht | Inhalt |
+|---|---|
+| **Live** | Animierter Energiefluss (PV, Haus, Netz, Akku), Ladezustand mit Ziel-SoC und Autonomie, Status-Chips (Sperren, HT-Schutz, Abregelschutz, Notladung, Vorausschau, Preisplan) und Tageswerte mit Verlauf seit Mitternacht |
+| **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
+| **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen (geplante Netzladung, erwartete Ersparnis, günstigster/teuerster Slot). Im Schattenmodus deutlich markiert |
+| **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
+
+![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)
+
+![Cockpit Entscheidung](Screenshots/cockpit_04_entscheidung.png)
+
+### Schnellsteuerung
+
+**Steuerung** (unten in der Navigation) öffnet ein Seitenblatt mit den wichtigsten
+Schaltern: Regelung aktiv, Vorausschauende Ladung, PV-Prognose-Verzögerung,
+Preisplan steuert Akku, Preisplan-Schattenmodus und Erzwungene Entladung mit
+Leistungsregler. Änderungen wirken **sofort** auf die Regelung (gleiche Entitäten
+wie im Dashboard). Der Leistungsregler sendet erst beim Loslassen.
+**Alle Einstellungen öffnen** springt in das Community-Dashboard unter
+`/e3dc-maestro`.
+
+![Cockpit Schnellsteuerung](Screenshots/cockpit_05_steuerung.png)
+
+### Handy und Tablet
+
+Auf schmalen Bildschirmen (≤ 960 px, z. B. Companion App) wandert die Navigation
+nach unten, der Energiefluss steht senkrecht und die Schnellsteuerung öffnet von
+unten.
+
+<img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobil" width="300">
+
+### Gut zu wissen
+
+- **Für alle Nutzer sichtbar.** Auch Nicht-Admins sehen das Panel und können die
+  Schnellsteuerung bedienen (wie die Schalter im Dashboard). Wer das nicht möchte,
+  kann das Panel im Profil über *Seitenleiste bearbeiten* ausblenden – das
+  blendet nur aus, sperrt aber nicht.
+- **Entitäten werden über ihre eindeutige ID gefunden.** Umbenannte
+  Maestro-Entitäten funktionieren weiter. Fehlt eine Entität oder ist sie
+  deaktiviert, zeigt das Panel oben einen Hinweis mit der betroffenen ID.
+- **Verläufe brauchen den Recorder.** Tagesverläufe, Ist-Verlauf und die
+  Entscheidungs-Historie kommen aus der HA-Historie. Sind Maestro-Entitäten vom
+  Recorder ausgeschlossen, bleiben diese Bereiche leer; der Rest funktioniert.
+- **Nach einem Update** lädt der Browser die neue Version normalerweise selbst.
+  Zeigt die Companion App noch den alten Stand, dort den Frontend-Cache
+  zurücksetzen (iOS: *Einstellungen → Companion App → Debugging*).
+- **Sprache:** Deutsch und Englisch (folgt der HA-Spracheinstellung). Uhrzeiten
+  in der Zeitzone des Geräts.
+- **Autonomie „–“** direkt nach einem Neustart ist normal: Maestro braucht rund
+  10 Minuten Verbrauchsdaten, bevor die Autonomiezeit berechnet wird.
+- Das Panel ist **Beta**. Fehler bitte mit Screenshot, Gerät/Browser und – falls
+  sichtbar – der roten Fehlermeldung im Panel als Issue melden.
 
 ---
 

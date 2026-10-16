@@ -11,6 +11,30 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.8] – Maestro-Cockpit als Sidebar-Panel (2026-10-16)
+
+> **Beta.** Inhalt von beta.7 plus das neue Panel. Die Regelung ist unverändert.
+
+### Neu
+- **Maestro-Cockpit:** eigenes Panel in der Seitenleiste (`/maestro-cockpit`),
+  ohne Custom Cards. Vier Ansichten – **Live** (Energiefluss, Akku, Status,
+  Tageswerte), **Prognose** (24-h-SoC-Trajektorie mit Phasen, Zoom und
+  Ist-Verlauf), **Preisplan** (Preis je Slot nach Aktion, geplanter SoC) und
+  **Entscheidung** (Phase mit Begründung, Limits Soll vs. gesendet,
+  Phasenverlauf) – plus **Schnellsteuerung** für die wichtigsten Schalter und
+  die erzwungene Entladung. Für alle Nutzer sichtbar, Deutsch/Englisch,
+  Handy-Layout mit unterer Navigation. Anleitung im README.
+- Das Panel findet seine Entitäten über die eindeutige ID (neuer
+  WebSocket-Befehl `e3dc_maestro/panel_entities`); umbenannte Entitäten
+  funktionieren weiter, fehlende oder deaktivierte werden im Panel benannt.
+
+### Hinweise
+- Classic- und Modernes Dashboard bleiben unverändert erhalten.
+- Das Panel verträgt sich mit `apexcharts-card` auf anderen Dashboards
+  (getrennte Chart-Bibliotheken).
+
+---
+
 ## [0.4.0-beta.7] – Feste Entity-IDs, Einspeisebegrenzung stabil (2026-10-16)
 
 > **Beta.** Inhalt von beta.6 plus die Fixes unten.
