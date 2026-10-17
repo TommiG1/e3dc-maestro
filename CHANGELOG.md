@@ -11,6 +11,24 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.10] – Cockpit-Ausbau und feste Notstromreserve (2026-10-17)
+
+> **Beta.** Inhalt von beta.9 plus die Punkte unten. Die feste Notstromreserve im Cockpit ändert die Regelung.
+
+### Neu
+- **Cockpit Live:** Gruppen Heute und Tagesbilanz, einklappbar, mit Kurzsumme. Zeitraum Heute, Woche, Monat über die Home-Assistant-Statistik. Erzwungene Entladung und feste Notstromreserve direkt auf dem Screen.
+- **Prognose:** Phasenbeschriftung oben im Chart, Kennzahlen zur Datenqualität, CSV der Trajektorie.
+- **Entscheidung:** Reserven, Ladefenster und Auto-Strategie, CSV der Timeline, einklappbares Debug-Log.
+- **Schnellsteuerung:** Limits freigeben ganz oben. Wallbox-Typ, Vorentladung, Auto-Ziel und Tarif als Auswahl. Manuelles Laden mit Rückfrage.
+- **Hinweis-Banner** oben, wenn der Wechselrichter nicht erreichbar ist, eine Sperre aktiv ist oder Netzladung ohne Rechtfertigung läuft.
+- **Feste Notstromreserve:** Schalter plus Prozentwert. Solange er an ist, ersetzt er die saisonale und die verbrauchsadaptive Reserve. Liegt der SoC darunter, lädt Maestro mit maximaler Ladeleistung aus dem Netz bis zu diesem Wert und sperrt die Entladung. Ab dem Wert bleibt nur die Entladesperre. Der Preisplan nutzt denselben Boden. *Notstromreserve (aktuell)* zeigt den festen Wert.
+
+### Hinweise
+- Nach dem Update Home Assistant neu starten, damit Schalter und Prozentwert der festen Reserve angelegt werden.
+- Statistik zurücksetzen bleibt eine Entität und ist nicht im Cockpit.
+
+---
+
 ## [0.4.0-beta.9] – Verbraucher im Energiefluss, 24-h-Verlauf (2026-10-17)
 
 > **Beta.** Inhalt von beta.8 plus die Panel-Erweiterungen unten. Die Regelung ist unverändert.
