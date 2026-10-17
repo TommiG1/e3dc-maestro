@@ -11,6 +11,34 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.11] – Einstellungen im Cockpit, Classic-Dashboard ohne Timeout (2026-10-17)
+
+> **Beta.** Inhalt von beta.10 plus die Punkte unten. Die Regelung ist unverändert.
+
+### Neu
+- **Einstellungen im Cockpit:** eigene Kategorie in der Seitenleiste des Panels. Kacheln wie eine Raumübersicht mit Symbol und Kurzbeschreibung, Tippen öffnet die Gruppe, Zurück führt zur Übersicht (auch per Browser-Zurück). Neun Gruppen in aufbauender Reihenfolge: Anlage; Ziel-SoC und Ladekorridor; Vorausschau und Zeitfenster; Wenig PV und Abregelung; Netz und Tarif; Hochtarif und Reserve; Wallbox, Wärmepumpe, Vorentladung; Steuerverhalten; Diagnose und Aktionen. Schalter, Zahlenfelder, Auswahllisten und Tasten direkt bedienbar; Statistik zurücksetzen fragt nach. Deaktivierte Entitäten werden markiert.
+- **Schwellwerte im Preisplan:** Tarif, Netzladung im günstigen Fenster und Preisplan (Günstig-Schwelle, Ziel-SoC, Tagesbudget, Mindest-Preisspanne, SoC-Obergrenze, Wirkungsgrad, Verschleiß) lassen sich direkt unter Preisplan ändern. Dieselben Entitäten bleiben unter Einstellungen → Netz und Tarif.
+- **Auto-Optimierung im Cockpit:** Schalter und Ziel stehen unter Einstellungen → Steuerverhalten.
+- **Classic-Dashboard direkt aus dem Cockpit anlegen:** Kachel unter Einstellungen. Sie zeigt, ob Mushroom Cards und ApexCharts Card installiert sind, und legt das Dashboard per Klick unter dem Pfad `e3dc-maestro` an (nur Administratoren). Ein leeres Dashboard unter diesem Pfad wird eingerichtet, eines mit anderem Inhalt nie überschrieben. Die manuelle Anleitung über *Community dashboards* steht aufklappbar darunter.
+
+### Geändert
+- **Alle Einstellungen öffnen** im Steuerungs-Sheet führt zu den Einstellungen im Cockpit statt ins Classic-Dashboard.
+- **Hilfetext korrigiert:** Das Classic-Dashboard baut sich bei jedem Öffnen aus der aktuellen Vorlage auf. Maestro-Updates kommen damit automatisch an; Löschen und neu anlegen ist nicht nötig, solange es nicht im Editor übernommen wurde.
+
+### Behoben
+- **Nettokosten für Woche und Monat:** Der nächtliche Rücksprung des Tageswerts zählte als Minusbetrag, angezeigt wurde praktisch nur ein Tag. Das Cockpit rechnet jetzt Bruttokosten minus Einspeiseerlös.
+- **Fehlermeldungen sichtbar:** Lehnt Home Assistant eine Änderung unter Einstellungen oder Preisplan ab (z. B. Wert außerhalb des Bereichs), erscheint die Meldung oben im Cockpit. Bisher sprang das Feld kommentarlos zurück.
+- **Zurück aus einer Einstellungsgruppe** nach direktem Aufruf per Link verlässt das Cockpit nicht mehr.
+- Escape schließt das Steuerungs-Sheet. Gesperrter Browser-Speicher blockiert die Verbraucherliste nicht mehr.
+- **Classic-Dashboard: Timeout beim ersten Laden** (`Timeout waiting for strategy element ll-strategy-dashboard-e3dc-maestro`): Lovelace wartet nur 5 Sekunden auf das Strategy-Modul. Das stand bisher als letzte Dashboard-Ressource in der Warteschlange und war über den Integrationspfad erst nach dem Start der Integration erreichbar. Maestro kopiert das Modul jetzt nach `config/www/e3dc_maestro/` (ausgeliefert unter `/local/…`, sobald Home Assistant läuft) und setzt die Ressource an die erste Stelle. Gibt es `config/www` noch nicht, bleibt bis zum nächsten Neustart der bisherige Pfad aktiv.
+
+### Hinweise
+- Nach dem Update Home Assistant neu starten; beim allerersten Mal ohne `config/www` ist ein zweiter Neustart nötig, damit `/local` greift.
+- `config/www/e3dc_maestro/` enthält nur Code und Dashboard-Layout und wird bei jedem Start überschrieben. Bitte dort nichts selbst ablegen.
+- Aus beta.10 weiterhin gültig: Statistik zurücksetzen ist eine Entität (jetzt auch unter Einstellungen → Diagnose und Aktionen). Zeigt die Companion App den alten Stand, Frontend-Cache zurücksetzen.
+
+---
+
 ## [0.4.0-beta.10] – Cockpit-Ausbau und feste Notstromreserve (2026-10-17)
 
 > **Beta.** Inhalt von beta.9 plus die Punkte unten. Die feste Notstromreserve im Cockpit ändert die Regelung.

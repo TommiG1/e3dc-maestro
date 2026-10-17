@@ -879,8 +879,9 @@ bestehen.
 |---|---|
 | **Live** | Energiefluss (PV, Haus, Netz, Akku) mit leuchtenden Teilchen, deren Tempo mit der Leistung mitgeht. Zusätzliche Verbraucher lassen sich einblenden. Ein Klick auf ein Symbol öffnet den Verlauf der letzten 24 h. Dazu Ladezustand mit Ziel-SoC und Autonomie, Status-Chips und Tageswerte seit Mitternacht |
 | **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
-| **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen (geplante Netzladung, erwartete Ersparnis, günstigster/teuerster Slot). Im Schattenmodus deutlich markiert |
+| **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen. Darunter die Schwellwerte für dynamischen Tarif und Netzladung (Günstig-Schwelle, Ziel im günstigen Fenster, Tagesbudget, Mindest-Preisspanne, SoC-Obergrenze). Im Schattenmodus deutlich markiert |
 | **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
+| **Einstellungen** | Kachelübersicht der Regelbereiche plus die Kachel **Classic-Dashboard**: prüft die benötigten HACS-Karten (Mushroom Cards, ApexCharts Card) und legt das Dashboard mit einem Klick an (Administratoren) |
 
 ![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)
 
@@ -893,8 +894,10 @@ Schaltern: Regelung aktiv, Vorausschauende Ladung, PV-Prognose-Verzögerung,
 Preisplan steuert Akku, Preisplan-Schattenmodus und Erzwungene Entladung mit
 Leistungsregler. Änderungen wirken **sofort** auf die Regelung (gleiche Entitäten
 wie im Dashboard). Der Leistungsregler sendet erst beim Loslassen.
-**Alle Einstellungen öffnen** springt in das Community-Dashboard unter
-`/e3dc-maestro`.
+Die vollständige Konfiguration liegt in der Ansicht **Einstellungen** in der
+Navigation; **Alle Einstellungen öffnen** im Sheet führt dorthin. Hilfe,
+Auswertung der Auto-Optimierung und Sizing Advisor bleiben im Community-Dashboard
+unter `/e3dc-maestro`.
 
 Darunter, unter **Anzeige**, lassen sich bis zu sechs Verbraucher für den
 Energiefluss eintragen (Name, Symbol, Leistungssensor in Watt). Das Symbol ist
@@ -956,7 +959,15 @@ mehr per YAML eingefügt** werden.
 Zusätzlich: **Home Assistant ≥ 2026.5** für den Eintrag unter *Community dashboards*
 (ohne Picker bleibt der manuelle YAML-Import unten als Fallback).
 
-### Empfohlen: Community-Dashboard (ein Klick)
+### Empfohlen: direkt aus dem Cockpit
+
+Im Sidebar-Panel **Maestro → Einstellungen → Classic-Dashboard** zeigt Maestro,
+ob Mushroom und ApexCharts installiert sind, und legt das Dashboard mit
+**Dashboard anlegen** unter dem Pfad `e3dc-maestro` an. Das geht nur als
+Administrator. Ein vorhandenes leeres Dashboard unter diesem Pfad wird
+eingerichtet; ein Dashboard mit anderem Inhalt bleibt unangetastet.
+
+### Alternativ: Community-Dashboard
 
 1. Integration **E3DC Maestro** einrichten (oder HA neu starten, falls sie schon läuft)
 2. Browser **hart neu laden** (damit das Strategy-Modul geladen wird)
@@ -967,15 +978,23 @@ Zusätzlich: **Home Assistant ≥ 2026.5** für den Eintrag unter *Community das
 > Der URL-Pfad muss **`e3dc-maestro`** lauten (Hilfe-Links). Der Dialog schlägt
 > den passenden Titel vor — bitte nicht umbenennen, bevor der Slug steht.
 
-Das Dashboard erscheint in der Sidebar. Änderungen an Maestro-Releases aktualisieren
-die Strategy-Vorlage; ein bereits angelegtes Storage-Dashboard bleibt unverändert,
-bis du es löschst und neu anlegst.
+Das Dashboard erscheint in der Sidebar. Es baut sich bei jedem Öffnen aus der
+aktuellen Strategy-Vorlage auf, Maestro-Updates kommen also automatisch an.
+Übernimmst du es im Editor (*Kontrolle übernehmen*), wird daraus eine feste
+Kopie, die keine Updates mehr bekommt.
+
+Maestro kopiert das Strategy-Modul nach `config/www/e3dc_maestro/` und trägt es
+als **erste** Dashboard-Ressource ein. So ist es geladen, bevor Lovelace nach
+5 Sekunden aufgibt. Gab es `config/www` noch nicht, greift die Kopie ab dem
+nächsten Neustart; bis dahin läuft das Modul über den Integrationspfad.
 
 Wenn **Timeout waiting for strategy element ll-strategy-dashboard-e3dc-maestro**
 erscheint: Home Assistant neu starten und den Browser hart neu laden. Danach unter
-**Einstellungen → Dashboards → Ressourcen** (erweiterter Modus)
-`/e3dc_maestro/frontend/e3dc-maestro-strategy.js` als JavaScript-Modul prüfen.
-Im Lovelace-YAML-Modus muss dieser Eintrag manuell gesetzt werden.
+**Einstellungen → Dashboards → Ressourcen** (erweiterter Modus) prüfen: Ganz oben
+steht `/local/e3dc_maestro/e3dc-maestro-strategy.js` (vor diesem Neustart
+`/e3dc_maestro/frontend/e3dc-maestro-strategy.js`) als JavaScript-Modul.
+Im Lovelace-YAML-Modus muss dieser Eintrag manuell gesetzt werden, möglichst
+weit oben in der Liste.
 
 ### Fallback: Manueller YAML-Import
 

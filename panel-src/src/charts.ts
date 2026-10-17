@@ -16,6 +16,20 @@ import {
 
 type Opts = ApexChartsType.ApexOptions;
 
+type Surface = { text: string; muted: string; faint: string; bg: string; grid: string; series: string; track: string; mode: "dark" | "light" };
+
+const SURFACES: Record<"dark" | "classic", Surface> = {
+  dark: { text: "#e8edf7", muted: "#8b96ad", faint: "#5a6580", bg: "#070b14", grid: "rgba(255,255,255,0.06)", series: "#ffffff", track: "rgba(255,255,255,0.06)", mode: "dark" as const },
+  classic: { text: "#152033", muted: "#5b6b80", faint: "#8b97a8", bg: "#eef2f6", grid: "rgba(21,32,51,0.08)", series: "#152033", track: "rgba(21,32,51,0.08)", mode: "light" as const },
+};
+
+let surface: Surface = SURFACES.dark;
+
+/** Chart ink follows the panel look. Call this before building options. */
+export function useChartTheme(theme: "dark" | "classic"): void {
+  surface = theme === "classic" ? SURFACES.classic : SURFACES.dark;
+}
+
 export const COLORS = {
   pv: "#fbbf24",
   house: "#a78bfa",
@@ -24,11 +38,31 @@ export const COLORS = {
   bat: "#22d3ee",
   accent: "#38bdf8",
   accent2: "#818cf8",
-  text: "#e8edf7",
-  muted: "#8b96ad",
-  faint: "#5a6580",
-  bg: "#070b14",
-} as const;
+  get text() {
+    return surface.text;
+  },
+  get muted() {
+    return surface.muted;
+  },
+  get faint() {
+    return surface.faint;
+  },
+  get bg() {
+    return surface.bg;
+  },
+  get grid() {
+    return surface.grid;
+  },
+  get series() {
+    return surface.series;
+  },
+  get track() {
+    return surface.track;
+  },
+  get mode() {
+    return surface.mode;
+  },
+};
 
 export const ACTION_COLOR: Record<SlotAction, string> = {
   charge: COLORS.gridOut,
@@ -36,7 +70,7 @@ export const ACTION_COLOR: Record<SlotAction, string> = {
   release: COLORS.bat,
 };
 
-const base = {
+const chartBase = (): Obj => ({
   chart: {
     background: "transparent",
     foreColor: COLORS.muted,
@@ -44,12 +78,12 @@ const base = {
     toolbar: { show: false },
     animations: { enabled: false },
   },
-  theme: { mode: "dark" },
-  grid: { borderColor: "rgba(255,255,255,0.06)", strokeDashArray: 4 },
+  theme: { mode: COLORS.mode },
+  grid: { borderColor: COLORS.grid, strokeDashArray: 4 },
   dataLabels: { enabled: false },
   legend: { show: false },
-  tooltip: { theme: "dark" },
-};
+  tooltip: { theme: COLORS.mode },
+});
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
@@ -58,7 +92,7 @@ const merge = (a: Obj, b: Obj): Obj => {
   for (const [k, v] of Object.entries(b)) out[k] = isObj(v) && isObj(out[k]) ? merge(out[k] as Obj, v) : v;
   return out;
 };
-const withBase = (o: Obj): Opts => merge(base, o) as unknown as Opts;
+const withBase = (o: Obj): Opts => merge(chartBase(), o) as unknown as Opts;
 
 const nowMarker = (label: string) => ({
   x: Date.now(),
@@ -263,7 +297,7 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
       },
       { name: i18n.t("legendPlanSoc"), type: "line", data: slots.map((s) => ({ x: ts(s), y: s.soc_pct })) },
     ],
-    colors: [COLORS.bat, "#ffffff"],
+    colors: [COLORS.bat, COLORS.series],
     stroke: { width: [0, 2.5], curve: "stepline" },
     plotOptions: { bar: { columnWidth: "78%", borderRadius: 4, borderRadiusApplication: "end" } },
     fill: { opacity: [0.85, 1] },
@@ -295,13 +329,13 @@ export function ringOptions(soc: number, label: string): Opts {
     chart: { type: "radialBar", height: 270, sparkline: { enabled: true } },
     series: [soc],
     colors: [COLORS.bat],
-    fill: { type: "gradient", gradient: { shade: "dark", type: "horizontal", gradientToColors: [COLORS.accent2], stops: [0, 100] } },
+    fill: { type: "gradient", gradient: { shade: COLORS.mode, type: "horizontal", gradientToColors: [COLORS.accent2], stops: [0, 100] } },
     plotOptions: {
       radialBar: {
         hollow: { size: "68%" },
         startAngle: -135,
         endAngle: 135,
-        track: { background: "rgba(255,255,255,0.06)", strokeWidth: "100%" },
+        track: { background: COLORS.track, strokeWidth: "100%" },
         dataLabels: {
           name: { show: true, offsetY: 26, color: COLORS.muted, fontSize: "13px" },
           value: { offsetY: -14, fontSize: "46px", fontWeight: 800, color: COLORS.text, formatter: (v: number) => `${Math.round(v)}%` },

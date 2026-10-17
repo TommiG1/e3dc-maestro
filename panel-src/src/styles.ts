@@ -21,9 +21,25 @@ export const styles = css`
     --warn: #fbbf24;
     --radius: 20px;
     --radius-sm: 12px;
+    --rail: rgba(7, 11, 20, 0.55);
+    --rail-solid: rgba(7, 11, 20, 0.88);
+    --btn: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+    --card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+    --card-highlight: rgba(255, 255, 255, 0.05);
+    --card-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    --fill: rgba(255, 255, 255, 0.04);
+    --field: rgba(0, 0, 0, 0.25);
+    --switch-track: rgba(255, 255, 255, 0.12);
+    --tip-bg: #0c1424;
+    --float: linear-gradient(180deg, rgba(20, 28, 48, 0.94), rgba(12, 18, 32, 0.97));
+    --float-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+    --scrim: rgba(3, 6, 12, 0.55);
+    --tooltip: rgba(14, 20, 36, 0.95);
+    color-scheme: dark;
     display: block;
-    height: 100%;
-    overflow-y: auto;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
     box-sizing: border-box;
     color: var(--text);
     font-family: Inter, system-ui, sans-serif;
@@ -31,7 +47,38 @@ export const styles = css`
     background:
       radial-gradient(1200px 600px at 10% -10%, rgba(56, 189, 248, 0.14), transparent 60%),
       radial-gradient(900px 500px at 100% 0%, rgba(129, 140, 248, 0.14), transparent 60%),
-      radial-gradient(800px 600px at 50% 120%, rgba(34, 211, 238, 0.08), transparent 60%), var(--bg);
+      radial-gradient(800px 600px at 50% 120%, rgba(34, 211, 238, 0.08), transparent 60%),
+      var(--bg);
+  }
+  :host([theme="classic"]) {
+    color-scheme: light;
+    --bg: #e7eef5;
+    --glass: rgba(21, 36, 56, 0.045);
+    --glass-strong: rgba(21, 36, 56, 0.08);
+    --stroke: rgba(21, 36, 56, 0.1);
+    --stroke-strong: rgba(21, 36, 56, 0.16);
+    --text: #152033;
+    --muted: #526277;
+    --faint: #8493a6;
+    --rail: rgba(255, 255, 255, 0.82);
+    --rail-solid: rgba(255, 255, 255, 0.94);
+    --btn: linear-gradient(180deg, #ffffff, #f3f7fb);
+    --card-bg: linear-gradient(180deg, #ffffff, #f6f9fc);
+    --card-highlight: rgba(255, 255, 255, 0.9);
+    --card-shadow: 0 14px 34px rgba(21, 32, 51, 0.08);
+    --fill: rgba(21, 36, 56, 0.045);
+    --field: #ffffff;
+    --switch-track: rgba(21, 36, 56, 0.14);
+    --tip-bg: #ffffff;
+    --float: linear-gradient(180deg, #ffffff, #f4f7fb);
+    --float-shadow: 0 24px 60px rgba(21, 32, 51, 0.16);
+    --scrim: rgba(21, 32, 51, 0.32);
+    --tooltip: rgba(255, 255, 255, 0.98);
+    background:
+      radial-gradient(1100px 560px at 8% -12%, rgba(2, 132, 199, 0.16), transparent 58%),
+      radial-gradient(860px 480px at 100% 0%, rgba(14, 165, 164, 0.12), transparent 56%),
+      radial-gradient(700px 520px at 50% 120%, rgba(217, 119, 6, 0.08), transparent 60%),
+      var(--bg);
   }
   * {
     box-sizing: border-box;
@@ -52,21 +99,22 @@ export const styles = css`
   .app {
     display: grid;
     grid-template-columns: 84px 1fr;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 
   /* Navigation */
   .rail {
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
     padding: 20px 0;
     border-right: 1px solid var(--stroke);
-    background: rgba(7, 11, 20, 0.55);
+    background: var(--rail);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
@@ -85,8 +133,10 @@ export const styles = css`
     height: 24px;
   }
   .nav-btn {
-    width: 60px;
-    padding: 10px 0 8px;
+    width: 68px;
+    padding: 10px 2px 8px;
+    text-align: center;
+    line-height: 1.15;
     border-radius: 14px;
     border: 0;
     cursor: pointer;
@@ -124,6 +174,9 @@ export const styles = css`
     max-width: 1480px;
     width: 100%;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .topbar {
     display: flex;
@@ -201,7 +254,7 @@ export const styles = css`
     padding: 9px 16px;
     border-radius: 12px;
     border: 1px solid var(--stroke-strong);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+    background: var(--btn);
     color: var(--text);
     font: 600 13px Inter, system-ui, sans-serif;
   }
@@ -212,18 +265,26 @@ export const styles = css`
     width: 16px;
     height: 16px;
   }
+  .btn.primary {
+    border-color: rgba(56, 189, 248, 0.7);
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.35), rgba(56, 189, 248, 0.15));
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
 
   .card {
     position: relative;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+    background: var(--card-bg);
     border: 1px solid var(--stroke);
     border-radius: var(--radius);
     padding: 20px;
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 20px 50px rgba(0, 0, 0, 0.25);
+      0 1px 0 var(--card-highlight) inset,
+      var(--card-shadow);
     min-width: 0;
   }
   .card h3 {
@@ -309,7 +370,7 @@ export const styles = css`
     height: 36px;
     border-radius: 12px;
     border: 1px solid var(--stroke-strong);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--fill);
     color: var(--muted);
     display: grid;
     place-items: center;
@@ -365,7 +426,7 @@ export const styles = css`
     text-align: center;
     padding: 10px 6px;
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--fill);
     border: 1px solid var(--stroke);
   }
   .meta b {
@@ -392,7 +453,7 @@ export const styles = css`
     font-size: 12.5px;
     font-weight: 500;
     color: var(--muted);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--fill);
     border: 1px solid var(--stroke);
   }
   .chip i {
@@ -524,7 +585,7 @@ export const styles = css`
     display: inline-flex;
     padding: 3px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--fill);
     border: 1px solid var(--stroke);
   }
   .seg button,
@@ -595,7 +656,7 @@ export const styles = css`
   .sheet select,
   .btn.action {
     border: 1px solid var(--stroke-strong);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--fill);
     color: var(--text);
     border-radius: 10px;
     padding: 8px 10px;
@@ -682,6 +743,19 @@ export const styles = css`
     flex-direction: column;
     gap: 14px;
   }
+  .plan-tune {
+    margin-top: 14px;
+  }
+  .plan-tune h4 {
+    margin: 18px 0 0;
+    font-size: 15px;
+  }
+  .plan-tune .sub {
+    margin: 4px 0 2px;
+  }
+  .plan-tune .hint {
+    margin: 6px 0 0;
+  }
   .plan-state {
     font-size: 22px;
     font-weight: 700;
@@ -720,7 +794,7 @@ export const styles = css`
   .slot {
     height: 34px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--fill);
   }
   .slot.charge {
     background: linear-gradient(180deg, rgba(52, 211, 153, 0.9), rgba(52, 211, 153, 0.45));
@@ -788,7 +862,7 @@ export const styles = css`
   .bar {
     height: 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--fill);
     position: relative;
     overflow: hidden;
   }
@@ -857,7 +931,7 @@ export const styles = css`
   .scrim {
     position: fixed;
     inset: 0;
-    background: rgba(3, 6, 12, 0.55);
+    background: var(--scrim);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     opacity: 0;
@@ -878,9 +952,9 @@ export const styles = css`
     z-index: 21;
     border-radius: 24px;
     padding: 22px;
-    background: linear-gradient(180deg, rgba(20, 28, 48, 0.94), rgba(12, 18, 32, 0.97));
+    background: var(--float);
     border: 1px solid var(--stroke-strong);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--float-shadow);
     transform: translateX(110%);
     transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
     overflow-y: auto;
@@ -902,7 +976,7 @@ export const styles = css`
     transform: translate(-50%, -48%);
     border-radius: 24px;
     padding: 22px;
-    background: linear-gradient(180deg, rgba(20, 28, 48, 0.97), rgba(12, 18, 32, 0.98));
+    background: var(--float);
     border: 1px solid var(--stroke-strong);
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
   }
@@ -926,7 +1000,7 @@ export const styles = css`
     gap: 14px;
     padding: 14px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.035);
+    background: var(--fill);
     border: 1px solid var(--stroke);
     margin-top: 10px;
   }
@@ -946,11 +1020,250 @@ export const styles = css`
     font-size: 12px;
     color: var(--muted);
   }
+  .settings-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .settings-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 148px;
+    padding: 18px 18px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .settings-tile:hover {
+    background: var(--glass-strong);
+    border-color: var(--stroke-strong);
+  }
+  .settings-tile svg {
+    width: 28px;
+    height: 28px;
+    color: var(--accent);
+  }
+  .settings-tile b {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .settings-tile span {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .settings-detail {
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-tiles .hint {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .theme-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .theme-choice {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--stroke);
+    background: var(--card-bg);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    box-shadow: var(--card-shadow);
+  }
+  .theme-choice.on {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent), var(--card-shadow);
+  }
+  .theme-choice .swatch {
+    width: 64px;
+    height: 44px;
+    border-radius: 12px;
+    flex: none;
+    border: 1px solid rgba(21, 36, 56, 0.12);
+  }
+  .theme-choice .swatch.dark {
+    background: linear-gradient(145deg, #070b14, #1a3a52 70%, #38bdf8);
+  }
+  .theme-choice .swatch.classic {
+    background: linear-gradient(145deg, #f7fbff, #d5e4f2 68%, #0284c7);
+  }
+  .theme-choice .txt {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .theme-choice .txt b {
+    font-size: 15px;
+  }
+  .theme-choice .txt span {
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  .guide p {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .guide h3 {
+    margin: 22px 0 10px;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .guide ol {
+    margin: 0 0 16px;
+    padding-left: 1.2rem;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .guide li + li {
+    margin-top: 8px;
+  }
+  .dep {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    border-radius: 16px;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+  }
+  .dep b {
+    font-size: 14px;
+  }
+  .dep span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .guide .btn {
+    margin-top: 8px;
+  }
+  .guide .ok,
+  .dep .ok {
+    color: var(--ok);
+  }
+  .guide .bad,
+  .dep .bad {
+    color: #f87171;
+  }
+  .classic-action {
+    margin-bottom: 18px;
+  }
+  .classic-action p {
+    margin-bottom: 6px;
+  }
+  .guide details {
+    margin-top: 18px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+  }
+  .guide summary {
+    cursor: pointer;
+    font-weight: 650;
+    color: var(--text);
+  }
+  .guide details[open] summary {
+    margin-bottom: 12px;
+  }
+  .setting-row select,
+  .setting-num input {
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 600 14px Inter, system-ui, sans-serif;
+    padding: 8px 10px;
+  }
+  .setting-row select {
+    max-width: 220px;
+  }
+  .setting-num {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .setting-num input {
+    width: 7.5rem;
+  }
+  .setting-num span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .setting-row .name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  maestro-setting-tip {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+  }
+  .info {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--stroke-strong);
+    background: transparent;
+    color: var(--muted);
+    font: 600 11px/16px Inter, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .info[aria-expanded="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .tip {
+    position: absolute;
+    z-index: 30;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: min(280px, 70vw);
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--tip-bg);
+    border: 1px solid var(--stroke-strong);
+    color: var(--text);
+    font: 500 13px/1.45 Inter, system-ui, sans-serif;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+  }
+  .setting-row.locked {
+    opacity: 0.7;
+  }
   .switch {
     width: 46px;
     height: 28px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--switch-track);
     border: 0;
     padding: 0;
     position: relative;
@@ -1017,7 +1330,7 @@ export const styles = css`
     gap: 8px;
     padding: 12px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.035);
+    background: var(--fill);
     border: 1px solid var(--stroke);
     margin-top: 10px;
   }
@@ -1027,7 +1340,7 @@ export const styles = css`
     box-sizing: border-box;
     border-radius: 10px;
     border: 1px solid var(--stroke-strong);
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--field);
     color: var(--text);
     font: 600 14px Inter, system-ui, sans-serif;
     padding: 8px 10px;
@@ -1080,7 +1393,7 @@ export const styles = css`
     gap: 4px;
     padding: 3px;
     border-radius: 12px;
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--field);
   }
   .seg button {
     border: 0;
@@ -1113,7 +1426,7 @@ export const styles = css`
     text-align: left;
     border-radius: 12px;
     border: 1px solid var(--stroke);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--fill);
     color: var(--text);
     padding: 8px 10px;
     cursor: pointer;
@@ -1125,8 +1438,9 @@ export const styles = css`
   }
 
   /* ApexCharts overrides */
-  .apexcharts-tooltip.apexcharts-theme-dark {
-    background: rgba(14, 20, 36, 0.95) !important;
+  .apexcharts-tooltip.apexcharts-theme-dark,
+  .apexcharts-tooltip.apexcharts-theme-light {
+    background: var(--tooltip) !important;
     border: 1px solid var(--stroke-strong) !important;
     border-radius: 12px !important;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
@@ -1136,7 +1450,7 @@ export const styles = css`
     border-bottom: 1px solid var(--stroke) !important;
   }
   .apexcharts-xaxistooltip {
-    background: rgba(14, 20, 36, 0.95) !important;
+    background: var(--tooltip) !important;
     border-color: var(--stroke-strong) !important;
     color: var(--text) !important;
   }
@@ -1164,7 +1478,7 @@ export const styles = css`
       padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
       border-right: 0;
       border-top: 1px solid var(--stroke);
-      background: rgba(7, 11, 20, 0.88);
+      background: var(--rail-solid);
     }
     .rail .logo,
     .rail .spacer {

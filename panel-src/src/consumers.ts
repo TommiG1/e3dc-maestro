@@ -105,7 +105,11 @@ export function loadConsumers(): Consumer[] {
 }
 
 export function saveConsumers(list: Consumer[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(parseConsumers(list)));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(parseConsumers(list)));
+  } catch {
+    // storage blocked or full: the list still applies for this session
+  }
 }
 
 export function toFlow(list: Consumer[], hass: Hass): FlowConsumer[] {

@@ -831,8 +831,9 @@ modern dashboards stay as they are.
 |---|---|
 | **Live** | Energy flow (PV, house, grid, battery) with glowing particles whose speed follows the power. Extra consumers can be shown. A click on a symbol opens the last 24 h. Plus state of charge with target SoC and autonomy, status chips and today's counters since midnight |
 | **Forecast** | SoC trajectory and power for the next 24 h with control phases, now marker and target SoC. Drag to zoom, overview bar below, 6/12/24 h. **Actuals** overlays the measured values of the last 6 h |
-| **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures (planned grid charge, expected saving, cheapest/most expensive slot). Clearly marked in shadow mode |
+| **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures. Below that, the thresholds for a dynamic tariff and grid charging (cheap threshold, cheap-window target, daily budget, minimum spread, SoC cap). Clearly marked in shadow mode |
 | **Decision** | Current control phase with its reason, charge/discharge limit "target vs. sent" and the phase changes of the last 24 h |
+| **Settings** | Tile overview of the control areas, plus a **Classic dashboard** tile that checks the required HACS cards (Mushroom Cards, ApexCharts Card) and creates the dashboard with one click (administrators) |
 
 ![Cockpit price plan](Screenshots/cockpit_03_preisplan.png)
 
@@ -844,7 +845,9 @@ modern dashboards stay as they are.
 regulation active, predictive charging, PV forecast delay, price plan controls
 battery, price plan shadow mode and forced discharge with a power slider. Changes
 take effect **immediately** (same entities as in the dashboard). The slider only
-sends when released. **Open all settings** jumps to the community dashboard at
+sends when released. The full configuration lives in the **Settings** view in
+the navigation; **Open all settings** in the sheet leads there. Help, the auto
+optimisation details and the sizing advisor stay in the community dashboard at
 `/e3dc-maestro`.
 
 Below that, under **Display**, up to six consumers can be added to the energy
@@ -905,7 +908,15 @@ need to paste YAML by hand.
 Also: **Home Assistant ≥ 2026.5** for the *Community dashboards* picker entry
 (older versions can still use the YAML fallback below).
 
-### Recommended: Community dashboard (one click)
+### Recommended: straight from the cockpit
+
+In the sidebar panel **Maestro → Settings → Classic dashboard**, Maestro shows
+whether Mushroom and ApexCharts are installed and creates the dashboard at the
+path `e3dc-maestro` with **Create dashboard**. Administrators only. An existing
+empty dashboard at that path is set up; a dashboard with other content is left
+untouched.
+
+### Alternative: Community dashboard
 
 1. Set up the **E3DC Maestro** integration (or restart HA if it is already running)
 2. **Hard-reload** the browser so the strategy module loads
@@ -916,15 +927,23 @@ Also: **Home Assistant ≥ 2026.5** for the *Community dashboards* picker entry
 > Help links require the URL path **`e3dc-maestro`**. The dialog suggests the
 > matching title — do not rename before the slug is set.
 
-The dashboard appears in the sidebar. Integration updates refresh the strategy
-template; an already created storage dashboard stays as-is until you delete and
-re-add it.
+The dashboard appears in the sidebar. It is built from the current strategy
+template every time it opens, so Maestro updates arrive automatically. If you
+take control of it in the editor, it becomes a fixed copy that no longer gets
+updates.
+
+Maestro copies the strategy module to `config/www/e3dc_maestro/` and registers it
+as the **first** dashboard resource, so it loads before Lovelace's 5-second
+wait expires. If `config/www` did not exist yet, the copy takes effect after the
+next restart; until then the integration path is used.
 
 If you see **Timeout waiting for strategy element ll-strategy-dashboard-e3dc-maestro**,
 restart Home Assistant and hard-reload the browser. Then check
-**Settings → Dashboards → Resources** (Advanced Mode) for
-`/e3dc_maestro/frontend/e3dc-maestro-strategy.js` as a JavaScript module.
-YAML-mode Lovelace cannot auto-register that resource — add it yourself.
+**Settings → Dashboards → Resources** (Advanced Mode): the first entry should be
+`/local/e3dc_maestro/e3dc-maestro-strategy.js` (or
+`/e3dc_maestro/frontend/e3dc-maestro-strategy.js` before that restart) as a
+JavaScript module. YAML-mode Lovelace cannot auto-register that resource — add
+it yourself, near the top of the list.
 
 ### Fallback: Manual YAML import
 

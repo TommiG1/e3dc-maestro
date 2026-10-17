@@ -17,8 +17,8 @@ import {
   type ConsumerMode,
 } from "./consumers";
 import { controlsSheet } from "./controls";
-import { applyEntityMap, DEFAULT_IDS, E, isOn, num, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
-import { powerHistoryOptions } from "./charts";
+import { applyEntityMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
 import { makeFmt } from "./format";
 import { loadCollapsed, saveCollapsed } from "./groups";
@@ -26,6 +26,7 @@ import { loadIst, loadPeriodSums, loadPowerSeries, loadSparks, loadTimeline, typ
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { styles } from "./styles";
+import { loadTheme, saveTheme, type ThemeId } from "./theme";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
 
 const NODE_META = {
@@ -34,16 +35,19 @@ const NODE_META = {
   house: { entity: "house" as const, color: "#a78bfa", label: "nodeHouse" as const },
   bat: { entity: "battery" as const, color: "#22d3ee", label: "nodeBatCharge" as const },
 };
+import { checkClassic, classicErrorText, createClassic, type ClassicStatus } from "./classic";
+import { CLASSIC_DASHBOARD, isSettingsArea, settingsHeading, settingsView } from "./settings";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
-type Screen = "live" | "forecast" | "plan" | "decision";
+type Screen = "live" | "forecast" | "plan" | "decision" | "settings";
 const SCREENS: { id: Screen; label: Key; sub: Key; icon: string }[] = [
   { id: "live", label: "navLive", sub: "subLive", icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' },
   { id: "forecast", label: "navForecast", sub: "subForecast", icon: '<path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/>' },
   { id: "plan", label: "navPlan", sub: "subPlan", icon: '<rect x="3" y="10" width="4" height="11" rx="1"/><rect x="10" y="5" width="4" height="16" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/>' },
   { id: "decision", label: "navDecision", sub: "subDecision", icon: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>' },
+  { id: "settings", label: "navSettings", sub: "subSettings", icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
 ];
 const SLIDERS_ICON = '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>';
 const MOBILE = "(max-width: 960px)";
@@ -56,17 +60,23 @@ const MISSING_SHOWN = 6;
 const icon = (paths: string, cls = "") =>
   html`<svg class=${cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" .innerHTML=${paths}></svg>`;
 
-const initialScreen = (): Screen => {
-  const h = location.hash.slice(1);
-  return SCREENS.some((s) => s.id === h) ? (h as Screen) : "live";
+const readLocation = (): { screen: Screen; settingsGroup?: string } => {
+  const [rawScreen, rawGroup] = location.hash.slice(1).split("/");
+  const screen = SCREENS.some((s) => s.id === rawScreen) ? (rawScreen as Screen) : "live";
+  const settingsGroup = screen === "settings" && isSettingsArea(rawGroup) ? rawGroup : undefined;
+  return { screen, settingsGroup };
 };
+
+const initialLocation = readLocation();
 
 class MaestroPanel extends LitElement {
   static styles = styles;
 
   private _hass?: Hass;
   private _narrow = false;
-  private _screen: Screen = initialScreen();
+  private _screen: Screen = initialLocation.screen;
+  private _settingsGroup?: string = initialLocation.settingsGroup;
+  private _theme: ThemeId = loadTheme();
   private _sheet = false;
   private _mobile = window.matchMedia(MOBILE).matches;
   private _mq = window.matchMedia(MOBILE);
@@ -99,6 +109,7 @@ class MaestroPanel extends LitElement {
   private _picking = false;
   private _pickQuery = "";
   private _focusConsumers = false;
+  private _classic?: ClassicStatus;
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
   set hass(hass: Hass) {
@@ -133,11 +144,13 @@ class MaestroPanel extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    useChartTheme(this._theme);
     this._mq.addEventListener("change", this._onMq);
     this._mobile = this._mq.matches;
     this._timer = window.setInterval(() => void this._ensureHistory(), HISTORY_RETRY);
     this.addEventListener("chart-error", this._onChartError as EventListener);
     window.addEventListener("keydown", this._onKey);
+    window.addEventListener("popstate", this._onPop);
     this._motion = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (this._motion) this._flowRaf = requestAnimationFrame(this._animateFlows);
   }
@@ -149,7 +162,15 @@ class MaestroPanel extends LitElement {
     cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
     window.removeEventListener("keydown", this._onKey);
+    window.removeEventListener("popstate", this._onPop);
   }
+
+  private _onPop = () => {
+    const next = readLocation();
+    this._screen = next.screen;
+    this._settingsGroup = next.settingsGroup;
+    this.requestUpdate();
+  };
 
   private _animateFlows = (now: number) => {
     placeElectrons(this.renderRoot.querySelectorAll(".electron"), now);
@@ -157,7 +178,9 @@ class MaestroPanel extends LitElement {
   };
 
   private _onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && this._hist) this._closeHistory();
+    if (e.key !== "Escape") return;
+    if (this._hist) this._closeHistory();
+    else if (this._sheet) this._setSheet(false);
   };
 
   private _closeHistory(): void {
@@ -214,6 +237,7 @@ class MaestroPanel extends LitElement {
       const map = await hass.callWS<EntityMap>({ type: "e3dc_maestro/panel_entities" });
       const before = JSON.stringify(E);
       applyEntityMap(map);
+      applySettingsMap(map);
       this._entityMap = map;
       if (JSON.stringify(E) !== before) this._loadedAt.clear(); // history was loaded for other ids
       this.requestUpdate();
@@ -283,12 +307,40 @@ class MaestroPanel extends LitElement {
 
   // ------------------------------------------------------------ actions
 
+  private _setTheme(theme: ThemeId): void {
+    this._theme = theme;
+    useChartTheme(theme);
+    saveTheme(theme);
+    this.requestUpdate();
+  }
+
   private _go(screen: Screen): void {
     this._screen = screen;
+    this._settingsGroup = undefined;
     this._zoomKey = undefined;
+    this._error = undefined;
     history.replaceState(null, "", `#${screen}`);
     this.requestUpdate();
     void this._ensureHistory();
+  }
+
+  private _openSettingsGroup(id: string): void {
+    this._screen = "settings";
+    this._settingsGroup = id;
+    if (id === CLASSIC_DASHBOARD.id) this._classic = undefined;
+    history.pushState({ maestroGroup: true }, "", `#settings/${id}`);
+    this.requestUpdate();
+  }
+
+  private _closeSettingsGroup(): void {
+    // A deep link has no pushed entry to go back to; back() would leave the panel.
+    if ((history.state as { maestroGroup?: boolean } | null)?.maestroGroup) {
+      history.back();
+      return;
+    }
+    this._settingsGroup = undefined;
+    history.replaceState(null, "", "#settings");
+    this.requestUpdate();
   }
 
   private _setSheet(open: boolean): void {
@@ -347,21 +399,48 @@ class MaestroPanel extends LitElement {
   }
 
   private _commitPower(watts: number): void {
-    void this._call(E.forceDischargePower, "number", "set_value", { entity_id: E.forceDischargePower, value: watts }).then(() => {
+    void this._commitNumber(E.forceDischargePower, watts).then(() => {
       this._powerDraft = undefined;
       this.requestUpdate();
     });
   }
 
   private _commitReserve(percent: number): void {
-    void this._call(E.fixedReserveSoc, "number", "set_value", { entity_id: E.fixedReserveSoc, value: percent }).then(() => {
+    void this._commitNumber(E.fixedReserveSoc, percent).then(() => {
       this._reserveDraft = undefined;
       this.requestUpdate();
     });
   }
 
-  private _openSettings(): void {
-    this._setSheet(false);
+  private _commitNumber(id: string, value: number): Promise<void> {
+    return this._call(id, "number", "set_value", { entity_id: id, value });
+  }
+
+  private async _checkClassic(): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    this._classic = { ...this._classic, state: "checking" };
+    this.requestUpdate();
+    this._classic = await checkClassic(hass);
+    this.requestUpdate();
+  }
+
+  private async _createClassic(): Promise<void> {
+    const hass = this._hass;
+    const current = this._classic;
+    if (!hass || !current) return;
+    this._classic = { ...current, state: "creating" };
+    this.requestUpdate();
+    try {
+      await createClassic(hass, current.state);
+      await this._checkClassic();
+    } catch (err) {
+      this._classic = { ...current, state: "error", error: classicErrorText(err) };
+      this.requestUpdate();
+    }
+  }
+
+  private _openClassic(): void {
     history.pushState(null, "", "/e3dc-maestro");
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
   }
@@ -419,8 +498,17 @@ class MaestroPanel extends LitElement {
         void this._ensureHistory();
       },
       pending: this._pending,
+      groupId: this._settingsGroup,
+      onOpenGroup: (id) => this._openSettingsGroup(id),
+      onOpenClassic: () => this._openClassic(),
+      classic: this._classic,
+      isAdmin: hass.user?.is_admin === true,
+      onCreateClassic: () => void this._createClassic(),
+      onCheckClassic: () => void this._checkClassic(),
       onToggle: (id) => this._toggle(id),
       onPress: (id) => this._press(id),
+      onSelect: (id, option) => this._select(id, option),
+      onNumber: (id, value) => void this._commitNumber(id, value),
       forcePowerDraft: this._powerDraft,
       onPowerDraft: (w) => {
         this._powerDraft = w;
@@ -438,11 +526,14 @@ class MaestroPanel extends LitElement {
         this._debugOpen = !this._debugOpen;
         this.requestUpdate();
       },
+      theme: this._theme,
+      onTheme: (theme) => this._setTheme(theme),
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
+    const settingsGroup = this._screen === "settings" ? settingsHeading(this._settingsGroup) : undefined;
     const regulation = isOn(hass.states[E.ctrlActive]);
     const phase = hass.states[E.phase]?.state;
-    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView }[current.id](ctx);
+    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, settings: settingsView }[current.id](ctx);
 
     const navButton = (s: (typeof SCREENS)[number]) => html`<button
       class="nav-btn ${s.id === current.id ? "active" : ""}"
@@ -469,14 +560,20 @@ class MaestroPanel extends LitElement {
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>
                 </button>`
               : nothing}
+            ${settingsGroup
+              ? html`<button class="menu" aria-label=${t("settingsBack")} @click=${() => this._closeSettingsGroup()}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.4 5.4 9.8 11H21v2H9.8l5.6 5.6L14 20l-8-8 8-8z"/></svg>
+                </button>`
+              : nothing}
             <div class="title grow">
-              <h1>${t(current.label)}</h1>
-              <p>${t(current.sub)}</p>
+              <h1>${settingsGroup ? t(settingsGroup.title) : t(current.label)}</h1>
+              <p>${settingsGroup ? t(settingsGroup.hint) : t(current.sub)}</p>
             </div>
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
           ${this._entityNotice(hass, t)}
           ${this._alerts(hass, t)}
+          ${this._error && !this._sheet ? html`<p class="err" role="alert">${this._error}</p>` : nothing}
           ${this._chartError ? html`<p class="err">${t("chartError", { err: this._chartError })}</p>` : nothing}
           <section class="screen" id=${`screen-${current.id}`}>${view}</section>
           ${DEBUG
@@ -507,7 +604,10 @@ class MaestroPanel extends LitElement {
         onReserveCommit: (percent) => this._commitReserve(percent),
         onPress: (id) => this._press(id),
         onSelect: (id, option) => this._select(id, option),
-        onAllSettings: () => this._openSettings(),
+        onAllSettings: () => {
+          this._setSheet(false);
+          this._go("settings");
+        },
         consumers: this._consumers,
         picking: this._picking,
         pickQuery: this._pickQuery,
@@ -556,7 +656,7 @@ class MaestroPanel extends LitElement {
               ${this._histState === "empty" ? html`<p class="hint">${t("historyEmpty")}</p>` : nothing}
               ${this._histState === "error" ? html`<p class="err">${t("historyFailed")}</p>` : nothing}
               ${this._histState === "ready" && this._histPoints
-                ? html`<maestro-chart .options=${memo(`hist-${this._hist.entityId}`, [this._histPoints, this._hist.color, fmt.loc], () => powerHistoryOptions(this._histPoints!, this._hist!.color, fmt))}></maestro-chart>`
+                ? html`<maestro-chart .options=${memo(`hist-${this._hist.entityId}`, [this._theme, this._histPoints, this._hist.color, fmt.loc], () => powerHistoryOptions(this._histPoints!, this._hist!.color, fmt))}></maestro-chart>`
                 : nothing}
             </aside>`
         : nothing}
@@ -567,7 +667,22 @@ class MaestroPanel extends LitElement {
     void this._ensureHistory();
   }
 
+  private _scrollKey = "";
+
+  protected willUpdate(): void {
+    if (this.getAttribute("theme") !== this._theme) this.setAttribute("theme", this._theme);
+  }
+
   protected updated(): void {
+    const scrollKey = `${this._screen}/${this._settingsGroup ?? ""}`;
+    if (scrollKey !== this._scrollKey) {
+      this._scrollKey = scrollKey;
+      const main = this.renderRoot.querySelector("main");
+      if (main && !this._focusConsumers) main.scrollTop = 0;
+    }
+    if (this._screen === "settings" && this._settingsGroup === CLASSIC_DASHBOARD.id && !this._classic) {
+      void this._checkClassic();
+    }
     if (this._focusConsumers) {
       this._focusConsumers = false;
       this.renderRoot.querySelector("#display-consumers")?.scrollIntoView({ block: "start" });

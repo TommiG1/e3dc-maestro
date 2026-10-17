@@ -12,13 +12,16 @@ import {
   ringOptions,
   sparkOptions,
 } from "./charts";
+import type { ClassicStatus } from "./classic";
 import type { FlowConsumer } from "./consumers";
 import { energyFlow, flowBoxHeight } from "./flow";
 import { memo } from "./memo";
+import type { ThemeId } from "./theme";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
 import { downloadCsv } from "./csv";
+import { planControls } from "./settings";
 import {
   parseSlots,
   parseTrajectory,
@@ -48,12 +51,21 @@ export interface Ctx {
   motion: boolean;
   collapsed: ReadonlySet<string>;
   onToggleGroup: (id: string) => void;
+  groupId?: string;
+  onOpenGroup: (id: string) => void;
+  onOpenClassic: () => void;
+  classic?: ClassicStatus;
+  isAdmin: boolean;
+  onCreateClassic: () => void;
+  onCheckClassic: () => void;
   period: Period;
   periodSums?: Partial<Record<PeriodKey, number>>;
   onPeriod: (period: Period) => void;
   pending: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onPress: (id: string) => void;
+  onSelect: (id: string, option: string) => void;
+  onNumber: (id: string, value: number) => void;
   forcePowerDraft?: number;
   onPowerDraft: (watts: number) => void;
   onPowerCommit: (watts: number) => void;
@@ -62,6 +74,8 @@ export interface Ctx {
   onReserveCommit: (percent: number) => void;
   debugOpen: boolean;
   onToggleDebug: () => void;
+  theme: ThemeId;
+  onTheme: (theme: ThemeId) => void;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -120,7 +134,7 @@ export function liveView(c: Ctx): TemplateResult {
     [t("chipShadow"), on(E.ctrlPlanShadow), "on"],
   ];
   const sp = (key: SparkKey, color: string) =>
-    c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
+    c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.theme, c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
   const flowH = flowBoxHeight(c.mobile, c.consumers.length);
   const amount = (key: PeriodKey): number | undefined => (c.period === "today" ? num(st(c, E[key])) : c.periodSums?.[key]);
   const balanceParts = [amount("feedRevenue"), amount("saving"), amount("costToday"), amount("wear")];
@@ -176,6 +190,7 @@ export function liveView(c: Ctx): TemplateResult {
             motion: c.motion,
             onSelect: c.onFlowNode,
             compact: c.mobile,
+            outline: c.theme === "classic",
             fmt: c.fmt,
             i18n: c.i18n,
           })}
@@ -185,7 +200,7 @@ export function liveView(c: Ctx): TemplateResult {
       <div class="card soc-card">
         <h3 class="self-start">${t("battery")}</h3>
         ${soc !== undefined
-          ? html`<maestro-chart class="ring" .options=${memo("ring", [soc, c.fmt.loc], () => ringOptions(soc, t("stateOfCharge")))}></maestro-chart>`
+          ? html`<maestro-chart class="ring" .options=${memo("ring", [c.theme, soc, c.fmt.loc], () => ringOptions(soc, t("stateOfCharge")))}></maestro-chart>`
           : html`<p class="empty">${t("unavailable")}</p>`}
         <div class="soc-meta">
           <div class="meta"><b>${target !== undefined ? `${Math.round(target)}%` : "–"}</b><span>${t("targetSoc")}</span></div>
@@ -365,7 +380,7 @@ export function forecastView(c: Ctx): TemplateResult {
       </div>
       <maestro-chart
         id="fc-main"
-        .options=${memo("forecast", [st(c, E.trajectory), st(c, E.targetSoc)?.state, c.ist, c.showIst, c.fmt.loc], () =>
+        .options=${memo("forecast", [c.theme, st(c, E.trajectory), st(c, E.targetSoc)?.state, c.ist, c.showIst, c.fmt.loc], () =>
           forecastOptions({
             traj,
             targetSoc: num(st(c, E.targetSoc)),
@@ -376,7 +391,7 @@ export function forecastView(c: Ctx): TemplateResult {
           }),
         )}
       ></maestro-chart>
-      <maestro-chart id="fc-brush" .options=${memo("brush", [st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>
+      <maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>
     </div>
     <div class="grid stat-row">
       ${stat(t("statMinMax"), html`${Math.round(n(a.min_soc) ?? 0)}<small>%</small> / ${Math.round(n(a.max_soc) ?? 0)}<small>%</small>`)}
@@ -400,7 +415,9 @@ export function planView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const a = attrs(c, E.plan);
   const slots = parseSlots(a.plan_slots);
-  if (!slots.length) return html`<div class="card"><p class="empty">${t("noPlan")}</p></div>`;
+  if (!slots.length) {
+    return html`<div class="card"><p class="empty">${t("noPlan")}</p></div>${planControls(c)}`;
+  }
   const ext = priceExtremes(slots);
   const legend: [string, string][] = [
     [COLORS.gridOut, t("legendCharge")],
@@ -425,7 +442,7 @@ export function planView(c: Ctx): TemplateResult {
           </div>
           <span class="badge">${a.shadow_mode ? t("planShadow") : t("planActive")}</span>
         </div>
-        <maestro-chart .options=${memo("plan", [st(c, E.plan), c.fmt.loc], () => planOptions({ slots, fmt: c.fmt, i18n: c.i18n }))}></maestro-chart>
+        <maestro-chart .options=${memo("plan", [c.theme, st(c, E.plan), c.fmt.loc], () => planOptions({ slots, fmt: c.fmt, i18n: c.i18n }))}></maestro-chart>
         <div class="strip">
           ${slots.map(
             (s) => html`<div class="slot ${slotAction(s)}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
@@ -447,7 +464,8 @@ export function planView(c: Ctx): TemplateResult {
           ${row(t("planKnownUntil"), known)}
         </div>
       </div>
-    </div>`;
+    </div>
+    ${planControls(c)}`;
 }
 
 // ---------------------------------------------------------------- Decision

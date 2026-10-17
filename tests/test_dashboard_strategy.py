@@ -47,6 +47,9 @@ def test_dashboard_frontend_module_and_assets() -> None:
     assert "async_create_item" in module
     assert "ResourceStorageCollection" in module
     assert '/{DOMAIN}/frontend' in module or 'f"/{DOMAIN}/frontend"' in module
+    assert "/local/{DOMAIN}" in module or 'f"/local/{DOMAIN}"' in module
+    assert "_prioritize_item" in module
+    assert "maestro_dashboard.json" in module
     assert STRATEGY_JS.is_file()
     assert STRATEGY_JSON.is_file()
     init_py = (ROOT / "custom_components" / "e3dc_maestro" / "__init__.py").read_text(

@@ -95,6 +95,9 @@ export interface EntityMap {
   entry_id: string | null;
   entities: Partial<Record<EntityKey, string>>;
   disabled: EntityKey[];
+  /** unique_id suffix -> current entity_id for every tunable number/switch/select/button. */
+  settings?: Record<string, string>;
+  settings_disabled?: string[];
 }
 
 /** Take over the registry-resolved ids; keys the backend did not find keep their default. */
@@ -104,11 +107,24 @@ export function applyEntityMap(map: EntityMap): void {
   }
 }
 
+/** Tunable entities for the settings screen. Replaced wholesale on every resolve. */
+export const S: Record<string, string> = {};
+const settingDisabled = new Set<string>();
+
+export function applySettingsMap(map: Pick<EntityMap, "settings" | "settings_disabled">): void {
+  for (const key of Object.keys(S)) delete S[key];
+  Object.assign(S, map.settings ?? {});
+  settingDisabled.clear();
+  for (const key of map.settings_disabled ?? []) settingDisabled.add(key);
+}
+
+export const isSettingDisabled = (key: string): boolean => settingDisabled.has(key);
+
 /** Switches shown in the quick-control sheet (order = display order); key doubles as i18n key. */
 export const CONTROL_SWITCHES = ["ctrlActive", "ctrlPredictive", "ctrlPvDelay", "ctrlPlanControls", "ctrlPlanShadow"] as const;
 
 /** Only these entities cause a re-render; hass changes on every state change in the house. */
-export const watched = (): string[] => Object.values(E);
+export const watched = (): string[] => [...Object.values(E), ...Object.values(S)];
 
 export interface HassEntity {
   entity_id: string;
@@ -120,6 +136,7 @@ export interface HassEntity {
 export interface Hass {
   states: Record<string, HassEntity | undefined>;
   language: string;
+  user?: { is_admin?: boolean };
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
 }

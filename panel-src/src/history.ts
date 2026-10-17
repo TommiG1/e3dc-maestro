@@ -94,6 +94,8 @@ export const PERIOD_KEYS = [
   "feedInInterventions",
 ] as const;
 export type PeriodKey = (typeof PERIOD_KEYS)[number];
+// Net cost is state_class "total" without last_reset: its midnight reset would count as a negative change.
+const STAT_KEYS = PERIOD_KEYS.filter((key) => key !== "costNet");
 
 const periodStart = (period: Exclude<Period, "today">): number => {
   const start = new Date();
@@ -109,15 +111,16 @@ export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today"
     type: "recorder/statistics_during_period",
     start_time: new Date(periodStart(period)).toISOString(),
     end_time: new Date().toISOString(),
-    statistic_ids: PERIOD_KEYS.map((key) => E[key]),
+    statistic_ids: STAT_KEYS.map((key) => E[key]),
     period: "day",
     types: ["change"],
   });
   const out: Partial<Record<PeriodKey, number>> = {};
-  for (const key of PERIOD_KEYS) {
+  for (const key of STAT_KEYS) {
     const sum = sumChanges(raw[E[key]]);
     if (sum !== undefined) out[key] = sum;
   }
+  if (out.costToday !== undefined && out.feedRevenue !== undefined) out.costNet = out.costToday - out.feedRevenue;
   return out;
 }
 

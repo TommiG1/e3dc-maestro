@@ -118,9 +118,33 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "selTariff": ("select", "tariff_mode"),
 }
 
+# Platforms whose entities are tunable from the settings screen. The key is the
+# unique_id suffix ("<entry_id>_<key>"), so renamed entities keep working.
+_SETTINGS_DOMAINS = frozenset({"number", "switch", "select", "button"})
+
 
 def panel_module_url() -> str:
     return f"{_PANEL_MODULE}?v={VERSION}"
+
+
+def _settings_for(registry: Any, entry_id: str) -> tuple[dict[str, str], list[str]]:
+    """Map every tunable entity of one config entry: unique_id suffix -> entity_id."""
+    prefix = f"{entry_id}_"
+    settings: dict[str, str] = {}
+    disabled: list[str] = []
+    for reg_entry in er.async_entries_for_config_entry(registry, entry_id):
+        if reg_entry.domain not in _SETTINGS_DOMAINS:
+            continue
+        unique_id = reg_entry.unique_id or ""
+        if not unique_id.startswith(prefix):
+            continue
+        key = unique_id[len(prefix):]
+        if not key or key in settings:
+            continue
+        settings[key] = reg_entry.entity_id
+        if reg_entry.disabled_by is not None:
+            disabled.append(key)
+    return settings, disabled
 
 
 def panel_entities(hass: HomeAssistant) -> dict[str, Any]:
@@ -128,7 +152,7 @@ def panel_entities(hass: HomeAssistant) -> dict[str, Any]:
     entries = hass.config_entries.async_entries(DOMAIN)
     entry = next((e for e in entries if e.state == ConfigEntryState.LOADED), None)
     if entry is None:
-        return {"entry_id": None, "entities": {}, "disabled": []}
+        return {"entry_id": None, "entities": {}, "disabled": [], "settings": {}, "settings_disabled": []}
     registry = er.async_get(hass)
     entities: dict[str, str] = {}
     disabled: list[str] = []
@@ -140,7 +164,14 @@ def panel_entities(hass: HomeAssistant) -> dict[str, Any]:
         reg_entry = registry.async_get(entity_id)
         if reg_entry is not None and reg_entry.disabled_by is not None:
             disabled.append(key)
-    return {"entry_id": entry.entry_id, "entities": entities, "disabled": disabled}
+    settings, settings_disabled = _settings_for(registry, entry.entry_id)
+    return {
+        "entry_id": entry.entry_id,
+        "entities": entities,
+        "disabled": disabled,
+        "settings": settings,
+        "settings_disabled": settings_disabled,
+    }
 
 
 @websocket_api.websocket_command({vol.Required("type"): WS_PANEL_ENTITIES})

@@ -13,6 +13,8 @@ export interface FlowInput {
   motion?: boolean;
   onSelect?: (key: string) => void;
   compact: boolean;
+  /** Classic look: node discs and icons are stroked, not filled. */
+  outline?: boolean;
   fmt: Fmt;
   i18n: I18n;
 }
@@ -125,6 +127,18 @@ export function placeElectrons(elements: Iterable<Element>, now: number): void {
 
 const clip = (name: string) => (name.length <= 16 ? name : `${name.slice(0, 15)}…`);
 
+/** Darker than the night-theme inks, so a stroke still reads on the light Classic surface. */
+const OUTLINE: Record<string, string> = {
+  "var(--pv)": "#9a3412",
+  "var(--house)": "#5b21b6",
+  "var(--grid-in)": "#b91c1c",
+  "var(--grid-out)": "#047857",
+  "var(--bat)": "#0e7490",
+  "var(--accent)": "#075985",
+};
+
+const tone = (color: string, outline: boolean) => (outline ? (OUTLINE[color] ?? "#152033") : color);
+
 function electrons(
   from: { x: number; y: number },
   to: { x: number; y: number },
@@ -160,6 +174,8 @@ export function energyFlow(i: FlowInput): TemplateResult {
       : { x: L.box[0] + 78, y: boxH * ((index + 1) / (consumers.length + 1)), labelDy: 44 };
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
   const motion = i.motion !== false;
+  const outline = i.outline === true;
+  const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
   const nodes: Record<NodeKey, { color: string; label: string; value: number; icon: string }> = {
     pv: { color: "var(--pv)", label: t("nodePv"), value: pv, icon: ICONS.pv },
@@ -211,25 +227,26 @@ export function energyFlow(i: FlowInput): TemplateResult {
       const toR = f.toHub ? HUB_R : NODE_R;
       return electrons(a, b, fromR, toR, nodes[f.node].value, nodes[f.node].color, motion);
     })}
-    <circle cx=${L.hub.x} cy=${L.hub.y} r="46" fill="url(#hubg)"/>
-    <circle cx=${L.hub.x} cy=${L.hub.y} r="9" fill="#fff" opacity=".9"/>
+    ${outline
+      ? svg`<circle cx=${L.hub.x} cy=${L.hub.y} r="16" fill="none" stroke="#075985" stroke-width="2.4"/>`
+      : svg`<circle cx=${L.hub.x} cy=${L.hub.y} r="46" fill="url(#hubg)"/><circle cx=${L.hub.x} cy=${L.hub.y} r="9" fill="#fff" opacity=".9"/>`}
     ${keys.map((k) => {
       const n = nodes[k];
       const p = L[k];
       const idle = Math.abs(n.value) < ACTIVE_W;
       const above = p.labelDy < 0;
       return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${n.label} @click=${() => i.onSelect?.(k)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(k); } }}>
-        <circle cx=${p.x} cy=${p.y} r="42" fill="rgba(10,16,30,.9)" stroke=${n.color} stroke-width="2" filter=${idle ? "none" : "url(#glow)"}/>
-        <g transform="translate(${p.x - 13} ${p.y - 13}) scale(1.08)" fill="none" stroke=${n.color} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d=${n.icon}/></g>
+        <circle cx=${p.x} cy=${p.y} r="42" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf(n.color)} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
+        <g transform="translate(${p.x - 13} ${p.y - 13}) scale(1.08)" fill="none" stroke=${strokeOf(n.color)} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d=${n.icon}/></g>
         <text class="node-val" x=${p.x} y=${p.y + p.labelDy} text-anchor="middle">${i.fmt.w(n.value)}</text>
         <text class="node-lbl" x=${p.x} y=${p.y + p.labelDy + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
       </g>`;
     })}
     ${places.map(({ c, p }) => {
-      const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
+      const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
       const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
       return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${() => i.onSelect?.(c.id)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(c.id); } }}>
-        <circle cx=${p.x} cy=${p.y} r="26" fill="rgba(10,16,30,.9)" stroke=${color} stroke-width="2" filter=${idle ? "none" : "url(#glow)"}/>
+        <circle cx=${p.x} cy=${p.y} r="26" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
         <g transform="translate(${p.x - 9} ${p.y - 9}) scale(0.75)" fill="none" stroke=${color} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]}/></g>
         <text class="node-val-sm" x=${p.x} y=${p.y + p.labelDy} text-anchor="middle">${i.fmt.w(c.watts)}</text>
         <text class="node-lbl-sm" x=${p.x} y=${p.y + p.labelDy + 14} text-anchor="middle">${clip(c.name)}</text>

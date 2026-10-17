@@ -233,6 +233,6 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
             </div>`
           : nothing}
       </div>
-      <a class="link" href="/e3dc-maestro" @click=${(e: Event) => { e.preventDefault(); c.onAllSettings(); }}>${t("allSettings")}</a>
+      <a class="link" href="#settings" @click=${(e: Event) => { e.preventDefault(); c.onAllSettings(); }}>${t("allSettings")}</a>
     </aside>`;
 }
