@@ -1,13 +1,38 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 import "./maestro-chart";
 import type { MaestroChart } from "./maestro-chart";
+import {
+  friendlyName,
+  guessIcon,
+  includedOverflow,
+  loadConsumers,
+  MAX_CONSUMERS,
+  newConsumerId,
+  powerSensorChoices,
+  saveConsumers,
+  toFlow,
+  WALLBOX_ENTITY,
+  type Consumer,
+  type ConsumerIcon,
+  type ConsumerMode,
+} from "./consumers";
 import { controlsSheet } from "./controls";
-import { applyEntityMap, DEFAULT_IDS, E, isOn, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { applyEntityMap, DEFAULT_IDS, E, isOn, num, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { powerHistoryOptions } from "./charts";
+import { placeElectrons } from "./flow";
 import { makeFmt } from "./format";
-import { loadIst, loadSparks, loadTimeline, type IstSeries, type SparkKey } from "./history";
+import { loadIst, loadPowerSeries, loadSparks, loadTimeline, type IstSeries, type SparkKey } from "./history";
+import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { styles } from "./styles";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
+
+const NODE_META = {
+  pv: { entity: "pv" as const, color: "#fbbf24", label: "nodePv" as const },
+  grid: { entity: "grid" as const, color: "#f87171", label: "nodeImport" as const },
+  house: { entity: "house" as const, color: "#a78bfa", label: "nodeHouse" as const },
+  bat: { entity: "battery" as const, color: "#22d3ee", label: "nodeBatCharge" as const },
+};
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
@@ -56,9 +81,18 @@ class MaestroPanel extends LitElement {
   private _powerDraft?: number;
   private _zoomKey?: string;
   private _timer?: number;
+  private _flowRaf = 0;
+  private _motion = true;
+  private _hist?: { name: string; color: string; entityId: string };
+  private _histPoints?: Point[];
+  private _histState: "loading" | "ready" | "empty" | "error" = "loading";
   private _stats = { hassUpdates: 0, renders: 0 };
   private _entityMap?: EntityMap;
   private _resolvedAt = 0;
+  private _consumers: Consumer[] = loadConsumers();
+  private _picking = false;
+  private _pickQuery = "";
+  private _focusConsumers = false;
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
   set hass(hass: Hass) {
@@ -97,13 +131,65 @@ class MaestroPanel extends LitElement {
     this._mobile = this._mq.matches;
     this._timer = window.setInterval(() => void this._ensureHistory(), HISTORY_RETRY);
     this.addEventListener("chart-error", this._onChartError as EventListener);
+    window.addEventListener("keydown", this._onKey);
+    this._motion = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (this._motion) this._flowRaf = requestAnimationFrame(this._animateFlows);
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._mq.removeEventListener("change", this._onMq);
     window.clearInterval(this._timer);
+    cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
+    window.removeEventListener("keydown", this._onKey);
+  }
+
+  private _animateFlows = (now: number) => {
+    placeElectrons(this.renderRoot.querySelectorAll(".electron"), now);
+    this._flowRaf = requestAnimationFrame(this._animateFlows);
+  };
+
+  private _onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && this._hist) this._closeHistory();
+  };
+
+  private _closeHistory(): void {
+    this._hist = undefined;
+    this._histPoints = undefined;
+    this.requestUpdate();
+  }
+
+  private _openFlow(key: string): void {
+    const hass = this._hass;
+    if (!hass) return;
+    const i18n = makeI18n(hass.language);
+    const main = NODE_META[key as keyof typeof NODE_META];
+    const consumer = this._consumers.find((c) => c.id === key);
+    const entityId = main ? E[main.entity] : consumer?.entityId;
+    if (!entityId) return;
+    const entity = hass.states[entityId];
+    const watts = num(entity);
+    const feeding = key === "grid" && watts !== undefined && watts >= 0;
+    const name = key === "grid" ? i18n.t(feeding ? "nodeFeed" : "nodeImport") : main ? i18n.t(main.label) : (consumer?.name ?? entityId);
+    const color = feeding ? "#34d399" : (main?.color ?? "#38bdf8");
+    const unit = entity?.attributes.unit_of_measurement;
+    this._hist = { name, color, entityId };
+    this._histPoints = undefined;
+    this._histState = "loading";
+    this.requestUpdate();
+    void loadPowerSeries(hass, entityId, unit === "kW" ? 1000 : 1)
+      .then((points) => {
+        if (this._hist?.entityId !== entityId) return;
+        this._histPoints = points;
+        this._histState = points.length ? "ready" : "empty";
+        this.requestUpdate();
+      })
+      .catch(() => {
+        if (this._hist?.entityId !== entityId) return;
+        this._histState = "error";
+        this.requestUpdate();
+      });
   }
 
   private _onChartError = (e: CustomEvent<string>) => {
@@ -184,7 +270,26 @@ class MaestroPanel extends LitElement {
 
   private _setSheet(open: boolean): void {
     this._sheet = open;
-    if (!open) this._error = undefined;
+    if (!open) {
+      this._error = undefined;
+      this._picking = false;
+    }
+    this.requestUpdate();
+  }
+
+  private _openConsumers(): void {
+    this._sheet = true;
+    this._focusConsumers = true;
+    this.requestUpdate();
+  }
+
+  private _setConsumers(next: Consumer[], closePicker = false): void {
+    this._consumers = next.slice(0, MAX_CONSUMERS);
+    saveConsumers(this._consumers);
+    if (closePicker) {
+      this._picking = false;
+      this._pickQuery = "";
+    }
     this.requestUpdate();
   }
 
@@ -255,6 +360,11 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
         void this._ensureHistory();
       },
+      consumers: toFlow(this._consumers, hass),
+      consumerOverflow: includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass)),
+      onEditConsumers: () => this._openConsumers(),
+      onFlowNode: (key) => this._openFlow(key),
+      motion: this._motion,
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
     const regulation = isOn(hass.states[E.ctrlActive]);
@@ -316,7 +426,58 @@ class MaestroPanel extends LitElement {
         },
         onPowerCommit: (w) => this._commitPower(w),
         onAllSettings: () => this._openSettings(),
+        consumers: this._consumers,
+        picking: this._picking,
+        pickQuery: this._pickQuery,
+        choices: powerSensorChoices(hass, new Set(this._consumers.map((c) => c.entityId)), this._pickQuery),
+        wallbox:
+          hass.states[WALLBOX_ENTITY] && !this._consumers.some((c) => c.entityId === WALLBOX_ENTITY)
+            ? { id: WALLBOX_ENTITY, name: friendlyName(hass.states[WALLBOX_ENTITY], i18n.t("useWallbox")) }
+            : undefined,
+        onPick: (open) => {
+          this._picking = open;
+          this.requestUpdate();
+        },
+        onPickQuery: (query) => {
+          this._pickQuery = query;
+          this.requestUpdate();
+        },
+        onAddConsumer: (entityId, name) => {
+          if (this._consumers.some((c) => c.entityId === entityId)) return;
+          this._setConsumers([...this._consumers, { id: newConsumerId(), entityId, name, mode: "included", icon: guessIcon(entityId) }], true);
+        },
+        onUseWallbox: () => {
+          const name = friendlyName(hass.states[WALLBOX_ENTITY], i18n.t("useWallbox"));
+          this._setConsumers([...this._consumers, { id: newConsumerId(), entityId: WALLBOX_ENTITY, name, mode: "separate", icon: "wallbox" }], true);
+        },
+        onRenameConsumer: (id, name) => {
+          const next = name.slice(0, 40);
+          if (!next.trim()) return;
+          this._setConsumers(this._consumers.map((c) => (c.id === id ? { ...c, name: next } : c)));
+        },
+        onConsumerMode: (id, mode: ConsumerMode) => {
+          this._setConsumers(this._consumers.map((c) => (c.id === id ? { ...c, mode } : c)));
+        },
+        onConsumerIcon: (id, icon: ConsumerIcon) => {
+          this._setConsumers(this._consumers.map((c) => (c.id === id ? { ...c, icon } : c)));
+        },
+        onRemoveConsumer: (id) => this._setConsumers(this._consumers.filter((c) => c.id !== id)),
       })}
+      ${this._hist
+        ? html`<div class="scrim open hist-scrim" @click=${() => this._closeHistory()}></div>
+            <aside class="overlay" role="dialog" aria-modal="true" aria-label=${this._hist.name}>
+              <div class="sheet-head">
+                <div class="grow"><h2>${this._hist.name}</h2><div class="sub">${t("historySub")}</div></div>
+                <button class="btn" @click=${() => this._closeHistory()}>${t("close")}</button>
+              </div>
+              ${this._histState === "loading" ? html`<p class="hint">${t("loading")}</p>` : nothing}
+              ${this._histState === "empty" ? html`<p class="hint">${t("historyEmpty")}</p>` : nothing}
+              ${this._histState === "error" ? html`<p class="err">${t("historyFailed")}</p>` : nothing}
+              ${this._histState === "ready" && this._histPoints
+                ? html`<maestro-chart .options=${memo(`hist-${this._hist.entityId}`, [this._histPoints, this._hist.color, fmt.loc], () => powerHistoryOptions(this._histPoints!, this._hist!.color, fmt))}></maestro-chart>`
+                : nothing}
+            </aside>`
+        : nothing}
     `;
   }
 
@@ -325,6 +486,10 @@ class MaestroPanel extends LitElement {
   }
 
   protected updated(): void {
+    if (this._focusConsumers) {
+      this._focusConsumers = false;
+      this.renderRoot.querySelector("#display-consumers")?.scrollIntoView({ block: "start" });
+    }
     if (this._screen !== "forecast" || !this._hass) return;
     const traj = parseTrajectory(this._hass.states[E.trajectory]?.attributes);
     const el = this.renderRoot.querySelector<MaestroChart>("#fc-main");

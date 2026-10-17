@@ -1,4 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
+import { ref } from "lit/directives/ref.js";
+import { CONSUMER_ICON_PATH, CONSUMER_ICONS, MAX_CONSUMERS, consumerUnavailable, type Consumer, type ConsumerIcon, type ConsumerMode } from "./consumers";
 import { CONTROL_SWITCHES, E, isOn, num, type Hass } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
@@ -16,7 +18,34 @@ export interface ControlsInput {
   onPowerDraft: (watts: number) => void;
   onPowerCommit: (watts: number) => void;
   onAllSettings: () => void;
+  consumers: Consumer[];
+  picking: boolean;
+  pickQuery: string;
+  choices: { id: string; name: string }[];
+  wallbox: { id: string; name: string } | undefined;
+  onPick: (open: boolean) => void;
+  onPickQuery: (query: string) => void;
+  onAddConsumer: (entityId: string, name: string) => void;
+  onUseWallbox: () => void;
+  onRenameConsumer: (id: string, name: string) => void;
+  onConsumerMode: (id: string, mode: ConsumerMode) => void;
+  onConsumerIcon: (id: string, icon: ConsumerIcon) => void;
+  onRemoveConsumer: (id: string) => void;
 }
+
+const ICON_LABEL = {
+  wallbox: "iconWallbox",
+  heater: "iconHeater",
+  climate: "iconClimate",
+  heatpump: "iconHeatpump",
+  meter: "iconMeter",
+} as const;
+
+const focused = (el: HTMLInputElement): boolean => {
+  const root = el.getRootNode();
+  const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+  return active === el;
+};
 
 const SUBS = {
   ctrlActive: "ctrlActiveSub",
@@ -77,6 +106,70 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
           @input=${(e: Event) => c.onPowerDraft(Number((e.target as HTMLInputElement).value))}
           @change=${(e: Event) => c.onPowerCommit(Number((e.target as HTMLInputElement).value))}
         />
+      </div>
+      <div class="sheet-section" id="display-consumers">
+        <h3>${t("displayTitle")}</h3>
+        <div class="sub">${t("consumersSub")}</div>
+        ${c.consumers.length
+          ? c.consumers.map((row) => {
+              const entity = c.hass.states[row.entityId];
+              const missing = consumerUnavailable(entity);
+              return html`<div class="consumer">
+                <label class="txt">
+                  <span class="lbl">${t("consumerName")}</span>
+                  <input
+                    ${ref((el) => {
+                      if (el instanceof HTMLInputElement && !focused(el) && el.value !== row.name) el.value = row.name;
+                    })}
+                    maxlength="40"
+                    aria-label=${t("consumerName")}
+                    @input=${(e: Event) => c.onRenameConsumer(row.id, (e.target as HTMLInputElement).value)}
+                  />
+                  <span>${missing ? t("consumerMissing") : row.entityId}</span>
+                </label>
+                <div class="icon-pick" role="group" aria-label=${t("consumerIcon")}>
+                  ${CONSUMER_ICONS.map(
+                    (icon) => html`<button
+                      type="button"
+                      class=${row.icon === icon ? "on" : ""}
+                      aria-pressed=${row.icon === icon}
+                      aria-label=${t(ICON_LABEL[icon])}
+                      @click=${() => c.onConsumerIcon(row.id, icon)}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${CONSUMER_ICON_PATH[icon]} /></svg>
+                    </button>`,
+                  )}
+                </div>
+                <div class="seg" role="group" aria-label=${row.name}>
+                  <button type="button" class=${row.mode === "included" ? "on" : ""} aria-pressed=${row.mode === "included"} @click=${() => c.onConsumerMode(row.id, "included")}>${t("modeIncluded")}</button>
+                  <button type="button" class=${row.mode === "separate" ? "on" : ""} aria-pressed=${row.mode === "separate"} @click=${() => c.onConsumerMode(row.id, "separate")}>${t("modeSeparate")}</button>
+                </div>
+                <button type="button" class="btn ghost" @click=${() => c.onRemoveConsumer(row.id)}>${t("removeConsumer")}</button>
+              </div>`;
+            })
+          : html`<p class="hint">${t("consumersEmpty")}</p>`}
+        ${c.wallbox ? html`<button type="button" class="btn add" @click=${c.onUseWallbox}>${t("useWallbox")}</button>` : nothing}
+        ${c.consumers.length < MAX_CONSUMERS
+          ? html`<button type="button" class="btn add" @click=${() => c.onPick(!c.picking)}>${t("addConsumer")}</button>`
+          : nothing}
+        ${c.picking
+          ? html`<div class="picker">
+              <input
+                type="search"
+                placeholder=${t("consumerSearch")}
+                aria-label=${t("consumerSearch")}
+                .value=${c.pickQuery}
+                @input=${(e: Event) => c.onPickQuery((e.target as HTMLInputElement).value)}
+              />
+              ${c.choices.length
+                ? c.choices.map(
+                    (choice) => html`<button type="button" class="pick" @click=${() => c.onAddConsumer(choice.id, choice.name)}>
+                      <b>${choice.name}</b><span>${choice.id}</span>
+                    </button>`,
+                  )
+                : html`<p class="hint">${t("noPowerSensors")}</p>`}
+            </div>`
+          : nothing}
       </div>
       <a class="link" href="/e3dc-maestro" @click=${(e: Event) => { e.preventDefault(); c.onAllSettings(); }}>${t("allSettings")}</a>
     </aside>`;

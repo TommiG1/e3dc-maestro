@@ -290,23 +290,60 @@ export const styles = css`
     font: 500 12px Inter, system-ui, sans-serif;
     fill: var(--muted);
   }
+  .node-val-sm {
+    font: 700 14px Inter, system-ui, sans-serif;
+    fill: var(--text);
+  }
+  .node-lbl-sm {
+    font: 500 11px Inter, system-ui, sans-serif;
+    fill: var(--muted);
+  }
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--stroke-strong);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex: none;
+  }
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  .icon-btn:hover {
+    color: var(--text);
+    border-color: rgba(56, 189, 248, 0.6);
+  }
+  .flow-node {
+    cursor: pointer;
+  }
+  .flow-node:focus {
+    outline: none;
+  }
+  .flow-node:focus-visible circle {
+    stroke-width: 3;
+  }
   .flow-line {
     fill: none;
-    stroke-width: 3;
+    stroke-width: 2;
     stroke-linecap: round;
-    opacity: 0.18;
+    opacity: 0.22;
   }
-  .flow-anim {
-    fill: none;
-    stroke-width: 4;
-    stroke-linecap: round;
-    stroke-dasharray: 6 10;
-    animation: dash 1.1s linear infinite;
+  .electron {
+    pointer-events: none;
   }
-  @keyframes dash {
-    to {
-      stroke-dashoffset: -32;
-    }
+  .electron .halo {
+    opacity: 0.22;
   }
   .soc-card {
     display: flex;
@@ -697,12 +734,35 @@ export const styles = css`
   .sheet.open {
     transform: none;
   }
+  .hist-scrim {
+    z-index: 30;
+  }
+  .overlay {
+    position: fixed;
+    z-index: 31;
+    left: 50%;
+    top: 50%;
+    width: min(760px, calc(100% - 24px));
+    max-height: min(560px, calc(100% - 24px));
+    overflow: auto;
+    transform: translate(-50%, -48%);
+    border-radius: 24px;
+    padding: 22px;
+    background: linear-gradient(180deg, rgba(20, 28, 48, 0.97), rgba(12, 18, 32, 0.98));
+    border: 1px solid var(--stroke-strong);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  }
+  .overlay maestro-chart {
+    height: 280px;
+    margin-top: 8px;
+  }
   .sheet-head {
     display: flex;
     align-items: center;
     gap: 12px;
   }
-  .sheet h2 {
+  .sheet h2,
+  .overlay h2 {
     margin: 0 0 4px;
     font-size: 20px;
   }
@@ -777,6 +837,137 @@ export const styles = css`
     color: var(--accent);
     font-size: 13px;
     text-decoration: none;
+  }
+  .sheet-section {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--stroke);
+  }
+  .sheet-section h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+    margin: 12px 0 0;
+  }
+  .consumer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--stroke);
+    margin-top: 10px;
+  }
+  .consumer input,
+  .picker input {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--text);
+    font: 600 14px Inter, system-ui, sans-serif;
+    padding: 8px 10px;
+  }
+  .consumer .lbl {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font: 600 11px Inter, system-ui, sans-serif;
+    letter-spacing: 0.2px;
+  }
+  .consumer .txt span:not(.lbl),
+  .pick span {
+    display: block;
+    margin-top: 4px;
+    color: var(--faint);
+    font: 11px ui-monospace, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .icon-pick {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  .icon-pick button {
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--stroke);
+    background: transparent;
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .icon-pick button.on {
+    color: var(--text);
+    border-color: rgba(56, 189, 248, 0.7);
+    background: rgba(56, 189, 248, 0.16);
+  }
+  .icon-pick svg {
+    width: 18px;
+    height: 18px;
+  }
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .seg button {
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 12px Inter, system-ui, sans-serif;
+    padding: 8px 6px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: rgba(56, 189, 248, 0.18);
+    color: var(--text);
+  }
+  .btn.add,
+  .btn.ghost {
+    margin-top: 10px;
+    width: 100%;
+  }
+  .btn.ghost {
+    background: transparent;
+  }
+  .picker {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pick {
+    text-align: left;
+    border-radius: 12px;
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    padding: 8px 10px;
+    cursor: pointer;
+  }
+  .pick b {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
   }
 
   /* ApexCharts overrides */

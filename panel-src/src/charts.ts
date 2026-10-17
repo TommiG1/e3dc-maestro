@@ -301,6 +301,20 @@ export function ringOptions(soc: number, label: string): Opts {
   });
 }
 
+/** Signed power over time, in kW. */
+export function powerHistoryOptions(data: Point[], color: string, fmt: Fmt): Opts {
+  return withBase({
+    chart: { type: "area", height: 280 },
+    series: [{ data: toKw(data) }],
+    colors: [color],
+    stroke: { width: 2, curve: "smooth" },
+    fill: { type: "gradient", gradient: { opacityFrom: 0.32, opacityTo: 0.02 } },
+    xaxis: xaxis(),
+    yaxis: { decimalsInFloat: 1, title: { text: "kW" }, labels: { formatter: (v: number) => fmt.n(v, 1) } },
+    tooltip: { x: { format: "dd.MM. HH:mm" }, y: { formatter: (v: number) => `${fmt.n(v, 2)} kW` } },
+  });
+}
+
 export function sparkOptions(data: Point[], color: string): Opts {
   return withBase({
     chart: { type: "area", height: 56, sparkline: { enabled: true } },

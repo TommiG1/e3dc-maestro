@@ -12,7 +12,8 @@ import {
   ringOptions,
   sparkOptions,
 } from "./charts";
-import { energyFlow } from "./flow";
+import type { FlowConsumer } from "./consumers";
+import { energyFlow, flowBoxHeight } from "./flow";
 import { memo } from "./memo";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
@@ -38,6 +39,11 @@ export interface Ctx {
   showIst: boolean;
   onRange: (hours: number) => void;
   onToggleIst: () => void;
+  consumers: FlowConsumer[];
+  consumerOverflow: boolean;
+  onEditConsumers: () => void;
+  onFlowNode: (key: string) => void;
+  motion: boolean;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -66,23 +72,35 @@ export function liveView(c: Ctx): TemplateResult {
   ];
   const sp = (key: SparkKey, color: string) =>
     c.sparks?.[key]?.length ? html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>` : nothing;
+  const flowH = flowBoxHeight(c.mobile, c.consumers.length);
 
   return html`
     <div class="grid live-top">
       <div class="card">
-        <h3>${t("flowTitle")}</h3>
-        <div class="sub">${t("flowSub")}</div>
-        <div class="flow-wrap">
+        <div class="card-head">
+          <div>
+            <h3>${t("flowTitle")}</h3>
+            <div class="sub">${t("flowSub")}</div>
+          </div>
+          <button type="button" class="icon-btn" aria-label=${t("editConsumers")} @click=${c.onEditConsumers}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+        </div>
+        <div class="flow-wrap" style=${flowH ? `height:${flowH}px` : nothing}>
           ${energyFlow({
             pv: num(st(c, E.pv)),
             house: num(st(c, E.house)),
             grid: num(st(c, E.grid)),
             battery: bat,
+            consumers: c.consumers,
+            motion: c.motion,
+            onSelect: c.onFlowNode,
             compact: c.mobile,
             fmt: c.fmt,
             i18n: c.i18n,
           })}
         </div>
+        ${c.consumerOverflow ? html`<p class="err">${t("consumersOverflow")}</p>` : nothing}
       </div>
       <div class="card soc-card">
         <h3 class="self-start">${t("battery")}</h3>

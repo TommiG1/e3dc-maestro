@@ -56,6 +56,17 @@ export interface IstSeries {
   soc: Point[];
 }
 
+/** One power entity over the last 24 h, 5-minute means, in watts. `scale` converts kW sensors. */
+export async function loadPowerSeries(hass: Hass, entityId: string, scale = 1): Promise<Point[]> {
+  const raw = await fetchRaw(hass, [entityId], Date.now() - 24 * 3600e3, {
+    minimal_response: true,
+    no_attributes: true,
+    significant_changes_only: false,
+  });
+  const points = numericPoints(normalizeHistory(raw[entityId])).map(([ts, v]): Point => [ts, v * scale]);
+  return bucket(points, 5 * 60e3, "mean");
+}
+
 /** Actual power/SoC of the last `hours` hours on a 5-minute grid (W / %). */
 export async function loadIst(hass: Hass, hours = 6): Promise<IstSeries> {
   const raw = await fetchRaw(hass, [E.pv, E.house, E.soc], Date.now() - hours * 3600e3, {
