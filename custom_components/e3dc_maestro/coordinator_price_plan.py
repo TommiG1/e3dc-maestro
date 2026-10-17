@@ -12,6 +12,7 @@ from .control_engine import (
     PricePlanAction,
     adaptive_emergency_reserve_soc as _adaptive_emergency_reserve_soc,
     seasonal_reserve_soc as _seasonal_reserve_soc,
+    manual_reserve_soc as _manual_reserve_soc,
 )
 from .price_curve import read_price_horizon
 from .price_plan_runner import STATUS_OK, PricePlanSnapshot, compute_price_plan
@@ -73,7 +74,10 @@ class CoordinatorPricePlanMixin:
 
             # Floor = max(Ladeschwelle, Notstromreserve)
             reserve = 0.0
-            if params.seasonal_reserve_enabled:
+            manual = _manual_reserve_soc(params)
+            if manual is not None:
+                reserve = manual
+            elif params.seasonal_reserve_enabled:
                 adaptive = _adaptive_emergency_reserve_soc(state, params)
                 reserve = adaptive if adaptive is not None else _seasonal_reserve_soc(now, params)
             floor_pct = max(float(params.charge_threshold), float(reserve))

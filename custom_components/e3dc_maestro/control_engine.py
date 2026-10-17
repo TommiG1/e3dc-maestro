@@ -238,6 +238,10 @@ class MaestroParams:
     battery_total_cycles: float = 5000.0   # Vollzyklen Lebensdauer
     # Manuelle Erzwingung der Akku-Entladung (Dashboard-Schalter)
     force_discharge_power_w: float = 3000.0
+    # Feste Notstromreserve aus dem Cockpit. Wenn aktiv, ersetzt sie die
+    # saisonale und die verbrauchsadaptive Reserve.
+    fixed_reserve_enabled: bool = False
+    fixed_reserve_soc: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -1100,6 +1104,13 @@ def _apply_wallbox_discharge_guard(
     )
 
 
+def manual_reserve_soc(params: MaestroParams) -> float | None:
+    """Fixed emergency reserve while the cockpit switch is on."""
+    if not params.fixed_reserve_enabled:
+        return None
+    return max(0.0, min(100.0, float(params.fixed_reserve_soc)))
+
+
 def decide(
     state: MaestroState,
     params: MaestroParams,
@@ -1283,7 +1294,10 @@ def _decide_core(
     # Akkus bis zur Notstromreserve / Ladeschwelle.
     if force_discharge:
         floor_soc = float(params.charge_threshold)
-        if params.seasonal_reserve_enabled:
+        manual_reserve = manual_reserve_soc(params)
+        if manual_reserve is not None:
+            floor_soc = max(floor_soc, manual_reserve)
+        elif params.seasonal_reserve_enabled:
             floor_soc = max(floor_soc, seasonal_reserve_soc(now, params))
         if state.soc > floor_soc:
             rate_w = max(100.0, min(params.force_discharge_power_w, params.max_charge_power))
@@ -1408,13 +1422,31 @@ def _decide_core(
     # ein low-Slot aktiv, ist das ein bewusster Nutzerwunsch, den Akku gezielt
     # aus dem Netz über die Reserve hinaus zu heben (Issue #13) – dafür muss
     # §6.97 weiter unten erreichbar bleiben, statt hier zu enden.
-    if params.seasonal_reserve_enabled:
-        adaptive_pct = adaptive_emergency_reserve_soc(state, params)
-        reserve_soc = adaptive_pct if adaptive_pct is not None else seasonal_reserve_soc(now, params)
+    manual_reserve = manual_reserve_soc(params)
+    if manual_reserve is not None and state.soc < manual_reserve:
+        return MaestroDecision(
+            phase=PHASE_RESERVE_PROTECTION,
+            reason=(
+                f"Notstromreserve {manual_reserve:.0f}% (fest) > SoC {state.soc:.0f}% – "
+                f"Netzladung bis zur Reserve, {params.max_charge_power:.0f} W"
+            ),
+            power_mode=POWER_MODE_CHARGE,
+            charge_power_limit=params.max_charge_power,
+            discharge_power_limit=0.0,
+            target_soc=manual_reserve,
+            target_charge_power=params.max_charge_power,
+        )
+    if manual_reserve is not None or params.seasonal_reserve_enabled:
+        if manual_reserve is not None:
+            reserve_soc = manual_reserve
+            source = "fest"
+        else:
+            adaptive_pct = adaptive_emergency_reserve_soc(state, params)
+            reserve_soc = adaptive_pct if adaptive_pct is not None else seasonal_reserve_soc(now, params)
+            source = "verbrauchsadaptiv" if adaptive_pct is not None else "saisonal"
         if state.soc <= reserve_soc and not _plan_charge and not (
             params.low_slot_grid_charge_enabled and tariff_class == TARIFF_LOW
         ):
-            source = "verbrauchsadaptiv" if adaptive_pct is not None else "saisonal"
             return MaestroDecision(
                 phase=PHASE_RESERVE_PROTECTION,
                 reason=(

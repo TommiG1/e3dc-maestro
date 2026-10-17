@@ -381,6 +381,17 @@ class E3DCMaestroCoordinator(
         )
 
 
+    def set_fixed_reserve(self, active: bool) -> None:
+        """Cockpit switch for a fixed emergency reserve."""
+        from .const import CONF_FIXED_RESERVE_ENABLED
+
+        self.update_param(CONF_FIXED_RESERVE_ENABLED, active)
+        self._create_background_task(
+            self.async_request_refresh(),
+            "e3dc_maestro_refresh",
+        )
+
+
     def update_param(self, key: str, value: Any) -> None:
         """Called by number/select/switch entities when user changes a value."""
         # Lat/lon come from HA config, not user entities
@@ -408,6 +419,11 @@ class E3DCMaestroCoordinator(
             self.hass.config_entries.async_update_entry(self.entry, options=new_options)
         finally:
             self._skip_reload = False
+        if key == "fixed_reserve_soc":
+            self._create_background_task(
+                self.async_request_refresh(),
+                "e3dc_maestro_refresh",
+            )
 
 
     def invalidate_auto_params(self) -> None:

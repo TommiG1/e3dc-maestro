@@ -81,11 +81,18 @@ def decision_explanation(coord) -> str:
         )
     elif phase == "reserve_protection":
         soc = _f(getattr(state, "soc", None))
-        text = (
-            f"Saisonale Notstromreserve geschützt: Batterie-Entladung ist "
-            f"gesperrt, bis SoC {soc}% wieder über die saisonale "
-            "Reserveschwelle steigt."
-        )
+        if dec.power_mode == "charge":
+            target = _f(dec.target_soc)
+            power = _f(dec.charge_power_limit)
+            text = (
+                f"Feste Notstromreserve: SoC {soc}% liegt unter {target}% – "
+                f"Batterie wird mit {power} W aus dem Netz bis zur Reserve geladen."
+            )
+        else:
+            text = (
+                f"Notstromreserve geschützt: Batterie-Entladung ist gesperrt, "
+                f"bis SoC {soc}% wieder über die Reserveschwelle steigt."
+            )
     elif phase == "evcc_pause":
         mode = state.evcc_mode if state and state.evcc_mode else "now"
         text = (

@@ -17,6 +17,9 @@ export interface ControlsInput {
   onToggle: (entityId: string) => void;
   onPowerDraft: (watts: number) => void;
   onPowerCommit: (watts: number) => void;
+  reserveDraft?: number;
+  onReserveDraft: (percent: number) => void;
+  onReserveCommit: (percent: number) => void;
   onAllSettings: () => void;
   consumers: Consumer[];
   picking: boolean;
@@ -31,6 +34,8 @@ export interface ControlsInput {
   onConsumerMode: (id: string, mode: ConsumerMode) => void;
   onConsumerIcon: (id: string, icon: ConsumerIcon) => void;
   onRemoveConsumer: (id: string) => void;
+  onPress: (entityId: string) => void;
+  onSelect: (entityId: string, option: string) => void;
 }
 
 const ICON_LABEL = {
@@ -63,6 +68,12 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
   const max = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
   const step = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
   const powerValue = c.forcePowerDraft ?? num(power) ?? min;
+  const reserve = c.hass.states[E.fixedReserveSoc];
+  const reserveAttrs = reserve?.attributes ?? {};
+  const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
+  const reserveMax = typeof reserveAttrs.max === "number" ? reserveAttrs.max : 100;
+  const reserveStep = typeof reserveAttrs.step === "number" ? reserveAttrs.step : 1;
+  const reserveValue = c.reserveDraft ?? num(reserve) ?? reserveMin;
 
   const toggle = (id: string, label: string) => {
     const entity = c.hass.states[id];
@@ -86,6 +97,14 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
         <button class="btn" @click=${c.onClose}>${t("close")}</button>
       </div>
       ${c.error ? html`<p class="err">${c.error}</p>` : nothing}
+      <div class="release">
+        <button
+          class="btn action"
+          ?disabled=${!c.hass.states[E.btnClear] || c.pending.has(E.btnClear)}
+          @click=${() => c.onPress(E.btnClear)}
+        >${t("btnClear")}</button>
+        <p class="sub">${t("btnClearSub")}</p>
+      </div>
       ${CONTROL_SWITCHES.map(
         (key) => html`<div class="ctrl">
           <div class="txt"><b>${t(key)}</b><span>${t(SUBS[key])}</span></div>
@@ -106,6 +125,49 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
           @input=${(e: Event) => c.onPowerDraft(Number((e.target as HTMLInputElement).value))}
           @change=${(e: Event) => c.onPowerCommit(Number((e.target as HTMLInputElement).value))}
         />
+      </div>
+      <div class="ctrl wrap">
+        <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
+        ${toggle(E.fixedReserve, t("fixedReserve"))}
+        <input
+          type="range"
+          min=${reserveMin}
+          max=${reserveMax}
+          step=${reserveStep}
+          .value=${String(reserveValue)}
+          aria-label=${t("fixedReserve")}
+          ?disabled=${!reserve || reserve.state === "unavailable"}
+          @input=${(e: Event) => c.onReserveDraft(Number((e.target as HTMLInputElement).value))}
+          @change=${(e: Event) => c.onReserveCommit(Number((e.target as HTMLInputElement).value))}
+        />
+      </div>
+      <div class="sheet-section">
+        <h3>${t("actionsTitle")}</h3>
+        ${(["selWallbox", "selMorning", "selAuto", "selTariff"] as const).map((key) => {
+          const entity = c.hass.states[E[key]];
+          const options = Array.isArray(entity?.attributes.options) ? (entity.attributes.options as string[]) : [];
+          return html`<label class="ctrl">
+            <span class="txt"><b>${t(key)}</b></span>
+            <select
+              .value=${entity?.state ?? ""}
+              ?disabled=${!entity || entity.state === "unavailable" || c.pending.has(E[key])}
+              @change=${(e: Event) => c.onSelect(E[key], (e.target as HTMLSelectElement).value)}
+            >
+              ${options.map((option) => html`<option value=${option} ?selected=${option === entity?.state}>${c.i18n.option(option)}</option>`)}
+            </select>
+          </label>`;
+        })}
+        ${(["btnCharge"] as const).map((key) => {
+          const confirms = key === "btnCharge" ? [t("confirmCharge")] : [];
+          return html`<button
+            class="btn action"
+            ?disabled=${!c.hass.states[E[key]] || c.pending.has(E[key])}
+            @click=${() => {
+              if (confirms.some((text) => !window.confirm(text))) return;
+              c.onPress(E[key]);
+            }}
+          >${t(key)}</button>`;
+        })}
       </div>
       <div class="sheet-section" id="display-consumers">
         <h3>${t("displayTitle")}</h3>

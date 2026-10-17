@@ -91,19 +91,23 @@ export interface ForecastInput {
 
 export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
-  const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => ({
-    x: b.x,
-    x2: b.x2,
-    fillColor: COLORS.accent,
-    opacity: 0.05,
-    label: {
-      text: i18n.phase(b.phase),
-      borderWidth: 0,
-      orientation: "horizontal",
-      position: "top",
-      style: { background: "transparent", color: COLORS.faint, fontSize: "11px" },
-    },
-  }));
+  const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
+    const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: 0.05 };
+    // Vertical text (bottom to top) keeps the name off the 100 % line at the top edge and fits
+    // narrow bands. A one-step phase is only minutes wide, so labeling every one would stack text.
+    if (b.x2 - b.x >= 30 * 60e3) {
+      ann.label = {
+        text: i18n.phase(b.phase),
+        borderWidth: 0,
+        orientation: "vertical",
+        position: "top",
+        offsetX: 10,
+        offsetY: 10,
+        style: { background: "transparent", color: COLORS.muted, fontSize: "11px" },
+      };
+    }
+    return ann;
+  });
 
   const series: Obj[] = [
     { name: i18n.t("legendPv"), type: "area", data: toKw(traj.pv_points) },
@@ -152,8 +156,10 @@ export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: Fo
     );
   }
 
+  const lineAtTop = targetSoc !== undefined && targetSoc >= 90;
   return withBase({
     chart: { id: "fc", type: "line", height: 420, zoom: { enabled: true, type: "x" }, toolbar: { show: false, autoSelected: "zoom" } },
+    grid: { padding: { top: lineAtTop ? 28 : 8 } },
     series,
     colors,
     stroke: { width: widths, curve: "smooth", dashArray: dashes },
@@ -185,10 +191,16 @@ export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: Fo
                   text: i18n.t("targetLabel", { v: Math.round(targetSoc) }),
                   position: "right",
                   textAnchor: "end",
-                  offsetX: 0,
-                  offsetY: 22,
+                  offsetX: -8,
+                  // Apex places the baseline at y + offsetY - 3. Negative offsetY lifts the label off the line.
+                  offsetY: -16,
                   borderWidth: 0,
-                  style: { background: "rgba(129,140,248,.25)", color: "#c7d2fe" },
+                  style: {
+                    background: "rgba(7,11,20,.85)",
+                    color: "#c7d2fe",
+                    fontSize: "12px",
+                    padding: { left: 6, right: 6, top: 3, bottom: 3 },
+                  },
                 },
               },
             ],

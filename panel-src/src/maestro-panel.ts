@@ -21,7 +21,8 @@ import { applyEntityMap, DEFAULT_IDS, E, isOn, num, watched, type EntityKey, typ
 import { powerHistoryOptions } from "./charts";
 import { placeElectrons } from "./flow";
 import { makeFmt } from "./format";
-import { loadIst, loadPowerSeries, loadSparks, loadTimeline, type IstSeries, type SparkKey } from "./history";
+import { loadCollapsed, saveCollapsed } from "./groups";
+import { loadIst, loadPeriodSums, loadPowerSeries, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { styles } from "./styles";
@@ -79,6 +80,7 @@ class MaestroPanel extends LitElement {
   private _error?: string;
   private _chartError?: string;
   private _powerDraft?: number;
+  private _reserveDraft?: number;
   private _zoomKey?: string;
   private _timer?: number;
   private _flowRaf = 0;
@@ -90,6 +92,10 @@ class MaestroPanel extends LitElement {
   private _entityMap?: EntityMap;
   private _resolvedAt = 0;
   private _consumers: Consumer[] = loadConsumers();
+  private _collapsed = loadCollapsed();
+  private _period: Period = "today";
+  private _periodSums?: Partial<Record<PeriodKey, number>>;
+  private _debugOpen = false;
   private _picking = false;
   private _pickQuery = "";
   private _focusConsumers = false;
@@ -234,6 +240,19 @@ class MaestroPanel extends LitElement {
     return html`<p class="err">${t("entitiesMissing", { list: names.join(", ") + more })}</p>`;
   }
 
+  private _alerts(hass: Hass, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
+    const state = (id: string) => hass.states[id]?.state;
+    const down = state(E.reachable) === "off";
+    const notes = [
+      down ? t("alertUnreachable") : null,
+      state(E.chargeLock) === "on" ? t("alertChargeLock") : null,
+      state(E.dischargeLock) === "on" ? t("alertDischargeLock") : null,
+      state(E.unjustified) === "on" ? t("alertUnjustified") : null,
+    ].filter((x): x is string => !!x);
+    if (!notes.length) return nothing;
+    return html`<div class="banner ${down ? "bad" : ""}" role="status">${notes.map((n) => html`<span>${n}</span>`)}</div>`;
+  }
+
   // ------------------------------------------------------------ history
 
   private async _ensureHistory(): Promise<void> {
@@ -252,6 +271,10 @@ class MaestroPanel extends LitElement {
       }
     };
     if (this._screen === "live") await run("sparks", async () => void (this._sparks = await loadSparks(hass)));
+    if (this._screen === "live" && this._period !== "today") {
+      const period = this._period;
+      await run(`period-${period}`, async () => void (this._periodSums = await loadPeriodSums(hass, period)));
+    }
     if (this._screen === "forecast" && this._showIst) {
       await run("ist", async () => void (this._ist = await loadIst(hass, IST_HOURS)));
     }
@@ -315,9 +338,24 @@ class MaestroPanel extends LitElement {
     void this._call(id, "switch", on ? "turn_off" : "turn_on", { entity_id: id });
   }
 
+  private _press(id: string): void {
+    void this._call(id, "button", "press", { entity_id: id });
+  }
+
+  private _select(id: string, option: string): void {
+    void this._call(id, "select", "select_option", { entity_id: id, option });
+  }
+
   private _commitPower(watts: number): void {
     void this._call(E.forceDischargePower, "number", "set_value", { entity_id: E.forceDischargePower, value: watts }).then(() => {
       this._powerDraft = undefined;
+      this.requestUpdate();
+    });
+  }
+
+  private _commitReserve(percent: number): void {
+    void this._call(E.fixedReserveSoc, "number", "set_value", { entity_id: E.fixedReserveSoc, value: percent }).then(() => {
+      this._reserveDraft = undefined;
       this.requestUpdate();
     });
   }
@@ -365,6 +403,41 @@ class MaestroPanel extends LitElement {
       onEditConsumers: () => this._openConsumers(),
       onFlowNode: (key) => this._openFlow(key),
       motion: this._motion,
+      collapsed: this._collapsed,
+      onToggleGroup: (id) => {
+        const next = new Set(this._collapsed);
+        if (!next.delete(id)) next.add(id);
+        this._collapsed = next;
+        saveCollapsed(next);
+        this.requestUpdate();
+      },
+      period: this._period,
+      periodSums: this._periodSums,
+      onPeriod: (period) => {
+        this._period = period;
+        this.requestUpdate();
+        void this._ensureHistory();
+      },
+      pending: this._pending,
+      onToggle: (id) => this._toggle(id),
+      onPress: (id) => this._press(id),
+      forcePowerDraft: this._powerDraft,
+      onPowerDraft: (w) => {
+        this._powerDraft = w;
+        this.requestUpdate();
+      },
+      onPowerCommit: (w) => this._commitPower(w),
+      reserveDraft: this._reserveDraft,
+      onReserveDraft: (percent) => {
+        this._reserveDraft = percent;
+        this.requestUpdate();
+      },
+      onReserveCommit: (percent) => this._commitReserve(percent),
+      debugOpen: this._debugOpen,
+      onToggleDebug: () => {
+        this._debugOpen = !this._debugOpen;
+        this.requestUpdate();
+      },
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
     const regulation = isOn(hass.states[E.ctrlActive]);
@@ -403,6 +476,7 @@ class MaestroPanel extends LitElement {
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
           ${this._entityNotice(hass, t)}
+          ${this._alerts(hass, t)}
           ${this._chartError ? html`<p class="err">${t("chartError", { err: this._chartError })}</p>` : nothing}
           <section class="screen" id=${`screen-${current.id}`}>${view}</section>
           ${DEBUG
@@ -425,6 +499,14 @@ class MaestroPanel extends LitElement {
           this.requestUpdate();
         },
         onPowerCommit: (w) => this._commitPower(w),
+        reserveDraft: this._reserveDraft,
+        onReserveDraft: (percent) => {
+          this._reserveDraft = percent;
+          this.requestUpdate();
+        },
+        onReserveCommit: (percent) => this._commitReserve(percent),
+        onPress: (id) => this._press(id),
+        onSelect: (id, option) => this._select(id, option),
         onAllSettings: () => this._openSettings(),
         consumers: this._consumers,
         picking: this._picking,

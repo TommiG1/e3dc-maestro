@@ -182,6 +182,8 @@ CONF_CHARGE_RAMP_W_PER_CYCLE = "charge_ramp_w_per_cycle"  # W – max step per c
 
 # Config entry keys – seasonal emergency reserve (B1)
 CONF_SEASONAL_RESERVE_ENABLED = "seasonal_reserve_enabled"  # bool
+CONF_FIXED_RESERVE_ENABLED = "fixed_reserve_enabled"        # bool, feste Reserve aus dem Cockpit
+CONF_FIXED_RESERVE_SOC = "fixed_reserve_soc"                # % SoC der festen Reserve
 CONF_RESERVE_WINTER_PERCENT = "reserve_winter_percent"       # % SoC at winter solstice
 CONF_RESERVE_EQUINOX_PERCENT = "reserve_equinox_percent"     # % SoC at equinox
 

@@ -38,6 +38,7 @@ from .const import (
     CONF_LOW_YIELD_PRIORITY_ENABLED,
     CONF_PV_FORECAST_ENABLED,
     CONF_SEASONAL_RESERVE_ENABLED,
+    CONF_FIXED_RESERVE_ENABLED,
     CONF_TWO_TIER_ENABLED,
     CONF_WALLBOX_DISCHARGE_GUARD_ENABLED,
     CONF_WALLBOX_ENABLED,
@@ -69,6 +70,14 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         icon="mdi:battery-arrow-down",
         on_fn=lambda coord: coord.set_force_discharge(True),
         off_fn=lambda coord: coord.set_force_discharge(False),
+    ),
+    MaestroSwitchDescription(
+        key=CONF_FIXED_RESERVE_ENABLED,
+        name="Notstromreserve",
+        icon="mdi:battery-lock",
+        param_key=CONF_FIXED_RESERVE_ENABLED,
+        on_fn=lambda coord: coord.set_fixed_reserve(True),
+        off_fn=lambda coord: coord.set_fixed_reserve(False),
     ),
     MaestroSwitchDescription(
         key=CONF_HT_ENABLED,

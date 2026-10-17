@@ -17,7 +17,8 @@ import { energyFlow, flowBoxHeight } from "./flow";
 import { memo } from "./memo";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
-import type { IstSeries, SparkKey } from "./history";
+import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
+import { downloadCsv } from "./csv";
 import {
   parseSlots,
   parseTrajectory,
@@ -25,6 +26,7 @@ import {
   slotAction,
   type Point,
   type TimelineItem,
+  type Trajectory,
 } from "./transform";
 
 export interface Ctx {
@@ -44,6 +46,22 @@ export interface Ctx {
   onEditConsumers: () => void;
   onFlowNode: (key: string) => void;
   motion: boolean;
+  collapsed: ReadonlySet<string>;
+  onToggleGroup: (id: string) => void;
+  period: Period;
+  periodSums?: Partial<Record<PeriodKey, number>>;
+  onPeriod: (period: Period) => void;
+  pending: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+  onPress: (id: string) => void;
+  forcePowerDraft?: number;
+  onPowerDraft: (watts: number) => void;
+  onPowerCommit: (watts: number) => void;
+  reserveDraft?: number;
+  onReserveDraft: (percent: number) => void;
+  onReserveCommit: (percent: number) => void;
+  debugOpen: boolean;
+  onToggleDebug: () => void;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -51,6 +69,33 @@ const attrs = (c: Ctx, id: string): Record<string, unknown> => st(c, id)?.attrib
 const n = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
 const unit = (v: string, u: string) => html`${v}<small>${u}</small>`;
+
+const infoRow = (label: string, value: string) =>
+  html`<div class="row"><span>${label}</span><b>${value}</b></div>`;
+
+const forecastCsv = (traj: Trajectory): string[][] => [
+  ["time", "soc_pct", "pv_w", "house_w", "grid_w", "phase"],
+  ...traj.trajectory_points.map((point, i) => [
+    new Date(point[0]).toISOString(),
+    String(point[1]),
+    String(traj.pv_points[i]?.[1] ?? ""),
+    String(traj.house_points[i]?.[1] ?? ""),
+    String(traj.grid_points[i]?.[1] ?? ""),
+    traj.trajectory_phases[i] ?? "",
+  ]),
+];
+
+const timelineCsv = (c: Ctx): string[][] => [
+  ["time", "phase", "reason"],
+  ...(c.timeline ?? []).map((item) => [new Date(item.ts).toISOString(), item.phase, item.reason]),
+];
+
+const onDebug = (c: Ctx): boolean => isOn(st(c, E.debug));
+
+const debugText = (c: Ctx): string => {
+  const state = st(c, E.debugLog)?.state;
+  return !state || state === "unknown" || state === "unavailable" ? c.i18n.t("debugEmpty") : state;
+};
 
 // ---------------------------------------------------------------- Live
 
@@ -67,12 +112,47 @@ export function liveView(c: Ctx): TemplateResult {
     [t("chipHt"), on(E.htProtect), "warn"],
     [t("chipCurtail"), on(E.curtail), "warn"],
     [t("chipEmergency"), on(E.emergency), "warn"],
+    [t("chipFeedIn"), on(E.feedInLimit), "warn"],
+    [t("chipGridCharge"), on(E.gridCharge), "on"],
+    [t("chipBatteryPriority"), on(E.batteryPriority), "warn"],
+    [t("chipLowYield"), on(E.lowYield), "warn"],
     [t("chipPredictive"), on(E.ctrlPredictive), "on"],
     [t("chipShadow"), on(E.ctrlPlanShadow), "on"],
   ];
   const sp = (key: SparkKey, color: string) =>
-    c.sparks?.[key]?.length ? html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>` : nothing;
+    c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
   const flowH = flowBoxHeight(c.mobile, c.consumers.length);
+  const amount = (key: PeriodKey): number | undefined => (c.period === "today" ? num(st(c, E[key])) : c.periodSums?.[key]);
+  const balanceParts = [amount("feedRevenue"), amount("saving"), amount("costToday"), amount("wear")];
+  const balance = c.period === "today" ? num(st(c, E.balance)) : balanceParts.some((v) => v === undefined) ? undefined : balanceParts[0]! + balanceParts[1]! - balanceParts[2]! - balanceParts[3]!;
+  const euroOf = (v: number | undefined) => `${c.fmt.n(v, 2)} €`;
+  const when = t(c.period === "today" ? "whenToday" : c.period === "week" ? "whenWeek" : "whenMonth");
+  const groupTitle = t(c.period === "today" ? "groupToday" : c.period === "week" ? "groupWeek" : "groupMonth");
+  const balanceTitle = t(c.period === "today" ? "balanceTitle" : c.period === "week" ? "balanceWeek" : "balanceMonth");
+  const balanceTone = balance === undefined || balance === 0 ? "" : balance > 0 ? "pos" : "neg";
+  const power = st(c, E.forceDischargePower);
+  const powerAttrs = power?.attributes ?? {};
+  const powerMin = typeof powerAttrs.min === "number" ? powerAttrs.min : 100;
+  const powerMax = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
+  const powerStep = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
+  const powerValue = c.forcePowerDraft ?? num(power) ?? powerMin;
+  const reserve = st(c, E.fixedReserveSoc);
+  const reserveAttrs = reserve?.attributes ?? {};
+  const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
+  const reserveMax = typeof reserveAttrs.max === "number" ? reserveAttrs.max : 100;
+  const reserveStep = typeof reserveAttrs.step === "number" ? reserveAttrs.step : 1;
+  const reserveValue = c.reserveDraft ?? num(reserve) ?? reserveMin;
+  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult) => {
+    const open = !c.collapsed.has(id);
+    return html`<section class="group">
+      <button type="button" class="group-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onToggleGroup(id)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        <span>${title}</span>
+        ${open ? nothing : summary}
+      </button>
+      ${open ? html`<div class="grid kpis">${body}</div>` : nothing}
+    </section>`;
+  };
 
   return html`
     <div class="grid live-top">
@@ -117,33 +197,139 @@ export function liveView(c: Ctx): TemplateResult {
     <div class="chips">
       ${chips.map(([label, active, cls]) => html`<span class="chip ${active ? cls : ""}"><i></i>${label}</span>`)}
     </div>
-    <div class="grid kpis">
+    <div class="card force">
+      <div class="txt"><b>${t("forceTitle")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
+      <button
+        class="switch ${on(E.forceDischarge) ? "on" : ""}"
+        role="switch"
+        aria-checked=${on(E.forceDischarge)}
+        aria-label=${t("forceTitle")}
+        ?disabled=${!st(c, E.forceDischarge) || c.pending.has(E.forceDischarge)}
+        @click=${() => c.onToggle(E.forceDischarge)}
+      ></button>
+      <input
+        type="range"
+        min=${powerMin}
+        max=${powerMax}
+        step=${powerStep}
+        .value=${String(powerValue)}
+        aria-label=${t("ctrlForcePower", { v: "" })}
+        ?disabled=${!power || power.state === "unavailable"}
+        @input=${(e: Event) => c.onPowerDraft(Number((e.target as HTMLInputElement).value))}
+        @change=${(e: Event) => c.onPowerCommit(Number((e.target as HTMLInputElement).value))}
+      />
+    </div>
+    <div class="card force">
+      <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
+      <button
+        class="switch ${on(E.fixedReserve) ? "on" : ""}"
+        role="switch"
+        aria-checked=${on(E.fixedReserve)}
+        aria-label=${t("fixedReserve")}
+        ?disabled=${!st(c, E.fixedReserve) || c.pending.has(E.fixedReserve)}
+        @click=${() => c.onToggle(E.fixedReserve)}
+      ></button>
+      <input
+        type="range"
+        min=${reserveMin}
+        max=${reserveMax}
+        step=${reserveStep}
+        .value=${String(reserveValue)}
+        aria-label=${t("fixedReserve")}
+        ?disabled=${!reserve || reserve.state === "unavailable"}
+        @input=${(e: Event) => c.onReserveDraft(Number((e.target as HTMLInputElement).value))}
+        @change=${(e: Event) => c.onReserveCommit(Number((e.target as HTMLInputElement).value))}
+      />
+    </div>
+    <div class="seg period" role="group" aria-label=${t("periodToday")}>
+      ${(["today", "week", "month"] as const).map(
+        (p) => html`<button class=${c.period === p ? "active" : ""} aria-pressed=${c.period === p} @click=${() => c.onPeriod(p)}>${t(p === "today" ? "periodToday" : p === "week" ? "periodWeek" : "periodMonth")}</button>`,
+      )}
+    </div>
+    ${group("today", groupTitle, html`<b class="group-sum">${euroOf(amount("costNet"))}<small>${t("groupNet")}</small></b>`, html`
       <div class="card kpi">
-        <h3>${t("kpiCost")}</h3>
-        <div class="v">${unit(c.fmt.n(num(st(c, E.costNet)), 2), "€")}</div>
+        <h3>${t("kpiCost", { when })}</h3>
+        <div class="v">${unit(c.fmt.n(amount("costNet"), 2), "€")}</div>
         <div class="delta">${t("kpiCostSub")}</div>
         ${sp("costNet", COLORS.gridIn)}
       </div>
       <div class="card kpi">
-        <h3>${t("kpiSaving")}</h3>
-        <div class="v">${unit(c.fmt.n(num(st(c, E.saving)), 2), "€")}</div>
+        <h3>${t("kpiSaving", { when })}</h3>
+        <div class="v">${unit(c.fmt.n(amount("saving"), 2), "€")}</div>
         <div class="delta">${t("kpiSavingSub")}</div>
         ${sp("saving", COLORS.gridOut)}
       </div>
       <div class="card kpi">
-        <h3>${t("kpiSelf")}</h3>
-        <div class="v">${unit(c.fmt.n(num(st(c, E.selfUse))), "kWh")}</div>
-        <div class="delta">${t("kpiSelfSub", { imp: c.fmt.n(num(st(c, E.importToday))), feed: c.fmt.n(num(st(c, E.feedToday))) })}</div>
+        <h3>${t("kpiSelf", { when })}</h3>
+        <div class="v">${unit(c.fmt.n(amount("selfUse")), "kWh")}</div>
+        <div class="delta">${t("kpiSelfSub", { imp: c.fmt.n(amount("importToday")), feed: c.fmt.n(amount("feedToday")) })}</div>
         ${sp("selfUse", COLORS.pv)}
       </div>
       <div class="card kpi">
-        <h3>${t("kpiBattery")}</h3>
-        <div class="v">${unit(c.fmt.n(num(st(c, E.chargedToday))), "kWh")}</div>
-        <div class="delta">${t("kpiBatterySub", { out: c.fmt.n(num(st(c, E.dischargedToday))) })}</div>
+        <h3>${t("kpiBattery", { when })}</h3>
+        <div class="v">${unit(c.fmt.n(amount("chargedToday")), "kWh")}</div>
+        <div class="delta">${t("kpiBatterySub", { out: c.fmt.n(amount("dischargedToday")) })}</div>
         ${sp("chargedToday", COLORS.bat)}
       </div>
-    </div>`;
+    `)}
+    ${group("balance", balanceTitle, html`<b class="group-sum ${balanceTone}">${euroOf(balance)}</b>`, html`
+      <div class="card kpi">
+        <h3>${t("kpiCostGross")}</h3>
+        <div class="v">${unit(c.fmt.n(amount("costToday"), 2), "€")}</div>
+        <div class="delta">${t("kpiCostGrossSub")}</div>
+        ${sp("costToday", COLORS.gridIn)}
+      </div>
+      <div class="card kpi">
+        <h3>${t("kpiRevenue")}</h3>
+        <div class="v">${unit(c.fmt.n(amount("feedRevenue"), 2), "€")}</div>
+        <div class="delta">${t("kpiRevenueSub", { when })}</div>
+        ${sp("feedRevenue", COLORS.gridOut)}
+      </div>
+      <div class="card kpi">
+        <h3>${t("kpiWear")}</h3>
+        <div class="v">${unit(c.fmt.n(amount("wear"), 2), "€")}</div>
+        <div class="delta">${t("kpiWearSub")}</div>
+        ${sp("wear", COLORS.accent2)}
+      </div>
+      <div class="card kpi">
+        <h3>${t("kpiBalance")}</h3>
+        <div class="v">${unit(c.fmt.n(balance, 2), "€")}</div>
+        <div class="delta">${t("kpiBalanceSub")}</div>
+        ${sp("balance", COLORS.accent)}
+      </div>
+      <div class="card kpi ${on(E.unjustified) ? "alert" : ""}">
+        <h3>${t("kpiGridBat")}</h3>
+        <div class="v">${unit(c.fmt.n(amount("gridToBattery")), "kWh")}</div>
+        <div class="delta">${on(E.unjustified) ? t("kpiGridBatWarn") : t("kpiGridBatSub")}</div>
+        ${sp("gridToBattery", COLORS.gridIn)}
+      </div>
+      <div class="card kpi">
+        <h3>${t("kpiWallbox", { when })}</h3>
+        <div class="v">${unit(c.fmt.n(amount("wallboxEnergy")), "kWh")}</div>
+        <div class="delta">${t("kpiWallboxSub")}</div>
+        ${sp("wallboxEnergy", COLORS.house)}
+      </div>
+      <div class="card kpi">
+        <h3>${t("kpiFeedLimit")}</h3>
+        <div class="v">${unit(c.fmt.n(amount("curtailAvoided")), "kWh")}</div>
+        <div class="delta">${t("kpiFeedLimitSub", { n: c.fmt.n(amount("feedInInterventions"), 0), dc: c.fmt.n(amount("feedInAvoided")) })}</div>
+        ${sp("curtailAvoided", COLORS.pv)}
+      </div>
+    `)}`;
 }
+
+const qualityLabel = (t: Ctx["i18n"]["t"], state: string | undefined): string => {
+  if (state === "ok") return t("qualityOk");
+  if (state === "pv_fallback") return t("qualityPv");
+  if (state === "consumption_fallback") return t("qualityConsumption");
+  if (state === "both_fallback") return t("qualityBoth");
+  return t("qualityUnknown");
+};
+
+const pct = (c: Ctx, id: string): string => {
+  const v = num(st(c, id));
+  return v === undefined ? "–" : `${Math.round(v)} %`;
+};
 
 // ---------------------------------------------------------------- Forecast
 
@@ -170,6 +356,7 @@ export function forecastView(c: Ctx): TemplateResult {
           <div class="legend">${legend.map(([color, label]) => html`<span><i style="background:${color}"></i>${label}</span>`)}</div>
         </div>
         <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
+        <button class="toggle" @click=${() => downloadCsv("maestro-prognose.csv", forecastCsv(traj))}>${t("exportCsv")}</button>
         <div class="seg" role="group">
           ${[6, 12, 24].map(
             (h) => html`<button class=${c.range === h ? "active" : ""} aria-pressed=${c.range === h} @click=${() => c.onRange(h)}>${t("hoursShort", { h })}</button>`,
@@ -197,7 +384,14 @@ export function forecastView(c: Ctx): TemplateResult {
       ${stat(t("statFeed"), unit(c.fmt.n(n(a.grid_feed_in_kwh)), "kWh"))}
       ${stat(t("statAutarky"), unit(c.fmt.n(n(a.self_sufficiency_pct)), "%"))}
       ${stat(t("statPvTomorrow"), unit(c.fmt.n(num(st(c, E.pvTomorrow))), "kWh"))}
-    </div>`;
+    </div>
+    <div class="grid stat-row">
+      ${stat(t("qualityLabel"), qualityLabel(t, st(c, E.forecastQuality)?.state))}
+      ${stat(t("statP10"), unit(c.fmt.n(num(st(c, E.p10))), "kWh"))}
+      ${stat(t("statDeficit"), unit(c.fmt.n(num(st(c, E.deficit))), "kWh"))}
+      ${stat(t("statYield"), html`${c.fmt.n((() => { const r = num(st(c, E.yieldRatio)); return r === undefined ? undefined : r * 100; })())}<small>%</small>`)}
+    </div>
+    <p class="sub yield-note">${t("statYieldSub", { today: c.fmt.n(num(st(c, E.yieldToday))), ref: c.fmt.n(num(st(c, E.yieldRef))) })}</p>`;
 }
 
 // ---------------------------------------------------------------- Price plan
@@ -309,7 +503,10 @@ export function decisionView(c: Ctx): TemplateResult {
       </div>
     </div>
     <div class="card tl-card">
-      <h3>${t("timelineTitle")}</h3>
+      <div class="card-head">
+        <h3>${t("timelineTitle")}</h3>
+        <button class="toggle" ?disabled=${!c.timeline?.length} @click=${() => c.timeline && downloadCsv("maestro-entscheidungen.csv", timelineCsv(c))}>${t("exportCsv")}</button>
+      </div>
       ${c.timeline?.length
         ? html`<div class="timeline">
             ${c.timeline.map(
@@ -321,5 +518,55 @@ export function decisionView(c: Ctx): TemplateResult {
             )}
           </div>`
         : html`<p class="empty">${c.timeline ? t("timelineEmpty") : t("loading")}</p>`}
-    </div>`;
+    </div>
+    <div class="grid stat-row dec-extra">
+      <div class="card">
+        <h3>${t("reserveTitle")}</h3>
+        <div class="rows">
+          ${infoRow(t("reserveSeasonal"), pct(c, E.seasonalReserve))}
+          ${infoRow(t("reserveAdaptive"), pct(c, E.adaptiveReserve))}
+          ${infoRow(t("reserveHt"), pct(c, E.htReserve))}
+          ${infoRow(t("reserveForward"), pct(c, E.forwardTarget))}
+          ${infoRow(t("targetSoc"), pct(c, E.targetSoc))}
+        </div>
+      </div>
+      <div class="card">
+        <h3>${t("windowsTitle")}</h3>
+        <div class="rows">
+          ${infoRow(t("windowAstro"), shown(st(c, E.astroStart)))}
+          ${infoRow(t("windowSeasonalEnd"), shown(st(c, E.seasonalEnd)))}
+          ${infoRow(t("windowPvDelay"), shown(st(c, E.pvDelayStart)))}
+          ${infoRow(t("windowTomorrow"), `${shown(st(c, E.tomorrowStart))} – ${shown(st(c, E.tomorrowEnd))}`)}
+        </div>
+      </div>
+      <div class="card">
+        <h3>${t("autoTitle")}</h3>
+        <div class="rows">
+          ${infoRow(t("autoTitle"), shown(st(c, E.autoStrategy)))}
+          ${infoRow(t("autoSaving"), `${c.fmt.n(num(st(c, E.autoSaving)), 2)} €`)}
+        </div>
+      </div>
+    </div>
+    <section class="group">
+      <button type="button" class="group-head ${c.debugOpen ? "open" : ""}" aria-expanded=${c.debugOpen} @click=${c.onToggleDebug}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        <span>${t("debugTitle")}</span>
+      </button>
+      ${c.debugOpen
+        ? html`<div class="card debug-card">
+            <div class="force">
+              <div class="txt"><b>${t("debugSwitch")}</b></div>
+              <button
+                class="switch ${onDebug(c) ? "on" : ""}"
+                role="switch"
+                aria-checked=${onDebug(c)}
+                aria-label=${t("debugSwitch")}
+                ?disabled=${!st(c, E.debug) || c.pending.has(E.debug)}
+                @click=${() => c.onToggle(E.debug)}
+              ></button>
+            </div>
+            <pre class="debug-log">${debugText(c)}</pre>
+          </div>`
+        : nothing}
+    </section>`;
 }

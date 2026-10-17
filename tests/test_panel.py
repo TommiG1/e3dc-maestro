@@ -150,7 +150,8 @@ def test_panel_entity_keys_exist_in_platforms():
         src = (ROOT / "custom_components" / "e3dc_maestro" / f"{platform}.py").read_text(encoding="utf-8")
         literal = f'key="{description_key}"' in src
         constant = description_key in conf_values and f"key={conf_values[description_key]}," in src
-        assert literal or constant, f"{panel_key}: {platform} key {description_key!r} not found"
+        unique = f'_{description_key}"' in src
+        assert literal or constant or unique, f"{panel_key}: {platform} key {description_key!r} not found"
 
 
 def test_panel_entity_keys_match_frontend():

@@ -15,6 +15,7 @@ from .control_engine import (
     astro_sunrise_sunset as _astro_sunrise_sunset,
     seasonal_charge_end_hour as _seasonal_charge_end_hour,
     seasonal_reserve_soc as _seasonal_reserve_soc,
+    manual_reserve_soc as _manual_reserve_soc,
     tariff_schedule_from_params as _tariff_schedule_from_params,
 )
 from .coordinator_helpers import (
@@ -86,7 +87,10 @@ class CoordinatorDiagnosticsMixin:
 
     @property
     def seasonal_reserve_soc(self) -> float | None:
-        """Currently active seasonal emergency reserve SoC (%) or None if disabled."""
+        """Effective emergency reserve SoC (%): fixed cockpit value, else seasonal."""
+        manual = _manual_reserve_soc(self._params)
+        if manual is not None:
+            return round(manual, 1)
         if not self._params.seasonal_reserve_enabled:
             return None
         return round(_seasonal_reserve_soc(dt_util.now(), self._params), 1)

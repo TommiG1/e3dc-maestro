@@ -2825,6 +2825,66 @@ class TestForceDischarge:
         assert d2.discharge_power_limit is None
 
 
+class TestFixedReserve:
+    """Cockpit switch: a fixed reserve replaces the seasonal one while it is on."""
+
+    def _state(self, soc: float) -> MaestroState:
+        return MaestroState(
+            soc=soc, pv_power=0, house_power=500, grid_power=500, battery_power=0,
+        )
+
+    def test_charges_from_grid_below_fixed_percent(self):
+        from custom_components.e3dc_maestro.const import POWER_MODE_CHARGE
+        p = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "fixed_reserve_enabled": True, "fixed_reserve_soc": 40, "seasonal_reserve_enabled": False, "ht_enabled": False, "charge_threshold": 5})
+        d = decide(self._state(35), p, _now(6, 15, 14))
+        assert d.phase == PHASE_RESERVE_PROTECTION
+        assert d.power_mode == POWER_MODE_CHARGE
+        assert d.charge_power_limit == p.max_charge_power
+        assert d.discharge_power_limit == 0.0
+        assert d.target_soc == 40
+
+    def test_blocks_discharge_once_fixed_percent_is_reached(self):
+        p = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "fixed_reserve_enabled": True, "fixed_reserve_soc": 40, "seasonal_reserve_enabled": False, "ht_enabled": False})
+        d = decide(self._state(40), p, _now(6, 15, 14))
+        assert d.phase == PHASE_RESERVE_PROTECTION
+        assert d.power_mode == POWER_MODE_NORMAL
+        assert d.charge_power_limit is None
+        assert d.discharge_power_limit == 0.0
+
+    def test_overrides_seasonal_reserve(self):
+        p = MaestroParams(**{
+            **DEFAULT_PARAMS.__dict__,
+            "fixed_reserve_enabled": True,
+            "fixed_reserve_soc": 10,
+            "seasonal_reserve_enabled": True,
+            "reserve_winter_percent": 30,
+            "ht_enabled": False,
+        })
+        d = decide(self._state(20), p, _now(12, 21, 14))
+        assert d.phase != PHASE_RESERVE_PROTECTION
+
+    def test_off_keeps_seasonal_reserve(self):
+        p = MaestroParams(**{
+            **DEFAULT_PARAMS.__dict__,
+            "fixed_reserve_enabled": False,
+            "fixed_reserve_soc": 10,
+            "seasonal_reserve_enabled": True,
+            "reserve_winter_percent": 30,
+            "ht_enabled": False,
+        })
+        d = decide(self._state(20), p, _now(12, 21, 14))
+        assert d.phase == PHASE_RESERVE_PROTECTION
+        assert "saisonal" in d.reason
+
+    def test_force_discharge_stops_at_fixed_reserve(self):
+        from custom_components.e3dc_maestro.const import PHASE_FORCE_DISCHARGE
+        p = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "fixed_reserve_enabled": True, "fixed_reserve_soc": 50, "charge_threshold": 5, "ht_enabled": False})
+        d = decide(self._state(40), p, _now(6, 15, 12), force_discharge=True)
+        assert d.phase == PHASE_FORCE_DISCHARGE
+        assert d.power_mode == POWER_MODE_IDLE
+        assert "50" in d.reason
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # G0: Hard SoC Limit (Akku-Schonung mit Curtailment-Bypass)
 # ──────────────────────────────────────────────────────────────────────────────

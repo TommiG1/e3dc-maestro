@@ -1087,6 +1087,29 @@ Häufigste Ursachen:
 
 Das ist **korrekt**: Im `idle`-Zustand sendet Maestro `clear_power_limits` an den E3DC, der dann eigenständig PV-Überschuss in den Akku leitet. Maestro stoppt den Akku im Idle bewusst nicht.
 
+### Notstromreserve auf 30 % gesetzt, der Akku pendelt und lädt immer wieder nach
+
+Notstromreserve und Ladeschwelle sind zwei verschiedene Regeln. Stehen beide auf demselben Wert, arbeiten sie an derselben Kante gegeneinander.
+
+Beispiel: **Notstromreserve Winter** und **Äquinoktium** auf 30 %, **Ladeschwelle** ebenfalls 30 %, **SoC-Hysterese** auf dem Standard von 2 %.
+
+- Liegt der SoC unter 30 %, gewinnt die Ladeschwelle (Phase `emergency`, höhere Priorität). Maestro lädt mit maximaler Ladeleistung aus dem Netz.
+- Liegt der SoC über 30 %, ist die Reservebedingung `SoC ≤ Reserve` nicht erfüllt. Der Akku versorgt das Haus und fällt wieder unter 30 %.
+- Die SoC-Hysterese reicht einen neuen Wert erst nach einer Änderung von 2 Punkten an die Regelung weiter. Sie sieht dadurch abwechselnd etwa 29 % (Vollladung) und 31 % (Entladung frei) und trifft den Haltepunkt 30 % praktisch nie.
+
+Die saisonale Notstromreserve sperrt nur die Entladung (Phase `reserve_protection`). Nachladen aus dem Netz löst dort ausschließlich die Ladeschwelle aus.
+
+Für eine feste 30-%-Reserve:
+
+- **Saisonale Notstromreserve** einschalten
+- **Notstromreserve Winter** und **Äquinoktium** beide auf 30 % (gleicher Wert = ganzjährig fest, ohne saisonale Interpolation)
+- **Adaptive Reserve** aus
+- **Ladeschwelle** deutlich darunter lassen, Standard ist 15 %
+
+Liegt der SoC unter 30 %, bleibt die Entladung gesperrt, und nur PV darf nachladen. Ab 30 % versorgt der Akku das Haus, bis er die Reserve wieder erreicht.
+
+Im Cockpit gibt es zusätzlich den Schalter **Notstromreserve** mit festem Prozentwert. Solange er an ist, ersetzt er die saisonale Reserve. Liegt der SoC darunter, lädt Maestro mit maximaler Ladeleistung aus dem Netz bis zu diesem Wert und sperrt die Entladung. Ab dem Wert bleibt nur die Entladesperre. Der Sensor *Notstromreserve (aktuell)* zeigt dann diesen festen Wert.
+
 ### PV-Verlust verhindert zeigt 0 kWh, obwohl geladen wurde
 
 Nur aktiv wenn entweder `curtailment_guard` oder `feed_in_limit` aktiv war. Prüfe:

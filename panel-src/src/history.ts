@@ -33,8 +33,93 @@ const startOfToday = (): number => {
   return d.getTime();
 };
 
-export type SparkKey = "costNet" | "saving" | "selfUse" | "chargedToday";
-const SPARK_KEYS: SparkKey[] = ["costNet", "saving", "selfUse", "chargedToday"];
+export type SparkKey =
+  | "costNet"
+  | "saving"
+  | "selfUse"
+  | "chargedToday"
+  | "costToday"
+  | "feedRevenue"
+  | "wear"
+  | "balance"
+  | "gridToBattery"
+  | "wallboxEnergy"
+  | "curtailAvoided";
+const SPARK_KEYS: SparkKey[] = [
+  "costNet",
+  "saving",
+  "selfUse",
+  "chargedToday",
+  "costToday",
+  "feedRevenue",
+  "wear",
+  "balance",
+  "gridToBattery",
+  "wallboxEnergy",
+  "curtailAvoided",
+];
+
+/** Sum of the recorder `change` column. Missing rows mean the statistic does not exist. */
+export function sumChanges(rows: { change?: number | null }[] | undefined): number | undefined {
+  if (!rows?.length) return undefined;
+  let any = false;
+  let sum = 0;
+  for (const row of rows) {
+    if (typeof row.change === "number" && Number.isFinite(row.change)) {
+      any = true;
+      sum += row.change;
+    }
+  }
+  return any ? sum : undefined;
+}
+
+export type Period = "today" | "week" | "month";
+
+/** Daily counters the live tiles can show for the current week or month. */
+export const PERIOD_KEYS = [
+  "costNet",
+  "costToday",
+  "feedRevenue",
+  "wear",
+  "saving",
+  "selfUse",
+  "importToday",
+  "feedToday",
+  "chargedToday",
+  "dischargedToday",
+  "gridToBattery",
+  "wallboxEnergy",
+  "curtailAvoided",
+  "feedInAvoided",
+  "feedInInterventions",
+] as const;
+export type PeriodKey = (typeof PERIOD_KEYS)[number];
+
+const periodStart = (period: Exclude<Period, "today">): number => {
+  const start = new Date();
+  if (period === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  else start.setDate(1);
+  start.setHours(0, 0, 0, 0);
+  return start.getTime();
+};
+
+/** Sum of daily statistic changes since Monday or the first of the month. */
+export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today">): Promise<Partial<Record<PeriodKey, number>>> {
+  const raw = await hass.callWS<Record<string, { change?: number | null }[]>>({
+    type: "recorder/statistics_during_period",
+    start_time: new Date(periodStart(period)).toISOString(),
+    end_time: new Date().toISOString(),
+    statistic_ids: PERIOD_KEYS.map((key) => E[key]),
+    period: "day",
+    types: ["change"],
+  });
+  const out: Partial<Record<PeriodKey, number>> = {};
+  for (const key of PERIOD_KEYS) {
+    const sum = sumChanges(raw[E[key]]);
+    if (sum !== undefined) out[key] = sum;
+  }
+  return out;
+}
 
 /** Cumulative daily counters since midnight, 30-minute grid. */
 export async function loadSparks(hass: Hass): Promise<Record<SparkKey, Point[]>> {

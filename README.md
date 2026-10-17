@@ -1018,6 +1018,29 @@ Most common causes:
 
 This is **correct**: in `idle` Maestro sends `clear_power_limits` to the E3DC, which then autonomously routes PV surplus into the battery. Maestro intentionally does not stop the battery in idle.
 
+### Emergency reserve set to 30 %, but the battery oscillates and keeps recharging
+
+The emergency reserve and the charge threshold are two different rules. Set to the same value, they pull in opposite directions on the same edge.
+
+Example: **emergency reserve winter** and **equinox** at 30 %, **charge threshold** also at 30 %, **SoC hysteresis** at the default of 2 %.
+
+- Below 30 % the charge threshold wins (phase `emergency`, higher priority). Maestro charges from the grid at maximum charge power.
+- Above 30 % the reserve condition `SoC ≤ reserve` is not met. The battery covers the house and drops below 30 % again.
+- SoC hysteresis only forwards a new value to the rule engine after a change of 2 points. The engine therefore alternates between about 29 % (full charge) and 31 % (discharge allowed) and almost never lands on the 30 % hold point.
+
+The seasonal emergency reserve only blocks discharge (phase `reserve_protection`). Grid top-up is triggered there only by the charge threshold.
+
+For a fixed 30 % reserve:
+
+- Turn **seasonal emergency reserve** on
+- Set **emergency reserve winter** and **equinox** both to 30 % (same value = fixed all year, no seasonal interpolation)
+- Turn **adaptive reserve** off
+- Leave the **charge threshold** well below that; the default is 15 %
+
+Below 30 % discharge stays blocked and only PV may recharge. From 30 % upward the battery covers the house until it reaches the reserve again.
+
+The cockpit adds an **emergency reserve** switch with a fixed percent. While it is on, it replaces the seasonal reserve. Below that percent Maestro charges from the grid at maximum charge power and blocks discharge. At the percent only the discharge lock remains. The *emergency reserve (current)* sensor then shows that fixed value.
+
 ### PV loss prevented shows 0 kWh even though charging occurred
 
 Only active if either `curtailment_guard` or `feed_in_limit` was triggered. Check:
