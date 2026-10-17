@@ -829,7 +829,7 @@ modern dashboards stay as they are.
 
 | View | Content |
 |---|---|
-| **Live** | Animated energy flow (PV, house, grid, battery), state of charge with target SoC and autonomy, status chips (locks, peak-tariff protection, curtailment guard, emergency charge, forward-looking, price plan) and today's counters with a curve since midnight |
+| **Live** | Energy flow (PV, house, grid, battery) with glowing particles whose speed follows the power. Extra consumers can be shown. A click on a symbol opens the last 24 h. Plus state of charge with target SoC and autonomy, status chips and today's counters since midnight |
 | **Forecast** | SoC trajectory and power for the next 24 h with control phases, now marker and target SoC. Drag to zoom, overview bar below, 6/12/24 h. **Actuals** overlays the measured values of the last 6 h |
 | **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures (planned grid charge, expected saving, cheapest/most expensive slot). Clearly marked in shadow mode |
 | **Decision** | Current control phase with its reason, charge/discharge limit "target vs. sent" and the phase changes of the last 24 h |
@@ -846,6 +846,13 @@ battery, price plan shadow mode and forced discharge with a power slider. Change
 take effect **immediately** (same entities as in the dashboard). The slider only
 sends when released. **Open all settings** jumps to the community dashboard at
 `/e3dc-maestro`.
+
+Below that, under **Display**, up to six consumers can be added to the energy
+flow (name, icon, power sensor in watts). The icon is wallbox, heating rod, air
+conditioning, heat pump or power meter. **In house load** hangs the node off the
+house; **Measured separately** gets its own link from the hub (the same way
+Maestro keeps the wallbox beside house consumption). The list is stored in this
+browser only. If the included consumers exceed the house load, the panel says so.
 
 ![Cockpit quick controls](Screenshots/cockpit_05_steuerung.png)
 

@@ -877,7 +877,7 @@ bestehen.
 
 | Ansicht | Inhalt |
 |---|---|
-| **Live** | Animierter Energiefluss (PV, Haus, Netz, Akku), Ladezustand mit Ziel-SoC und Autonomie, Status-Chips (Sperren, HT-Schutz, Abregelschutz, Notladung, Vorausschau, Preisplan) und Tageswerte mit Verlauf seit Mitternacht |
+| **Live** | Energiefluss (PV, Haus, Netz, Akku) mit leuchtenden Teilchen, deren Tempo mit der Leistung mitgeht. Zusätzliche Verbraucher lassen sich einblenden. Ein Klick auf ein Symbol öffnet den Verlauf der letzten 24 h. Dazu Ladezustand mit Ziel-SoC und Autonomie, Status-Chips und Tageswerte seit Mitternacht |
 | **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
 | **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen (geplante Netzladung, erwartete Ersparnis, günstigster/teuerster Slot). Im Schattenmodus deutlich markiert |
 | **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
@@ -895,6 +895,14 @@ Leistungsregler. Änderungen wirken **sofort** auf die Regelung (gleiche Entitä
 wie im Dashboard). Der Leistungsregler sendet erst beim Loslassen.
 **Alle Einstellungen öffnen** springt in das Community-Dashboard unter
 `/e3dc-maestro`.
+
+Darunter, unter **Anzeige**, lassen sich bis zu sechs Verbraucher für den
+Energiefluss eintragen (Name, Symbol, Leistungssensor in Watt). Das Symbol ist
+Wallbox, Heizstab, Klimaanlage, Wärmepumpe oder Leistungsmesser. **Im
+Hausverbrauch** hängt der Knoten am Haus, **Separat gemessen** bekommt eine
+eigene Kante vom Mittelpunkt (so wie die Wallbox, die Maestro neben dem
+Hausverbrauch führt). Die Liste gilt nur in diesem Browser. Liegt die Summe der
+enthaltenen Verbraucher über der Hausleistung, weist das Panel darauf hin.
 
 ![Cockpit Schnellsteuerung](Screenshots/cockpit_05_steuerung.png)
 

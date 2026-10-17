@@ -11,6 +11,27 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.9] – Verbraucher im Energiefluss, 24-h-Verlauf (2026-10-17)
+
+> **Beta.** Inhalt von beta.8 plus die Panel-Erweiterungen unten. Die Regelung ist unverändert.
+
+### Neu
+- **Verbraucher im Energiefluss:** unter Steuerung → Anzeige bis zu sechs
+  Leistungssensoren (Name, Symbol: Wallbox, Heizstab, Klimaanlage, Wärmepumpe
+  oder Leistungsmesser). *Im Hausverbrauch* hängt am Hausknoten, *Separat
+  gemessen* bekommt eine eigene Kante. Die vorkonfigurierte Wallbox kann
+  übernommen werden. Die Liste liegt nur in diesem Browser.
+- **Teilchen statt Striche:** aktive Kanten zeigen einen feinen Leuchtschimmer,
+  Tempo und Anzahl folgen der Leistung.
+- **24-Stunden-Verlauf:** Klick auf ein Symbol (PV, Netz, Haus, Akku oder
+  Verbraucher) öffnet den Leistungsverlauf als Fenster.
+
+### Hinweise
+- Ein Sensor mit Zustand `unknown` zählt als vorhanden ohne Messwert (0 W).
+  *Sensor nicht verfügbar* nur, wenn die Entity fehlt oder `unavailable` ist.
+
+---
+
 ## [0.4.0-beta.8] – Maestro-Cockpit als Sidebar-Panel (2026-10-16)
 
 > **Beta.** Inhalt von beta.7 plus das neue Panel. Die Regelung ist unverändert.
