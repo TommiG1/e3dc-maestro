@@ -21,6 +21,7 @@ def test_strategy_js_registers_community_dashboard() -> None:
     assert "window.customStrategies" in text
     assert "strategyType: \"dashboard\"" in text
     assert "ll-strategy-dashboard-${STRATEGY_TYPE}" in text
+    assert "setInterval(registerStrategyElement, 50)" in text
     assert "maestro_dashboard.json" in text
     assert "getCreateSuggestions" in text
     assert "type: STRATEGY_TYPE" in text

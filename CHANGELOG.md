@@ -11,6 +11,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.12] – Classic-Dashboard-Anmeldung nach dem Start (2026-10-17)
+
+> **Beta.** Inhalt von beta.11 plus der Punkt unten. Die Regelung ist unverändert.
+
+### Behoben
+- **Classic-Dashboard: Timeout trotz geladenem Strategy-Modul.** Das Modul registrierte sich, bevor Home Assistant seine eigene Element-Registrierung einsetzt. Lovelace hat die Anmeldung dort nicht gesehen und nach 5 Sekunden aufgegeben. Die Anmeldung wird jetzt wiederholt, bis sie in der aktiven Registrierung steht.
+
+### Hinweise
+- Wie in beta.11: Das Strategy-Modul wird nach `config/www/e3dc_maestro/` kopiert und unter `/local/e3dc_maestro/` geladen. Die Kopie stimmt erst nach einem Neustart. Gab es `config/www` noch nicht, ist ein zweiter Neustart nötig.
+
+---
+
 ## [0.4.0-beta.11] – Einstellungen im Cockpit, Classic-Dashboard ohne Timeout (2026-10-17)
 
 > **Beta.** Inhalt von beta.10 plus die Punkte unten. Die Regelung ist unverändert.
@@ -33,7 +45,7 @@ einen eigenen Versionsabschnitt verschieben.
 - **Classic-Dashboard: Timeout beim ersten Laden** (`Timeout waiting for strategy element ll-strategy-dashboard-e3dc-maestro`): Lovelace wartet nur 5 Sekunden auf das Strategy-Modul. Das stand bisher als letzte Dashboard-Ressource in der Warteschlange und war über den Integrationspfad erst nach dem Start der Integration erreichbar. Maestro kopiert das Modul jetzt nach `config/www/e3dc_maestro/` (ausgeliefert unter `/local/…`, sobald Home Assistant läuft) und setzt die Ressource an die erste Stelle. Gibt es `config/www` noch nicht, bleibt bis zum nächsten Neustart der bisherige Pfad aktiv.
 
 ### Hinweise
-- Nach dem Update Home Assistant neu starten; beim allerersten Mal ohne `config/www` ist ein zweiter Neustart nötig, damit `/local` greift.
+- **Neustart nötig.** Das Strategy-Modul für das Classic-Dashboard wird nach `config/www/e3dc_maestro/` kopiert und unter `/local/e3dc_maestro/` ausgeliefert. Die Dateien liegen erst nach dem Neustart korrekt in `www`. Gab es `config/www` noch nicht, ist ein zweiter Neustart nötig, damit `/local` greift.
 - `config/www/e3dc_maestro/` enthält nur Code und Dashboard-Layout und wird bei jedem Start überschrieben. Bitte dort nichts selbst ablegen.
 - Aus beta.10 weiterhin gültig: Statistik zurücksetzen ist eine Entität (jetzt auch unter Einstellungen → Diagnose und Aktionen). Zeigt die Companion App den alten Stand, Frontend-Cache zurücksetzen.
 

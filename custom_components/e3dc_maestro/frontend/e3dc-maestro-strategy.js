@@ -38,9 +38,22 @@ class E3DCMaestroDashboardStrategy extends HTMLElement {
   }
 }
 
-if (!customElements.get(ELEMENT_NAME)) {
-  customElements.define(ELEMENT_NAME, E3DCMaestroDashboardStrategy);
-}
+const registerStrategyElement = () => {
+  if (customElements.get(ELEMENT_NAME) === E3DCMaestroDashboardStrategy) return;
+  try {
+    customElements.define(ELEMENT_NAME, E3DCMaestroDashboardStrategy);
+  } catch {
+    // This registry already has the name.
+  }
+};
+
+// The module is preloaded before Home Assistant installs its scoped custom
+// element registry. define() then lands on the native registry, which the
+// dashboard does not consult, and a module is evaluated only once. Re-define
+// on whatever registry is current until the frontend has settled.
+registerStrategyElement();
+const registryWatch = window.setInterval(registerStrategyElement, 50);
+window.setTimeout(() => window.clearInterval(registryWatch), 15000);
 
 window.customStrategies = window.customStrategies || [];
 if (
