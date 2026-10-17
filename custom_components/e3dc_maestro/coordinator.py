@@ -64,6 +64,7 @@ from .control_engine import (
     active_tariff_slot as _active_tariff_slot,
     decide,
     forward_looking_charge_target as _forward_looking_charge_target,
+    manual_reserve_soc,
     tariff_schedule_from_params as _tariff_schedule_from_params,
 )
 from .coordinator_act import CoordinatorActMixin
@@ -479,7 +480,14 @@ class E3DCMaestroCoordinator(
 
         # A1: SoC hysteresis – only update _stable_soc when change exceeds dead-band
         hysteresis = self._params.soc_hysteresis_percent
-        if self._stable_soc is None:
+        # Near the fixed reserve the dead-band would let the engine see e.g.
+        # 29 % → 32 % and flip between grid charge and free discharge.
+        fixed_reserve = manual_reserve_soc(self._params)
+        near_reserve = (
+            fixed_reserve is not None
+            and state_data.soc <= fixed_reserve + hysteresis
+        )
+        if self._stable_soc is None or near_reserve:
             self._stable_soc = state_data.soc
         elif abs(state_data.soc - self._stable_soc) >= hysteresis:
             self._stable_soc = state_data.soc

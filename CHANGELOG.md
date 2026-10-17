@@ -23,6 +23,9 @@ einen eigenen Versionsabschnitt verschieben.
 - **Hinweis-Banner** oben, wenn der Wechselrichter nicht erreichbar ist, eine Sperre aktiv ist oder Netzladung ohne Rechtfertigung läuft.
 - **Feste Notstromreserve:** Schalter plus Prozentwert. Solange er an ist, ersetzt er die saisonale und die verbrauchsadaptive Reserve. Liegt der SoC darunter, lädt Maestro mit maximaler Ladeleistung aus dem Netz bis zu diesem Wert und sperrt die Entladung. Ab dem Wert bleibt nur die Entladesperre. Der Preisplan nutzt denselben Boden. *Notstromreserve (aktuell)* zeigt den festen Wert.
 
+### Behoben
+- **Pendeln an der festen Notstromreserve:** Die SoC-Hysterese gilt in der Nähe der festen Reserve nicht mehr. Sonst sieht die Regelung den SoC in Sprüngen und wechselt zwischen Netzladung und freier Entladung.
+
 ### Hinweise
 - Nach dem Update Home Assistant neu starten, damit Schalter und Prozentwert der festen Reserve angelegt werden.
 - Statistik zurücksetzen bleibt eine Entität und ist nicht im Cockpit.
