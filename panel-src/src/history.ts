@@ -144,15 +144,30 @@ export interface IstSeries {
   soc: Point[];
 }
 
+const DAY_MS = 24 * 3600e3;
+const HISTORY_QUERY = { minimal_response: true, no_attributes: true, significant_changes_only: false };
+
+const watts = (hass: Hass, entityId: string, rows: RawState[] | undefined): Point[] => {
+  const scale = hass.states[entityId]?.attributes.unit_of_measurement === "kW" ? 1000 : 1;
+  const points = numericPoints(normalizeHistory(rows)).map(([ts, v]): Point => [ts, v * scale]);
+  return bucket(points, 5 * 60e3, "mean");
+};
+
 /** One power entity over the last 24 h, 5-minute means, in watts. `scale` converts kW sensors. */
 export async function loadPowerSeries(hass: Hass, entityId: string, scale = 1): Promise<Point[]> {
-  const raw = await fetchRaw(hass, [entityId], Date.now() - 24 * 3600e3, {
-    minimal_response: true,
-    no_attributes: true,
-    significant_changes_only: false,
-  });
+  const raw = await fetchRaw(hass, [entityId], Date.now() - DAY_MS, HISTORY_QUERY);
   const points = numericPoints(normalizeHistory(raw[entityId])).map(([ts, v]): Point => [ts, v * scale]);
   return bucket(points, 5 * 60e3, "mean");
+}
+
+/** Several power entities over the last 24 h, one recorder query, 5-minute means in watts. */
+export async function loadPowerSeriesMany(hass: Hass, entityIds: string[]): Promise<Record<string, Point[]>> {
+  const ids = [...new Set(entityIds)];
+  const out: Record<string, Point[]> = {};
+  if (!ids.length) return out;
+  const raw = await fetchRaw(hass, ids, Date.now() - DAY_MS, HISTORY_QUERY);
+  for (const id of ids) out[id] = watts(hass, id, raw[id]);
+  return out;
 }
 
 /** Actual power/SoC of the last `hours` hours on a 5-minute grid (W / %). */

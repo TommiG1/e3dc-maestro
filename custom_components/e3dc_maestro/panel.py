@@ -9,9 +9,11 @@ import voluptuous as vol
 from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    E3DC_RSCP_DOMAIN,
     CONF_FORCE_DISCHARGE_POWER_W,
     CONF_FIXED_RESERVE_ENABLED,
     CONF_FIXED_RESERVE_SOC,
@@ -122,6 +124,285 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
 # unique_id suffix ("<entry_id>_<key>"), so renamed entities keep working.
 _SETTINGS_DOMAINS = frozenset({"number", "switch", "select", "button"})
 
+# Panel key -> e3dc_rscp translation_key. One value per system, matched on the
+# entity registry so renamed entity_ids keep working.
+_PLANT_KEYS: dict[str, str] = {
+    "mode": "pset-powermode",
+    "powerValue": "pset-powervalue",
+    "limitsOn": "pset-limit-enabled",
+    "limitCharge": "pset-limit-charge",
+    "limitDischarge": "pset-limit-discharge",
+    "limitDischargeMin": "pset-limit-discharge-minimum",
+    "manualCharge": "manual-charge-active",
+    "manualEnergy": "manual-charge-energy",
+    "pvDerated": "system-pv-derated",
+    "emergencyPower": "system-emergency-power-started",
+    "emergencyReserve": "system-emergency-reserve-reached",
+    "rescueBattery": "system-rescue-battery-enabled",
+    "weather": "pset-weatherregulationenabled",
+    "weatherWait": "system-wait-for-weather-breakthrough",
+    "autarky": "autarky",
+    "selfConsumption": "selfconsumption",
+    "houseL1": "house-l1",
+    "houseL2": "house-l2",
+    "houseL3": "house-l3",
+    "gridL1": "grid-l1",
+    "gridL2": "grid-l2",
+    "gridL3": "grid-l3",
+    "pviL1": "pvi-l1",
+    "pviL2": "pvi-l2",
+    "pviL3": "pvi-l3",
+    "installedPeak": "system-battery-installed-peak",
+    "batteryCapacity": "system-battery-installed-capacity",
+    "acMax": "system-ac-maxpower",
+    "chargeMax": "system-battery-charge-max",
+    "dischargeMax": "system-battery-discharge-max",
+    "deratePercent": "system-derate-percent",
+    "deratePower": "system-derate-power",
+    "extraProduction": "additional-production",
+    "extraConsumption": "additional-consumption",
+    "errors": "system-saved-errors",
+}
+_PACK_KEYS: dict[str, str] = {
+    "soh": "battery-pack-state-of-health",
+    "cycles": "battery-pack-charge-cycles",
+    "energy": "battery-pack-usable-remaining-energy",
+    "current": "battery-pack-current",
+    "voltage": "battery-pack-module-voltage",
+    "tempMax": "battery-pack-max-dcb-cell-temperature",
+    "tempMin": "battery-pack-min-dcb-cell-temperature",
+}
+_WALLBOX_KEYS: dict[str, str] = {
+    "plug": "wallbox-plug",
+    "charging": "wallbox-charging",
+    "phases": "wallbox-phases",
+    "net": "wallbox-consumption-net",
+    "sun": "wallbox-consumption-sun",
+    "soc": "wallbox-soc",
+    "current": "wallbox-max-charge-current",
+}
+# Device-reported module health. The calculated module SoH is a different entity.
+_MODULE_KEYS: dict[str, str] = {
+    "sohReported": "battery-module-soh-reported",
+}
+# System switches and numbers RSCP can write. Same translation may also exist as a sensor.
+_GENERAL_CONTROLS: dict[str, str] = {
+    "powersave": "pset-powersaving-enabled",
+    "weather": "pset-weatherregulationenabled",
+}
+_WALLBOX_SYSTEM_CONTROLS: dict[str, str] = {
+    "batteryBeforeCar": "battery-before-car-mode",
+    "batteryToCar": "battery-to-car-mode",
+    "enforcePower": "wallbox-enforce-power-assignment",
+    "dischargeLimit": "battery-wallbox-discharge-limit",
+}
+_WALLBOX_CONTROLS: dict[str, str] = {
+    "sunMode": "wallbox-sun-mode",
+    "schuko": "wallbox-schuko",
+    "maxCurrent": "wallbox-max-charge-current",
+    "togglePhases": "wallbox-toggle-wallbox-phases",
+    "toggleCharging": "wallbox-toggle-wallbox-charging",
+}
+_WRITABLE = frozenset({"switch", "number", "select", "button"})
+_PLANT_DEVICE_KEYS = frozenset(
+    {
+        *_PACK_KEYS.values(),
+        *_WALLBOX_KEYS.values(),
+        *_MODULE_KEYS.values(),
+        *_WALLBOX_CONTROLS.values(),
+    }
+)
+
+
+def empty_plant() -> dict[str, Any]:
+    return {
+        "entities": {},
+        "packs": [],
+        "wallboxes": [],
+        "controls": {"general": {}, "wallbox": {}},
+        "identity": {},
+    }
+
+
+_READONLY = frozenset({"sensor", "binary_sensor"})
+
+
+def _prefer_sensor(current: Any | None, candidate: Any) -> Any:
+    """A sensor wins over a same-named switch or number so status rows stay read-only."""
+    if current is None:
+        return candidate
+    if getattr(current, "domain", None) not in _READONLY and getattr(candidate, "domain", None) in _READONLY:
+        return candidate
+    return current
+
+
+def _prefer_writable(current: Any | None, candidate: Any) -> Any:
+    """A switch or number wins over a same-named sensor so the control can be changed."""
+    if current is None:
+        return candidate
+    if getattr(current, "domain", None) not in _WRITABLE and getattr(candidate, "domain", None) in _WRITABLE:
+        return candidate
+    return current
+
+
+def _writable_ids(fields: dict[str, Any]) -> dict[str, str]:
+    return {key: ent.entity_id for key, ent in fields.items() if getattr(ent, "domain", None) in _WRITABLE}
+
+
+def plant_from_entries(reg_entries: list[Any], devices: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Group enabled e3dc_rscp registry entries into system, pack, module and control maps."""
+    scalar_of = {translation: key for key, translation in _PLANT_KEYS.items()}
+    pack_of = {translation: key for key, translation in _PACK_KEYS.items()}
+    module_of = {translation: key for key, translation in _MODULE_KEYS.items()}
+    wallbox_of = {translation: key for key, translation in _WALLBOX_KEYS.items()}
+    general_of = {translation: key for key, translation in _GENERAL_CONTROLS.items()}
+    wallbox_system_of = {translation: key for key, translation in _WALLBOX_SYSTEM_CONTROLS.items()}
+    wallbox_control_of = {translation: key for key, translation in _WALLBOX_CONTROLS.items()}
+    scalars: dict[str, Any] = {}
+    packs: dict[str, dict[str, Any]] = {}
+    modules: dict[str, dict[str, Any]] = {}
+    wallboxes: dict[str, dict[str, Any]] = {}
+    wallbox_controls: dict[str, dict[str, Any]] = {}
+    general: dict[str, Any] = {}
+    wallbox_system: dict[str, Any] = {}
+    for ent in reg_entries:
+        if getattr(ent, "disabled_by", None) is not None:
+            continue
+        translation = getattr(ent, "translation_key", None)
+        if not translation:
+            continue
+        device_id = getattr(ent, "device_id", None) or ""
+        if translation in scalar_of:
+            key = scalar_of[translation]
+            scalars[key] = _prefer_sensor(scalars.get(key), ent)
+        if translation in general_of:
+            key = general_of[translation]
+            general[key] = _prefer_writable(general.get(key), ent)
+        if translation in wallbox_system_of:
+            key = wallbox_system_of[translation]
+            wallbox_system[key] = _prefer_writable(wallbox_system.get(key), ent)
+        if translation in pack_of:
+            slot = packs.setdefault(device_id, {})
+            key = pack_of[translation]
+            slot[key] = _prefer_sensor(slot.get(key), ent)
+        elif translation in module_of:
+            slot = modules.setdefault(device_id, {})
+            key = module_of[translation]
+            slot[key] = _prefer_sensor(slot.get(key), ent)
+        if translation in wallbox_of:
+            slot = wallboxes.setdefault(device_id, {})
+            key = wallbox_of[translation]
+            slot[key] = _prefer_sensor(slot.get(key), ent)
+        if translation in wallbox_control_of and getattr(ent, "domain", None) in _WRITABLE:
+            slot = wallbox_controls.setdefault(device_id, {})
+            key = wallbox_control_of[translation]
+            slot[key] = _prefer_writable(slot.get(key), ent)
+
+    def name_of(device_id: str) -> str:
+        return str((devices.get(device_id) or {}).get("name") or "")
+
+    modules_by_parent: dict[str, list[dict[str, Any]]] = {}
+    for device_id, fields in modules.items():
+        parent = str((devices.get(device_id) or {}).get("via") or device_id)
+        modules_by_parent.setdefault(parent, []).append(
+            {"name": name_of(device_id), "entities": {key: ent.entity_id for key, ent in fields.items()}}
+        )
+    for rows in modules_by_parent.values():
+        rows.sort(key=lambda row: row["name"])
+
+    pack_rows = []
+    for device_id in set(packs) | set(modules_by_parent):
+        fields = packs.get(device_id) or {}
+        nested = modules_by_parent.get(device_id) or []
+        if not fields and not nested:
+            continue
+        pack_rows.append(
+            {
+                "name": name_of(device_id),
+                "entities": {key: ent.entity_id for key, ent in fields.items()},
+                "modules": nested,
+            }
+        )
+    pack_rows.sort(key=lambda row: row["name"])
+
+    box_rows = []
+    for device_id in set(wallboxes) | set(wallbox_controls):
+        fields = wallboxes.get(device_id) or {}
+        controls = wallbox_controls.get(device_id) or {}
+        if not fields and not controls:
+            continue
+        box_rows.append(
+            {
+                "name": name_of(device_id),
+                "entities": {key: ent.entity_id for key, ent in fields.items()},
+                "controls": {key: ent.entity_id for key, ent in controls.items()},
+            }
+        )
+    box_rows.sort(key=lambda row: row["name"])
+
+    system = next(
+        (
+            getattr(scalars[key], "device_id", None)
+            for key in ("mode", "autarky", "selfConsumption", "errors")
+            if key in scalars and getattr(scalars[key], "device_id", None)
+        ),
+        None,
+    )
+    info = devices.get(system) or {} if system else {}
+    identity = {
+        key: str(info.get(key) or "")
+        for key in ("name", "model", "serial", "firmware")
+        if info.get(key)
+    }
+    return {
+        "entities": {key: ent.entity_id for key, ent in scalars.items()},
+        "packs": pack_rows,
+        "wallboxes": box_rows,
+        "controls": {"general": _writable_ids(general), "wallbox": _writable_ids(wallbox_system)},
+        "identity": identity,
+    }
+
+
+def _device_facts(hass: HomeAssistant, device_ids: set[str]) -> dict[str, dict[str, Any]]:
+    if not device_ids:
+        return {}
+    registry = dr.async_get(hass)
+    facts: dict[str, dict[str, Any]] = {}
+    for device_id in device_ids:
+        device = registry.async_get(device_id)
+        if device is None:
+            continue
+        facts[device_id] = {
+            "name": device.name_by_user or device.name or "",
+            "via": device.via_device_id,
+            "model": device.model or "",
+            "serial": device.serial_number or "",
+            "firmware": device.sw_version or "",
+        }
+    return facts
+
+
+def _rscp_plant(hass: HomeAssistant, registry: Any) -> dict[str, Any]:
+    loaded = [
+        entry
+        for entry in hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
+        if entry.state == ConfigEntryState.LOADED
+    ]
+    reg_entries: list[Any] = []
+    for entry in loaded:
+        reg_entries.extend(er.async_entries_for_config_entry(registry, entry.entry_id))
+    device_ids = {
+        device_id
+        for ent in reg_entries
+        if (device_id := getattr(ent, "device_id", None))
+        and getattr(ent, "translation_key", None) in _PLANT_DEVICE_KEYS | set(_PLANT_KEYS.values())
+        and getattr(ent, "disabled_by", None) is None
+    }
+    facts = _device_facts(hass, device_ids)
+    parents = {via for fact in facts.values() if (via := fact.get("via")) and via not in facts}
+    facts.update(_device_facts(hass, parents))
+    return plant_from_entries(reg_entries, facts)
+
 
 def panel_module_url() -> str:
     return f"{_PANEL_MODULE}?v={VERSION}"
@@ -152,7 +433,14 @@ def panel_entities(hass: HomeAssistant) -> dict[str, Any]:
     entries = hass.config_entries.async_entries(DOMAIN)
     entry = next((e for e in entries if e.state == ConfigEntryState.LOADED), None)
     if entry is None:
-        return {"entry_id": None, "entities": {}, "disabled": [], "settings": {}, "settings_disabled": []}
+        return {
+            "entry_id": None,
+            "entities": {},
+            "disabled": [],
+            "settings": {},
+            "settings_disabled": [],
+            "plant": empty_plant(),
+        }
     registry = er.async_get(hass)
     entities: dict[str, str] = {}
     disabled: list[str] = []
@@ -171,6 +459,7 @@ def panel_entities(hass: HomeAssistant) -> dict[str, Any]:
         "disabled": disabled,
         "settings": settings,
         "settings_disabled": settings_disabled,
+        "plant": _rscp_plant(hass, registry),
     }
 
 

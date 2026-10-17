@@ -1,5 +1,5 @@
 /** Collapsible tile groups on the live screen; the collapsed ids are kept per browser. */
-export const GROUP_IDS = ["today", "balance"] as const;
+export const GROUP_IDS = ["today", "balance", "plant-operation", "plant-storage", "plant-phases", "plant-wallbox"] as const;
 const STORAGE_KEY = "e3dc-maestro.groups.v1";
 
 export function parseCollapsed(raw: unknown): Set<string> {

@@ -144,7 +144,126 @@ def test_panel_entities_without_loaded_entry():
         "disabled": [],
         "settings": {},
         "settings_disabled": [],
+        "plant": {"entities": {}, "packs": [], "wallboxes": [], "controls": {"general": {}, "wallbox": {}}, "identity": {}},
     }
+
+
+def test_plant_from_entries_groups_packs_and_skips_disabled():
+    entries = [
+        SimpleNamespace(
+            translation_key="autarky",
+            entity_id="sensor.autarky",
+            domain="sensor",
+            device_id="sys",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-pack-state-of-health",
+            entity_id="sensor.pack_b_soh",
+            domain="sensor",
+            device_id="b",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-pack-state-of-health",
+            entity_id="sensor.pack_a_soh",
+            domain="sensor",
+            device_id="a",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-pack-current",
+            entity_id="sensor.hidden_current",
+            domain="sensor",
+            device_id="a",
+            disabled_by="user",
+        ),
+        SimpleNamespace(
+            translation_key="wallbox-max-charge-current",
+            entity_id="number.wb_current",
+            domain="number",
+            device_id="wb",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="wallbox-max-charge-current",
+            entity_id="sensor.wb_current",
+            domain="sensor",
+            device_id="wb",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="wallbox-plug",
+            entity_id="binary_sensor.wb_plug",
+            domain="binary_sensor",
+            device_id="wb",
+            disabled_by=None,
+        ),
+        SimpleNamespace(entity_id="sensor.other", domain="sensor", device_id="sys", disabled_by=None),
+    ]
+
+    entries.extend(
+        [
+            SimpleNamespace(
+                translation_key="battery-module-soh-reported",
+                entity_id="sensor.mod_soh",
+                domain="sensor",
+                device_id="m1",
+                disabled_by=None,
+            ),
+            SimpleNamespace(
+                translation_key="pset-weatherregulationenabled",
+                entity_id="binary_sensor.weather",
+                domain="binary_sensor",
+                device_id="sys",
+                disabled_by=None,
+            ),
+            SimpleNamespace(
+                translation_key="pset-weatherregulationenabled",
+                entity_id="switch.weather",
+                domain="switch",
+                device_id="sys",
+                disabled_by=None,
+            ),
+            SimpleNamespace(
+                translation_key="wallbox-sun-mode",
+                entity_id="switch.wb_sun",
+                domain="switch",
+                device_id="wb",
+                disabled_by=None,
+            ),
+        ]
+    )
+    result = panel.plant_from_entries(
+        entries,
+        {
+            "a": {"name": "Pack A", "via": None},
+            "b": {"name": "Pack B", "via": None},
+            "m1": {"name": "Module 1", "via": "a"},
+            "wb": {"name": "Wallbox", "via": None},
+            "sys": {"name": "S10", "via": None, "model": "S10E_Pro", "serial": "702207024837", "firmware": "P10_2026_027"},
+        },
+    )
+
+    assert result["entities"]["autarky"] == "sensor.autarky"
+    assert result["entities"]["weather"] == "binary_sensor.weather"
+    assert result["packs"] == [
+        {
+            "name": "Pack A",
+            "entities": {"soh": "sensor.pack_a_soh"},
+            "modules": [{"name": "Module 1", "entities": {"sohReported": "sensor.mod_soh"}}],
+        },
+        {"name": "Pack B", "entities": {"soh": "sensor.pack_b_soh"}, "modules": []},
+    ]
+    assert result["wallboxes"] == [
+        {
+            "name": "Wallbox",
+            "entities": {"current": "sensor.wb_current", "plug": "binary_sensor.wb_plug"},
+            "controls": {"maxCurrent": "number.wb_current", "sunMode": "switch.wb_sun"},
+        }
+    ]
+    assert result["controls"] == {"general": {"weather": "switch.weather"}, "wallbox": {}}
+    assert result["identity"] == {"name": "S10", "model": "S10E_Pro", "serial": "702207024837", "firmware": "P10_2026_027"}
 
 
 def test_panel_entities_settings_map_keeps_renames_and_skips_sensors(monkeypatch):

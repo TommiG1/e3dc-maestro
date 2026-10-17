@@ -17,12 +17,12 @@ import {
   type ConsumerMode,
 } from "./consumers";
 import { controlsSheet } from "./controls";
-import { applyEntityMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
 import { makeFmt } from "./format";
 import { loadCollapsed, saveCollapsed } from "./groups";
-import { loadIst, loadPeriodSums, loadPowerSeries, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
+import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { styles } from "./styles";
@@ -37,16 +37,18 @@ const NODE_META = {
 };
 import { checkClassic, classicErrorText, createClassic, type ClassicStatus } from "./classic";
 import { CLASSIC_DASHBOARD, isSettingsArea, settingsHeading, settingsView } from "./settings";
+import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
-type Screen = "live" | "forecast" | "plan" | "decision" | "settings";
+type Screen = "live" | "forecast" | "plan" | "decision" | "plant" | "settings";
 const SCREENS: { id: Screen; label: Key; sub: Key; icon: string }[] = [
   { id: "live", label: "navLive", sub: "subLive", icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' },
   { id: "forecast", label: "navForecast", sub: "subForecast", icon: '<path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/>' },
   { id: "plan", label: "navPlan", sub: "subPlan", icon: '<rect x="3" y="10" width="4" height="11" rx="1"/><rect x="10" y="5" width="4" height="16" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/>' },
   { id: "decision", label: "navDecision", sub: "subDecision", icon: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>' },
+  { id: "plant", label: "navPlant", sub: "subPlant", icon: '<path d="M4 21V10l8-7 8 7v11"/><path d="M9 21v-6h6v6"/>' },
   { id: "settings", label: "navSettings", sub: "subSettings", icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
 ];
 const SLIDERS_ICON = '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>';
@@ -60,11 +62,12 @@ const MISSING_SHOWN = 6;
 const icon = (paths: string, cls = "") =>
   html`<svg class=${cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" .innerHTML=${paths}></svg>`;
 
-const readLocation = (): { screen: Screen; settingsGroup?: string } => {
+const readLocation = (): { screen: Screen; settingsGroup?: string; plantGroup?: string } => {
   const [rawScreen, rawGroup] = location.hash.slice(1).split("/");
   const screen = SCREENS.some((s) => s.id === rawScreen) ? (rawScreen as Screen) : "live";
   const settingsGroup = screen === "settings" && isSettingsArea(rawGroup) ? rawGroup : undefined;
-  return { screen, settingsGroup };
+  const plantGroup = screen === "plant" && isPlantRoom(rawGroup) ? rawGroup : undefined;
+  return { screen, settingsGroup, plantGroup };
 };
 
 const initialLocation = readLocation();
@@ -76,6 +79,7 @@ class MaestroPanel extends LitElement {
   private _narrow = false;
   private _screen: Screen = initialLocation.screen;
   private _settingsGroup?: string = initialLocation.settingsGroup;
+  private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
   private _sheet = false;
   private _mobile = window.matchMedia(MOBILE).matches;
@@ -110,6 +114,9 @@ class MaestroPanel extends LitElement {
   private _pickQuery = "";
   private _focusConsumers = false;
   private _classic?: ClassicStatus;
+  private _phasePoints: Record<string, Point[]> = {};
+  private _phaseHistory: "idle" | "loading" | "ready" | "error" = "idle";
+  private _phaseTicket = 0;
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
   set hass(hass: Hass) {
@@ -169,7 +176,9 @@ class MaestroPanel extends LitElement {
     const next = readLocation();
     this._screen = next.screen;
     this._settingsGroup = next.settingsGroup;
+    this._plantGroup = next.plantGroup;
     this.requestUpdate();
+    void this._loadPhaseHistory();
   };
 
   private _animateFlows = (now: number) => {
@@ -238,6 +247,13 @@ class MaestroPanel extends LitElement {
       const before = JSON.stringify(E);
       applyEntityMap(map);
       applySettingsMap(map);
+      const plantBefore = JSON.stringify(plant.entities);
+      applyPlantMap(map);
+      if (JSON.stringify(plant.entities) !== plantBefore) {
+        this._phasePoints = {};
+        this._loadedAt.delete("plant-grid");
+        this._loadedAt.delete("plant-pv");
+      }
       this._entityMap = map;
       if (JSON.stringify(E) !== before) this._loadedAt.clear(); // history was loaded for other ids
       this.requestUpdate();
@@ -303,6 +319,41 @@ class MaestroPanel extends LitElement {
       await run("ist", async () => void (this._ist = await loadIst(hass, IST_HOURS)));
     }
     if (this._screen === "decision") await run("timeline", async () => void (this._timeline = await loadTimeline(hass)));
+    await this._loadPhaseHistory();
+  }
+
+  private async _loadPhaseHistory(): Promise<void> {
+    const hass = this._hass;
+    const group = this._plantGroup;
+    if (!hass || document.hidden || this._screen !== "plant" || (group !== "grid" && group !== "pv")) return;
+    const keys = group === "grid" ? ["houseL1", "houseL2", "houseL3", "gridL1", "gridL2", "gridL3"] : ["pviL1", "pviL2", "pviL3"];
+    const ids = keys.map((key) => plant.entities[key]).filter((id): id is string => !!id);
+    if (!ids.length) return;
+    const cacheKey = `plant-${group}`;
+    if (ids.every((id) => id in this._phasePoints) && Date.now() - (this._loadedAt.get(cacheKey) ?? 0) <= HISTORY_TTL) {
+      if (this._phaseHistory !== "ready") {
+        this._phaseHistory = "ready";
+        this.requestUpdate();
+      }
+      return;
+    }
+    const ticket = ++this._phaseTicket;
+    if (!ids.every((id) => id in this._phasePoints)) {
+      this._phaseHistory = "loading";
+      this.requestUpdate();
+    }
+    try {
+      const got = await loadPowerSeriesMany(hass, ids);
+      this._phasePoints = { ...this._phasePoints, ...Object.fromEntries(ids.map((id) => [id, got[id] ?? []])) };
+      this._loadedAt.set(cacheKey, Date.now());
+      if (ticket !== this._phaseTicket) return;
+      this._phaseHistory = "ready";
+    } catch {
+      if (ticket !== this._phaseTicket) return;
+      this._loadedAt.set(cacheKey, Date.now() - HISTORY_TTL + HISTORY_RETRY);
+      this._phaseHistory = "error";
+    }
+    this.requestUpdate();
   }
 
   // ------------------------------------------------------------ actions
@@ -317,6 +368,7 @@ class MaestroPanel extends LitElement {
   private _go(screen: Screen): void {
     this._screen = screen;
     this._settingsGroup = undefined;
+    this._plantGroup = undefined;
     this._zoomKey = undefined;
     this._error = undefined;
     history.replaceState(null, "", `#${screen}`);
@@ -332,14 +384,27 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
-  private _closeSettingsGroup(): void {
+  private _openPlantRoom(id: string): void {
+    this._screen = "plant";
+    this._plantGroup = id;
+    history.pushState({ maestroGroup: true }, "", `#plant/${id}`);
+    this.requestUpdate();
+    void this._loadPhaseHistory();
+  }
+
+  private _closeArea(): void {
     // A deep link has no pushed entry to go back to; back() would leave the panel.
     if ((history.state as { maestroGroup?: boolean } | null)?.maestroGroup) {
       history.back();
       return;
     }
-    this._settingsGroup = undefined;
-    history.replaceState(null, "", "#settings");
+    if (this._screen === "plant") {
+      this._plantGroup = undefined;
+      history.replaceState(null, "", "#plant");
+    } else {
+      this._settingsGroup = undefined;
+      history.replaceState(null, "", "#settings");
+    }
     this.requestUpdate();
   }
 
@@ -498,8 +563,9 @@ class MaestroPanel extends LitElement {
         void this._ensureHistory();
       },
       pending: this._pending,
-      groupId: this._settingsGroup,
+      groupId: this._screen === "plant" ? this._plantGroup : this._settingsGroup,
       onOpenGroup: (id) => this._openSettingsGroup(id),
+      onOpenRoom: (id: string) => this._openPlantRoom(id),
       onOpenClassic: () => this._openClassic(),
       classic: this._classic,
       isAdmin: hass.user?.is_admin === true,
@@ -528,12 +594,16 @@ class MaestroPanel extends LitElement {
       },
       theme: this._theme,
       onTheme: (theme) => this._setTheme(theme),
+      phasePoints: this._phasePoints,
+      phaseHistory: this._phaseHistory,
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
     const settingsGroup = this._screen === "settings" ? settingsHeading(this._settingsGroup) : undefined;
+    const plantGroup = this._screen === "plant" ? plantHeading(this._plantGroup) : undefined;
+    const area = settingsGroup ?? plantGroup;
     const regulation = isOn(hass.states[E.ctrlActive]);
     const phase = hass.states[E.phase]?.state;
-    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, settings: settingsView }[current.id](ctx);
+    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, plant: plantView, settings: settingsView }[current.id](ctx);
 
     const navButton = (s: (typeof SCREENS)[number]) => html`<button
       class="nav-btn ${s.id === current.id ? "active" : ""}"
@@ -560,14 +630,14 @@ class MaestroPanel extends LitElement {
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>
                 </button>`
               : nothing}
-            ${settingsGroup
-              ? html`<button class="menu" aria-label=${t("settingsBack")} @click=${() => this._closeSettingsGroup()}>
+            ${area
+              ? html`<button class="menu" aria-label=${t("settingsBack")} @click=${() => this._closeArea()}>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.4 5.4 9.8 11H21v2H9.8l5.6 5.6L14 20l-8-8 8-8z"/></svg>
                 </button>`
               : nothing}
             <div class="title grow">
-              <h1>${settingsGroup ? t(settingsGroup.title) : t(current.label)}</h1>
-              <p>${settingsGroup ? t(settingsGroup.hint) : t(current.sub)}</p>
+              <h1>${area ? t(area.title) : t(current.label)}</h1>
+              <p>${area ? t(area.hint) : t(current.sub)}</p>
             </div>
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
@@ -674,7 +744,7 @@ class MaestroPanel extends LitElement {
   }
 
   protected updated(): void {
-    const scrollKey = `${this._screen}/${this._settingsGroup ?? ""}`;
+    const scrollKey = `${this._screen}/${this._settingsGroup ?? ""}/${this._plantGroup ?? ""}`;
     if (scrollKey !== this._scrollKey) {
       this._scrollKey = scrollKey;
       const main = this.renderRoot.querySelector("main");

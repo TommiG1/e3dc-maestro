@@ -53,6 +53,7 @@ export interface Ctx {
   onToggleGroup: (id: string) => void;
   groupId?: string;
   onOpenGroup: (id: string) => void;
+  onOpenRoom: (id: string) => void;
   onOpenClassic: () => void;
   classic?: ClassicStatus;
   isAdmin: boolean;
@@ -76,6 +77,8 @@ export interface Ctx {
   onToggleDebug: () => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  phasePoints?: Readonly<Record<string, Point[]>>;
+  phaseHistory?: "idle" | "loading" | "ready" | "error";
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];

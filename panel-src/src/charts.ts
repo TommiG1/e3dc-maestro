@@ -347,6 +347,20 @@ export function ringOptions(soc: number, label: string): Opts {
   });
 }
 
+/** L1–L3 of one phase group over time, in kW. */
+export function phaseHistoryOptions(series: { name: string; points: Point[] }[], fmt: Fmt): Opts {
+  return withBase({
+    chart: { type: "line", height: 220 },
+    series: series.map((item) => ({ name: item.name, data: toKw(item.points) })),
+    colors: [COLORS.accent, COLORS.house, COLORS.pv],
+    stroke: { width: 2, curve: "smooth" },
+    legend: { show: false },
+    xaxis: xaxis(),
+    yaxis: { decimalsInFloat: 1, title: { text: "kW" }, labels: { formatter: (v: number) => fmt.n(v, 1) } },
+    tooltip: { shared: true, intersect: false, x: { format: "dd.MM. HH:mm" }, y: { formatter: (v: number) => `${fmt.n(v, 2)} kW` } },
+  });
+}
+
 /** Signed power over time, in kW. */
 export function powerHistoryOptions(data: Point[], color: string, fmt: Fmt): Opts {
   return withBase({

@@ -91,6 +91,43 @@ export type EntityKey = keyof typeof DEFAULT_IDS;
 /** Current entity_ids; starts with the defaults and is updated by applyEntityMap(). */
 export const E: Record<EntityKey, string> = { ...DEFAULT_IDS };
 
+export interface PlantModule {
+  name: string;
+  entities: Record<string, string>;
+}
+
+export interface PlantDevice {
+  name: string;
+  entities: Record<string, string>;
+  modules?: PlantModule[];
+  controls?: Record<string, string>;
+}
+
+export interface PlantControls {
+  general?: Record<string, string>;
+  wallbox?: Record<string, string>;
+}
+
+export interface PlantIdentity {
+  name?: string;
+  model?: string;
+  serial?: string;
+  firmware?: string;
+}
+
+export interface PlantMap {
+  entities: Record<string, string>;
+  packs: PlantDevice[];
+  wallboxes: PlantDevice[];
+  controls?: PlantControls;
+  identity?: PlantIdentity;
+}
+
+export const emptyPlant = (): PlantMap => ({ entities: {}, packs: [], wallboxes: [], controls: { general: {}, wallbox: {} }, identity: {} });
+
+/** e3dc_rscp entities for the plant screen. Replaced on every resolve. */
+export let plant: PlantMap = emptyPlant();
+
 export interface EntityMap {
   entry_id: string | null;
   entities: Partial<Record<EntityKey, string>>;
@@ -98,6 +135,7 @@ export interface EntityMap {
   /** unique_id suffix -> current entity_id for every tunable number/switch/select/button. */
   settings?: Record<string, string>;
   settings_disabled?: string[];
+  plant?: PlantMap;
 }
 
 /** Take over the registry-resolved ids; keys the backend did not find keep their default. */
@@ -118,13 +156,31 @@ export function applySettingsMap(map: Pick<EntityMap, "settings" | "settings_dis
   for (const key of map.settings_disabled ?? []) settingDisabled.add(key);
 }
 
+export function applyPlantMap(map: Pick<EntityMap, "plant">): void {
+  plant = map.plant ?? emptyPlant();
+}
+
 export const isSettingDisabled = (key: string): boolean => settingDisabled.has(key);
 
 /** Switches shown in the quick-control sheet (order = display order); key doubles as i18n key. */
 export const CONTROL_SWITCHES = ["ctrlActive", "ctrlPredictive", "ctrlPvDelay", "ctrlPlanControls", "ctrlPlanShadow"] as const;
 
 /** Only these entities cause a re-render; hass changes on every state change in the house. */
-export const watched = (): string[] => [...Object.values(E), ...Object.values(S)];
+const values = (map: Record<string, string> | undefined): string[] => Object.values(map ?? {});
+
+const plantIds = (): string[] => [
+  ...values(plant.entities),
+  ...values(plant.controls?.general),
+  ...values(plant.controls?.wallbox),
+  ...plant.packs.flatMap((pack) => [
+    ...values(pack.entities),
+    ...values(pack.controls),
+    ...(pack.modules ?? []).flatMap((mod) => values(mod.entities)),
+  ]),
+  ...plant.wallboxes.flatMap((box) => [...values(box.entities), ...values(box.controls)]),
+];
+
+export const watched = (): string[] => [...Object.values(E), ...Object.values(S), ...plantIds()];
 
 export interface HassEntity {
   entity_id: string;
