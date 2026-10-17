@@ -881,6 +881,7 @@ bestehen.
 | **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
 | **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen. Darunter die Schwellwerte für dynamischen Tarif und Netzladung (Günstig-Schwelle, Ziel im günstigen Fenster, Tagesbudget, Mindest-Preisspanne, SoC-Obergrenze). Im Schattenmodus deutlich markiert |
 | **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
+| **Anlage** | Hero mit Modus, Autarkie, Eigenverbrauch, Modell, Seriennummer und Firmware. Räume Netz, Akku, PV, Wallbox und RSCP-Schalter. Phasen L1–L3 als Gauge plus 24-Stunden-Verlauf, sofern die Sensoren der E3DC-Integration vorhanden sind |
 | **Einstellungen** | Kachelübersicht der Regelbereiche plus die Kachel **Classic-Dashboard**: prüft die benötigten HACS-Karten (Mushroom Cards, ApexCharts Card) und legt das Dashboard mit einem Klick an (Administratoren) |
 
 ![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)

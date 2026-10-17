@@ -11,6 +11,28 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.13] – Anlage im Cockpit, Netzladung endet im Normalmodus (2026-10-18)
+
+> **Beta.** Inhalt von beta.12 plus die Punkte unten. Die Regelung ändert sich beim Beenden einer Netzladung.
+
+### Neu
+- **Anlage im Cockpit:** eigene Kategorie in der Seitenleiste. Übersicht mit Hero-Karte, darunter Räume wie bei den Einstellungen: Netz, Akku, PV, Wallbox (nur wenn eine Wallbox existiert) und Einstellungen.
+- **Hero:** Modus, Autarkie und Eigenverbrauch in einer Karte, dazu Modell, Seriennummer und Firmware. Eine Fehlermeldung erscheint nur, wenn der letzte gespeicherte RSCP-Eintrag jünger als 24 Stunden ist.
+- **Phasen:** Haus, Netz und Wechselrichter als Gauge je Phase (L1–L3), darunter der Verlauf der letzten 24 Stunden. Negative Leistung ist grün. Fehlt eine Gruppe oder ist sie deaktiviert, fällt nur diese Karte weg. Es gibt keine Fehlermeldung.
+- **Akku:** Packs mit Füllstand gegen den Kapazitätsanteil, Modul-Zustand aus dem vom Gerät gemeldeten State of Health, Lade- und Entladegrenzen.
+- **Einstellungen der Anlage:** Powersave und Wetterregelung, sofern die Schalter existieren. Modus, Leistungsgrenzen und manuelles Laden setzt Maestro selbst und sind hier nicht noch einmal schaltbar.
+
+### Geändert
+- **Netzladung endet im Normalmodus.** `clear_power_limits` hebt einen aktiven Lade- oder Entlademodus der E3DC nicht auf. Wechselt die Regelung zurück auf Normal, setzt Maestro den Modus jetzt ausdrücklich auf Normal. Eine noch gesendete Ladegrenze wird abgeräumt, bevor nur noch die Entladung begrenzt wird.
+
+### Hinweise
+- **Neustart nötig.** Der Anlagen-Tab und die Modus-Korrektur stecken in der Integration. Ohne Neustart bleibt der Websocket-Handler und die Regelung auf dem alten Stand. Danach das Cockpit neu laden. Zeigt die Companion App noch die drei einzelnen Kacheln: Frontend-Cache zurücksetzen.
+- **Phasen L1–L3 liefert hacs-e3dc (torbennehmer) nicht**, weder in `v4.0.0` noch in `v4.0.0-beta.2`. Offen ist [hacs-e3dc#401](https://github.com/torbennehmer/hacs-e3dc/pull/401). Ohne diese Sensoren zeigt Netz den übrigen Verbrauch und PV die übrigen Kennzahlen. Gauges und Verlauf fehlen dann still.
+- **Diese RSCP-Entitäten sind in hacs-e3dc standardmäßig aus** und fehlen in der Anlage, bis sie aktiviert sind: `system-derate-power`, `system-ac-maxpower`, `system-pv-derated`, `pset-limit-discharge-minimum`, `battery-module-soh-reported`, `system-rescue-battery-enabled`, `pset-powersaving-enabled`. `additional-production` nur, wenn eine externe Quelle vorhanden ist. `system-saved-errors` (Fehlermeldung in der Hero) ist [hacs-e3dc#373](https://github.com/torbennehmer/hacs-e3dc/pull/373) und noch nicht im Release. E3DC liefert aktuelle Diagnosen mit normalem Zugang nicht. Ältere Einträge bleiben von der Karte weg.
+- Aktualisieren über HACS (Beta-Versionen anzeigen aktivieren), danach Home Assistant neu starten.
+
+---
+
 ## [0.4.0-beta.12] – Classic-Dashboard-Anmeldung nach dem Start (2026-10-17)
 
 > **Beta.** Inhalt von beta.11 plus der Punkt unten. Die Regelung ist unverändert.
