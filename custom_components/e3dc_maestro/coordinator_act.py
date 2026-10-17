@@ -150,6 +150,12 @@ class CoordinatorActMixin:
             act_attempted = True
             if decision.power_mode == POWER_MODE_NORMAL and decision.charge_power_limit is None and decision.discharge_power_limit is None:
                 ok = await self._call_e3dc(SERVICE_CLEAR_POWER_LIMITS, {})
+                # clear_power_limits beendet keinen aktiven CHARGE/DISCHARGE-
+                # Modus – die E3DC würde sonst weiter aus dem Netz laden.
+                if ok and mode_changed:
+                    ok = await self._call_e3dc(
+                        SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}
+                    )
                 act_ok = ok
                 if ok:
                     self._last_sent_charge_limit = None
@@ -158,10 +164,20 @@ class CoordinatorActMixin:
             elif decision.power_mode == POWER_MODE_NORMAL and decision.charge_power_limit is None and decision.discharge_power_limit is not None:
                 # Nur Entladung begrenzen (z. B. EVCC Now-Modus) – kein Ladebefehl
                 _max_discharge_w = max(0, int(decision.discharge_power_limit))
-                ok = await self._call_e3dc(
-                    SERVICE_SET_POWER_LIMITS,
-                    {"max_discharge": _max_discharge_w},
-                )
+                ok = True
+                if self._last_sent_charge_limit is not None:
+                    ok = await self._call_e3dc(SERVICE_CLEAR_POWER_LIMITS, {})
+                    if ok:
+                        self._last_sent_charge_limit = None
+                if ok and mode_changed:
+                    ok = await self._call_e3dc(
+                        SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}
+                    )
+                if ok:
+                    ok = await self._call_e3dc(
+                        SERVICE_SET_POWER_LIMITS,
+                        {"max_discharge": _max_discharge_w},
+                    )
                 act_ok = ok
                 if ok:
                     self._last_sent_discharge_limit = _max_discharge_w
