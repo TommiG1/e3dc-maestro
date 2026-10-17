@@ -16,13 +16,20 @@ from typing import TYPE_CHECKING
 
 from .const import (
     PHASE_MORNING_DISCHARGE,
+    PHASE_RESERVE_PROTECTION,
     POWER_MODE_CHARGE,
     POWER_MODE_CHARGE_FROM_GRID,
     POWER_MODE_DISCHARGE,
     POWER_MODE_IDLE,
     POWER_MODE_NORMAL,
 )
-from .control_engine import MaestroDecision, MaestroParams, MaestroState, decide
+from .control_engine import (
+    MaestroDecision,
+    MaestroParams,
+    MaestroState,
+    decide,
+    manual_reserve_soc,
+)
 
 if TYPE_CHECKING:
     pass
@@ -174,6 +181,7 @@ def simulate_next_24h(
     )
 
     current_soc = float(soc)
+    fixed_reserve = manual_reserve_soc(params)
     anchor_delta_w = 0.0  # set after _cons_lookup is defined
     battery_anchor_delta_w = 0.0  # set on the first step
 
@@ -326,6 +334,20 @@ def simulate_next_24h(
                 -(elapsed_h - _STEP_H) / battery_anchor_tau_h
             )
             bat_net_w = max(-max_disch_w, min(params.max_charge_power, bat_net_w))
+
+        # The real loop runs every ~30 s and stops grid charging exactly at the
+        # reserve; one 15-min step at full power would overshoot it by several
+        # percent and the forecast would saw up and down around the reserve.
+        # Likewise discharge stops at the fixed reserve instead of dipping below.
+        if phase == PHASE_RESERVE_PROTECTION:
+            if decision.discharge_power_limit is not None:
+                bat_net_w = max(-float(decision.discharge_power_limit), bat_net_w)
+            if decision.power_mode == POWER_MODE_CHARGE and decision.target_soc is not None:
+                headroom_wh = (decision.target_soc - current_soc) / 100.0 * capacity_wh
+                bat_net_w = min(bat_net_w, max(0.0, headroom_wh / _STEP_H))
+        if fixed_reserve is not None and bat_net_w < 0 and current_soc >= fixed_reserve:
+            floor_wh = (current_soc - fixed_reserve) / 100.0 * capacity_wh
+            bat_net_w = max(bat_net_w, -floor_wh / _STEP_H)
 
         # ── SoC update (15-min step = 0.25 h) ──────────────────────────────
         delta_wh = bat_net_w * _STEP_H

@@ -25,6 +25,7 @@ einen eigenen Versionsabschnitt verschieben.
 
 ### Behoben
 - **Pendeln an der festen Notstromreserve:** Die SoC-Hysterese gilt in der Nähe der festen Reserve nicht mehr. Sonst sieht die Regelung den SoC in Sprüngen und wechselt zwischen Netzladung und freier Entladung.
+- **Sägezahn in der Prognose:** Die 24-Stunden-Prognose rechnet in 15-Minuten-Schritten. An der festen Reserve lud sie dadurch eine ganze Viertelstunde mit voller Leistung und entlud danach wieder. Jetzt stoppt die simulierte Ladung und Entladung genau an der Reserve. Die echte Regelung war davon nicht betroffen.
 
 ### Hinweise
 - Nach dem Update Home Assistant neu starten, damit Schalter und Prozentwert der festen Reserve angelegt werden.
