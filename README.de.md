@@ -78,63 +78,41 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 
 ## Screenshots
 
-### Maestro-Cockpit (seit 0.5.0 stabil)
+Das **Maestro-Cockpit** ist die Oberfläche, vom Onboarding bis zum Betrieb.
+Anleitung: [Maestro-Cockpit](#maestro-cockpit). Classic-Dashboard und Modernes
+Dashboard sind optional und hier nicht abgebildet.
 
-Eigenes Panel in der Seitenleiste, ohne Custom Cards. Anleitung:
-[Maestro-Cockpit](#maestro-cockpit).
+### Live
 
 ![Cockpit Live](Screenshots/cockpit_01_live.png)
 
+### Prognose
+
 ![Cockpit Prognose](Screenshots/cockpit_02_prognose.png)
 
-### Modernes Dashboard (optional)
+### Preisplan
 
-Aufnahmen von v0.3.26. Vier Ansichten: Übersicht, Cockpit, Laden und 24-h-Charts. Für den Betrieb brauchst du dieses Dashboard nicht.
+![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)
 
-![Modern Übersicht](Screenshots/modern_01_uebersicht.png)
+### Entscheidung
 
-![Modern Cockpit](Screenshots/modern_02_cockpit.png)
+![Cockpit Entscheidung](Screenshots/cockpit_04_entscheidung.png)
 
-![Modern Laden](Screenshots/modern_03_laden.png)
+### Anlage
 
-![Modern 24h-Charts](Screenshots/modern_04_charts.png)
+![Cockpit Anlage](Screenshots/cockpit_07_anlage.png)
 
-### Classic-Dashboard (optional)
+### Einstellungen
 
-Ein Screenshot pro Hauptmodul. Für den Betrieb brauchst du dieses Dashboard nicht.
+![Cockpit Einstellungen](Screenshots/cockpit_08_einstellungen.png)
 
-#### Tab 1 – Dashboard & Echtzeit-Übersicht
-![Dashboard Übersicht](Screenshots/01_dashboard_uebersicht.png)
+### Steuerung
 
-#### Tab 2 – Regelungs-Cockpit
-![Cockpit](Screenshots/10_cockpit.png)
+![Cockpit Steuerung](Screenshots/cockpit_05_steuerung.png)
 
-#### Tab 3 – Laden & Ladestrategie
-![Laden & Ladestrategie](Screenshots/02_laden_ladestrategie.png)
+### Auf dem Handy
 
-#### Tab 4 – Zeitplanung & Astro-Modus
-![Zeitplanung & Astro-Modus](Screenshots/03_zeitplanung_astro.png)
-
-#### Tab 5 – Netz & Tarif
-![Netz & Tarif](Screenshots/04_netz_tarif.png)
-
-#### Tab 6 – Flexibilität (Wallbox, Wärmepumpe, Vorentladung)
-![Flexibilität Wallbox Wärmepumpe](Screenshots/05_flexibilitaet_wallbox.png)
-
-#### Tab 7 – Einstellungen & Systemparameter
-![Einstellungen Systemparameter](Screenshots/06_einstellungen_system.png)
-
-#### Tab 8 – Diagnose & Debug
-![Diagnose & Debug](Screenshots/07_diagnose.png)
-
-#### Tab 9 – Hilfe & Glossar
-![Hilfe & Glossar](Screenshots/08_hilfe_glossar.png)
-
-#### Tab 10 – Auto-Optimierung
-![Auto-Optimierung](Screenshots/09_auto_optimierung.png)
-
-#### Tab 11 – Akku & PV Sizing Advisor
-![Sizing Advisor](Screenshots/11_sizing_advisor.png)
+<img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobil" width="300">
 
 ---
 
@@ -923,6 +901,8 @@ bleiben in allen Looks dieselben.
 ![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)
 
 ![Cockpit Entscheidung](Screenshots/cockpit_04_entscheidung.png)
+
+![Cockpit Anlage](Screenshots/cockpit_07_anlage.png)
 
 ### Schnellsteuerung
 

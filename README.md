@@ -78,63 +78,41 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 
 ## Screenshots
 
-### Maestro Cockpit (stable since 0.5.0)
+The **Maestro Cockpit** is the interface, from onboarding through daily operation.
+Guide: [Maestro Cockpit](#maestro-cockpit). The classic dashboard and the modern
+dashboard are optional and not shown here.
 
-A dedicated sidebar panel, no custom cards needed. Guide:
-[Maestro Cockpit](#maestro-cockpit).
+### Live
 
 ![Cockpit live](Screenshots/cockpit_01_live.png)
 
+### Forecast
+
 ![Cockpit forecast](Screenshots/cockpit_02_prognose.png)
 
-### Modern dashboard (optional)
+### Price plan
 
-Screenshots from v0.3.26. Four views: overview, cockpit, charging, and 24 h charts. You do not need this dashboard to run Maestro.
+![Cockpit price plan](Screenshots/cockpit_03_preisplan.png)
 
-![Modern overview](Screenshots/modern_01_uebersicht.png)
+### Decision
 
-![Modern cockpit](Screenshots/modern_02_cockpit.png)
+![Cockpit decision](Screenshots/cockpit_04_entscheidung.png)
 
-![Modern charging](Screenshots/modern_03_laden.png)
+### Plant
 
-![Modern 24h charts](Screenshots/modern_04_charts.png)
+![Cockpit plant](Screenshots/cockpit_07_anlage.png)
 
-### Classic dashboard (optional)
+### Settings
 
-One screenshot per main module. You do not need this dashboard to run Maestro.
+![Cockpit settings](Screenshots/cockpit_08_einstellungen.png)
 
-#### Tab 1 – Dashboard & Live Overview
-![Dashboard Overview](Screenshots/01_dashboard_uebersicht.png)
+### Controls
 
-#### Tab 2 – Control Cockpit
-![Cockpit](Screenshots/10_cockpit.png)
+![Cockpit controls](Screenshots/cockpit_05_steuerung.png)
 
-#### Tab 3 – Charging & Charge Strategy
-![Charging & Strategy](Screenshots/02_laden_ladestrategie.png)
+### On a phone
 
-#### Tab 4 – Scheduling & Astro Mode
-![Scheduling & Astro](Screenshots/03_zeitplanung_astro.png)
-
-#### Tab 5 – Grid & Tariff
-![Grid & Tariff](Screenshots/04_netz_tarif.png)
-
-#### Tab 6 – Flexibility (Wallbox, Heat Pump, Pre-Discharge)
-![Flexibility](Screenshots/05_flexibilitaet_wallbox.png)
-
-#### Tab 7 – Settings & System Parameters
-![Settings](Screenshots/06_einstellungen_system.png)
-
-#### Tab 8 – Diagnostics & Debug
-![Diagnostics](Screenshots/07_diagnose.png)
-
-#### Tab 9 – Help & Glossary
-![Help](Screenshots/08_hilfe_glossar.png)
-
-#### Tab 10 – Auto-Optimisation
-![Auto-Optimisation](Screenshots/09_auto_optimierung.png)
-
-#### Tab 11 – Battery & PV Sizing Advisor
-![Sizing Advisor](Screenshots/11_sizing_advisor.png)
+<img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobile" width="300">
 
 ---
 
@@ -876,6 +854,8 @@ in every look.
 ![Cockpit price plan](Screenshots/cockpit_03_preisplan.png)
 
 ![Cockpit decision](Screenshots/cockpit_04_entscheidung.png)
+
+![Cockpit plant](Screenshots/cockpit_07_anlage.png)
 
 ### Quick controls
 
