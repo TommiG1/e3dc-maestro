@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_PRICE_SENSOR
 from .control_engine import (
@@ -16,6 +17,7 @@ from .control_engine import (
 )
 from .price_curve import read_price_horizon
 from .price_plan_runner import STATUS_OK, PricePlanSnapshot, compute_price_plan
+from .tibber_prices import is_tibber_electricity_price, price_slots_for_home
 
 if TYPE_CHECKING:
     from .control_engine import MaestroState
@@ -24,11 +26,17 @@ _LOGGER = logging.getLogger(__name__)
 
 # Ein Plan, der älter ist (z. B. Preis-Sensor ausgefallen), steuert nicht mehr.
 PRICE_PLAN_MAX_AGE_S = 20 * 60
+# Tibber-Preise ändern sich stündlich; morgen steht frühestens am Nachmittag fest.
+TIBBER_PRICE_REFRESH_S = 15 * 60
 
 
 class CoordinatorPricePlanMixin:
     price_plan: PricePlanSnapshot | None = None
     _price_plan_fingerprint: tuple | None = None
+    _tibber_curve_sensor: str | None = None
+    _tibber_curve_at: datetime | None = None
+    _tibber_curve_attrs: dict | None = None
+    _tibber_curve_warned: bool = False
 
     def _reset_price_plan(self) -> None:
         self.price_plan = None
@@ -66,11 +74,16 @@ class CoordinatorPricePlanMixin:
         try:
             sensor_id = self.entry.options.get(CONF_PRICE_SENSOR)
             attrs: dict = {}
+            st = None
             if sensor_id:
                 st = self.hass.states.get(sensor_id)
                 if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                     attrs = dict(st.attributes)
             horizon = read_price_horizon(attrs, now)
+            if horizon is None and sensor_id:
+                tibber_attrs = await self._async_tibber_curve_attrs(sensor_id, st, now)
+                if tibber_attrs:
+                    horizon = read_price_horizon(tibber_attrs, now)
 
             # Floor = max(Ladeschwelle, Notstromreserve)
             reserve = 0.0
@@ -139,3 +152,69 @@ class CoordinatorPricePlanMixin:
             _LOGGER.debug("Preisplan: %s", snapshot.message)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Preisplan fehlgeschlagen: %s", err)
+
+    async def _async_tibber_curve_attrs(
+        self, sensor_id: str, state: Any, now: datetime
+    ) -> dict | None:
+        """Stundenkurve des Tibber-Strompreis-Sensors, höchstens alle 15 Minuten neu."""
+        platform = None
+        registry_entry = er.async_get(self.hass).async_get(sensor_id)
+        if registry_entry is not None:
+            platform = registry_entry.platform
+        attributes = state.attributes if state is not None else {}
+        if not is_tibber_electricity_price(platform, attributes):
+            return None
+
+        if (
+            self._tibber_curve_sensor == sensor_id
+            and self._tibber_curve_at is not None
+            and (now - self._tibber_curve_at).total_seconds() < TIBBER_PRICE_REFRESH_S
+        ):
+            return self._tibber_curve_attrs
+
+        nickname = attributes.get("app_nickname")
+        nickname = nickname if isinstance(nickname, str) else None
+        fetched = await self._async_fetch_tibber_curve(nickname, now)
+        if fetched is None and self._tibber_curve_attrs and self._tibber_curve_sensor == sensor_id:
+            self._tibber_curve_at = now
+            return self._tibber_curve_attrs
+
+        self._tibber_curve_sensor = sensor_id
+        self._tibber_curve_at = now
+        self._tibber_curve_attrs = fetched
+        return fetched
+
+    async def _async_fetch_tibber_curve(self, nickname: str | None, now: datetime) -> dict | None:
+        if not self.hass.services.has_service("tibber", "get_prices"):
+            if not self._tibber_curve_warned:
+                _LOGGER.warning(
+                    "Tibber-Strompreis-Sensor gewählt, aber die Aktion tibber.get_prices fehlt"
+                )
+                self._tibber_curve_warned = True
+            return None
+        end = now + timedelta(days=1)
+        end = end.replace(hour=23, minute=59, second=0, microsecond=0)
+        try:
+            response = await self.hass.services.async_call(
+                "tibber",
+                "get_prices",
+                {"end": end.strftime("%Y-%m-%d %H:%M:%S")},
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            if not self._tibber_curve_warned:
+                _LOGGER.warning("Tibber-Preiskurve nicht abrufbar: %s", err)
+                self._tibber_curve_warned = True
+            return None
+
+        slots = price_slots_for_home(response, nickname)
+        if not slots:
+            if not self._tibber_curve_warned:
+                _LOGGER.warning(
+                    "Tibber-Preiskurve leer oder Wohnung %r nicht in der Antwort", nickname
+                )
+                self._tibber_curve_warned = True
+            return None
+        self._tibber_curve_warned = False
+        return {"prices": slots}

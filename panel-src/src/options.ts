@@ -8,6 +8,8 @@ export interface OptionField {
   min?: number;
   max?: number;
   step?: number;
+  /** Shown beside the number. "%" uses the slider with the 10% grid. */
+  unit?: string;
   choices?: readonly string[];
   domains?: readonly string[];
   required?: boolean;
@@ -33,7 +35,7 @@ export interface OptionBlock {
 const sensor = ["sensor"] as const;
 const energy = ["sensor"] as const;
 
-const num = (key: string, min: number, max: number, step = 1): OptionField => ({ key, kind: "number", min, max, step });
+const num = (key: string, min: number, max: number, step = 1, unit?: string): OptionField => ({ key, kind: "number", min, max, step, unit });
 const entity = (key: string, domains: readonly string[], required = false): OptionField => ({
   key,
   kind: "entity",
@@ -67,7 +69,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       num("adaptive_reserve_lookback_days", 1, 60),
       num("adaptive_reserve_min_days", 1, 30),
       num("adaptive_reserve_safety_factor", 1, 3, 0.1),
-      num("adaptive_reserve_max_soc", 5, 90),
+      num("adaptive_reserve_max_soc", 5, 90, 1, "%"),
     ],
   },
   {

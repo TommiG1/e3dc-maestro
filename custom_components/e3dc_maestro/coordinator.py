@@ -394,6 +394,19 @@ class E3DCMaestroCoordinator(
         )
 
 
+    def poll_interval_seconds(self) -> float | None:
+        """Control-cycle length. Not stored on MaestroParams."""
+        interval = self.update_interval
+        if interval is None:
+            return None
+        return float(interval.total_seconds())
+
+    def set_poll_interval(self, seconds: float) -> None:
+        """Persist the control-cycle interval and reschedule the coordinator."""
+        seconds = int(seconds)
+        self.update_param(CONF_UPDATE_INTERVAL, seconds)
+        self.async_set_update_interval(timedelta(seconds=seconds))
+
     def update_param(self, key: str, value: Any) -> None:
         """Called by number/select/switch entities when user changes a value."""
         # Lat/lon come from HA config, not user entities

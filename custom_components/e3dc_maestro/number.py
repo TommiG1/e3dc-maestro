@@ -790,7 +790,8 @@ class MaestroNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntity):
         set_stable_entity_id(self, "number")
         self._attr_native_min_value = description.min_value
         self._attr_native_step = description.step_value
-        self._attr_mode = description.mode
+        unit = description.native_unit_of_measurement
+        self._attr_mode = NumberMode.SLIDER if unit in {PERCENTAGE, "%"} else description.mode
         # Statischer Fallback; ``native_max_value`` unten überschreibt dies,
         # falls die Beschreibung ``dynamic_max_fn`` setzt.
         self._attr_native_max_value = description.max_value
@@ -810,16 +811,25 @@ class MaestroNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return getattr(self.coordinator._params, self.entity_description.param_key, None)
+        key = self.entity_description.param_key
+        # The poll interval lives on the coordinator, not on MaestroParams.
+        # Reading _params left this entity unknown, so the box could not keep a value.
+        if key == CONF_UPDATE_INTERVAL:
+            return self.coordinator.poll_interval_seconds()
+        return getattr(self.coordinator._params, key, None)
 
     async def async_set_native_value(self, value: float) -> None:
-        self.coordinator.update_param(self.entity_description.param_key, value)
+        key = self.entity_description.param_key
+        if key == CONF_UPDATE_INTERVAL:
+            self.coordinator.set_poll_interval(value)
+        else:
+            self.coordinator.update_param(key, value)
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()
 
 
 class MaestroSizingNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntity):
-    """Slider for the Sizing Advisor hypothetical battery / PV value.
+    """Number for the Sizing Advisor hypothetical battery / PV value.
 
     Unlike ``MaestroNumber``, these sliders do not map to ``_params`` but
     update a dedicated field on the coordinator, then notify all listeners

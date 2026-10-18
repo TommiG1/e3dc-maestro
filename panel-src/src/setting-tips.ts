@@ -413,8 +413,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "How fast charge power may rise per cycle.",
   },
   update_interval: {
-    de: "Sekunden zwischen zwei Regel-Durchläufen.",
-    en: "Seconds between two control cycles.",
+    de: "Sekunden zwischen zwei Regel-Durchläufen. Standard 30 s, möglich 10–120 s.",
+    en: "Seconds between two control cycles. Default 30 s, range 10–120 s.",
   },
   watchdog_timeout: {
     de: "Nach diesen Sekunden ohne Kontakt hebt der Wechselrichter die Limits auf.",

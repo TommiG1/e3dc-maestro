@@ -6,6 +6,7 @@ import { isOn, num, plant, type HassEntity } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n, Key } from "./i18n";
 import { memo } from "./memo";
+import { sliderField } from "./slider-field";
 import type { Point } from "./transform";
 
 type T = I18n["t"];
@@ -440,9 +441,25 @@ export function plantView(c: PlantCtx): TemplateResult {
     const label = labelOf(entity, id);
     const domain = id.split(".", 1)[0];
     const locked = entity.state === "unavailable" || c.pending.has(id);
+    const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement : "";
+    const min = typeof entity.attributes.min === "number" ? entity.attributes.min : undefined;
+    const max = typeof entity.attributes.max === "number" ? entity.attributes.max : undefined;
+    const step = typeof entity.attributes.step === "number" ? entity.attributes.step : 1;
+    const percent = unit === "%" || entity.attributes.mode === "slider";
     const control =
       domain === "switch"
         ? html`<button class="switch ${isOn(entity) ? "on" : ""}" role="switch" aria-checked=${isOn(entity)} aria-label=${label} ?disabled=${locked} @click=${() => c.onToggle(id)}></button>`
+        : domain === "number" && percent && min !== undefined && max !== undefined
+          ? sliderField({
+              label,
+              min,
+              max,
+              step,
+              value: num(entity) ?? min,
+              unit,
+              disabled: locked,
+              onCommit: (value) => c.onNumber(id, value),
+            })
         : domain === "number"
           ? html`<label class="setting-num">
               <input
@@ -471,7 +488,7 @@ export function plantView(c: PlantCtx): TemplateResult {
                 if (window.confirm(t("plantSend"))) c.onPress(id);
               }}>${label}</button>`
             : nothing;
-    return html`<div class="ctrl setting-row"><div class="txt"><span class="name"><b>${label}</b></span></div>${control}</div>`;
+    return html`<div class="ctrl setting-row ${percent && domain === "number" ? "wide" : ""}"><div class="txt"><span class="name"><b>${label}</b></span></div>${control}</div>`;
   };
   const controlCard = (ids: Record<string, string> | undefined) => {
     const rows = Object.values(ids ?? {}).map((id) => controlRow(id));

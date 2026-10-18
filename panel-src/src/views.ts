@@ -15,6 +15,7 @@ import {
 import type { ClassicStatus } from "./classic";
 import type { FlowConsumer } from "./consumers";
 import { energyFlow, flowBoxHeight } from "./flow";
+import { sliderField } from "./slider-field";
 import { memo } from "./memo";
 import type { ThemeId } from "./theme";
 import type { Fmt } from "./format";
@@ -232,17 +233,16 @@ export function liveView(c: Ctx): TemplateResult {
         ?disabled=${!st(c, E.forceDischarge) || c.pending.has(E.forceDischarge)}
         @click=${() => c.onToggle(E.forceDischarge)}
       ></button>
-      <input
-        type="range"
-        min=${powerMin}
-        max=${powerMax}
-        step=${powerStep}
-        .value=${String(powerValue)}
-        aria-label=${t("ctrlForcePower", { v: "" })}
-        ?disabled=${!power || power.state === "unavailable"}
-        @input=${(e: Event) => c.onPowerDraft(Number((e.target as HTMLInputElement).value))}
-        @change=${(e: Event) => c.onPowerCommit(Number((e.target as HTMLInputElement).value))}
-      />
+      ${sliderField({
+        label: t("ctrlForcePower", { v: "" }),
+        min: powerMin,
+        max: powerMax,
+        step: powerStep,
+        value: powerValue,
+        disabled: !power || power.state === "unavailable",
+        onPreview: c.onPowerDraft,
+        onCommit: c.onPowerCommit,
+      })}
     </div>
     <div class="card force">
       <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
@@ -254,17 +254,17 @@ export function liveView(c: Ctx): TemplateResult {
         ?disabled=${!st(c, E.fixedReserve) || c.pending.has(E.fixedReserve)}
         @click=${() => c.onToggle(E.fixedReserve)}
       ></button>
-      <input
-        type="range"
-        min=${reserveMin}
-        max=${reserveMax}
-        step=${reserveStep}
-        .value=${String(reserveValue)}
-        aria-label=${t("fixedReserve")}
-        ?disabled=${!reserve || reserve.state === "unavailable"}
-        @input=${(e: Event) => c.onReserveDraft(Number((e.target as HTMLInputElement).value))}
-        @change=${(e: Event) => c.onReserveCommit(Number((e.target as HTMLInputElement).value))}
-      />
+      ${sliderField({
+        label: t("fixedReserve"),
+        min: reserveMin,
+        max: reserveMax,
+        step: reserveStep,
+        value: reserveValue,
+        unit: "%",
+        disabled: !reserve || reserve.state === "unavailable",
+        onPreview: c.onReserveDraft,
+        onCommit: c.onReserveCommit,
+      })}
     </div>
     <div class="seg period" role="group" aria-label=${t("periodToday")}>
       ${(["today", "week", "month"] as const).map(

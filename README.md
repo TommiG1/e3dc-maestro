@@ -338,7 +338,7 @@ it the plan stays display-only (shadow mode). It is calculated as long as
 **Setup** (Settings → Devices & services → E3DC Maestro → Configure):
 
 1. **Tariff & costs:** pick the price sensor (attributes `raw_today`/`raw_tomorrow`,
-   e.g. Nordpool, EPEX, aWATTar or Tibber with `prices`), feed-in tariff, battery
+   e.g. Nordpool, EPEX, aWATTar; the Tibber electricity-price sensor is enough, Maestro fetches the curve itself), feed-in tariff, battery
    purchase cost and lifetime (cycles), max grid charge/day.
 2. **System parameters:** battery capacity, max charge power, inverter power.
 3. **PV forecast:** enable a forecast sensor (Solcast / Forecast.Solar) – without

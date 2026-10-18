@@ -1204,7 +1204,7 @@ export const styles = css`
     font-size: 12px;
     font-weight: 500;
   }
-  .force input[type="range"] {
+  .force .slider-field {
     grid-column: 1 / -1;
   }
   .period {
@@ -2056,6 +2056,89 @@ export const styles = css`
     font-size: 13px;
     text-decoration: none;
   }
+  .sheet .ctrl .slider-field {
+    flex: 1 1 100%;
+  }
+  .slider-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+  .slider-track {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+  .slider-field input[type="range"] {
+    width: 100%;
+    height: 44px;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    accent-color: var(--accent);
+  }
+  .slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    height: 6px;
+    margin: -6px 14px 0;
+    pointer-events: none;
+  }
+  .slider-ticks i {
+    width: 2px;
+    height: 6px;
+    border-radius: 1px;
+    background: var(--muted);
+    opacity: 0.55;
+  }
+  .slider-field input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--switch-track);
+  }
+  .slider-field input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    margin-top: -10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface, #fff);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+  .slider-field input[type="range"]::-moz-range-track {
+    height: 8px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--switch-track);
+  }
+  .slider-field input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface, #fff);
+  }
+  .slider-field input[type="number"] {
+    width: 6.5rem;
+    flex: none;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 600 14px Inter, system-ui, sans-serif;
+    padding: 8px 10px;
+  }
+  .slider-field span {
+    color: var(--muted);
+    font-size: 12px;
+    flex: none;
+  }
   .sheet-section {
     margin-top: 22px;
     padding-top: 16px;
@@ -2357,5 +2440,35 @@ export const styles = css`
   .opt-slot-fields input,
   .opt-slot-fields select {
     min-width: 0;
+  }
+  .setting-row.wide {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .setting-row.wide .txt {
+    flex: none;
+  }
+  .setting-row.wide .opt-entity,
+  .setting-row.wide .opt-action {
+    width: 100%;
+  }
+  .setting-row.wide .opt-entity input,
+  .setting-row.wide .opt-action input {
+    flex: 1 1 100%;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 600 13px Inter, system-ui, sans-serif;
+    padding: 8px 10px;
+  }
+  .setting-row.wide .opt-action input {
+    flex: 1 1 14rem;
+  }
+  .opt-choices button,
+  .opt-chips .chip {
+    overflow-wrap: anywhere;
   }
 `;

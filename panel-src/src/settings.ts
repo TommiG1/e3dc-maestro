@@ -7,6 +7,7 @@ import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
 import { optionSections, sizingPage, type OptionCtx } from "./options-view";
 import { settingTip } from "./setting-tips";
+import { sliderField } from "./slider-field";
 import "./setting-tip";
 import { THEMES, type ThemeId } from "./theme";
 
@@ -321,37 +322,18 @@ function numberField(c: ControlCtx, id: string, entity: HassEntity | undefined, 
   const max = bound(entity, "max");
   const step = bound(entity, "step");
   const unit = unitOf(entity);
-  const commit = (raw: string) => {
-    const value = Number.parseFloat(raw);
-    if (Number.isFinite(value)) c.onNumber(id, value);
-  };
-  if (entity?.attributes.mode === "slider" && min !== undefined && max !== undefined) {
-    return html`<label class="setting-num range">
-      <input
-        type="range"
-        aria-label=${label}
-        min=${min}
-        max=${max}
-        step=${step ?? 1}
-        ?disabled=${locked || c.pending.has(id)}
-        ${ref((el) => {
-          if (el instanceof HTMLInputElement && !focused(el) && el.value !== text) el.value = text;
-        })}
-        @input=${(e: Event) => {
-          const input = e.target as HTMLInputElement & { _commit?: number };
-          const value = input.parentElement?.querySelector("b");
-          if (value) value.textContent = unit ? `${input.value} ${unit}` : input.value;
-          window.clearTimeout(input._commit);
-          input._commit = window.setTimeout(() => commit(input.value), 200);
-        }}
-        @change=${(e: Event) => {
-          const input = e.target as HTMLInputElement & { _commit?: number };
-          window.clearTimeout(input._commit);
-          commit(input.value);
-        }}
-      />
-      <b .textContent=${unit ? `${text} ${unit}` : text}></b>
-    </label>`;
+  const percent = unit === "%";
+  if ((entity?.attributes.mode === "slider" || percent) && min !== undefined && max !== undefined) {
+    return sliderField({
+      label,
+      min,
+      max,
+      step: step ?? 1,
+      value: shown ?? min,
+      unit,
+      disabled: locked || c.pending.has(id),
+      onCommit: (value) => c.onNumber(id, value),
+    });
   }
   return html`<label class="setting-num">
     <input

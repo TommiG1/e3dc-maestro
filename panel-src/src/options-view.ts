@@ -3,6 +3,7 @@ import "./maestro-chart";
 import { asMonths, sizingYearOptions } from "./charts";
 import { memo } from "./memo";
 import { ref } from "lit/directives/ref.js";
+import { sliderField } from "./slider-field";
 import { E, type Hass, type HassEntity } from "./entities";
 import type { I18n, Key } from "./i18n";
 import {
@@ -46,8 +47,9 @@ const focused = (el: HTMLInputElement): boolean => {
   return active === el;
 };
 
-const row = (label: string, control: TemplateResult, locked: boolean): TemplateResult =>
-  html`<div class="ctrl setting-row ${locked ? "locked" : ""}">
+/** `wide` stacks the control under the label so long entity ids get the full row. */
+const row = (label: string, control: TemplateResult, locked: boolean, wide = false): TemplateResult =>
+  html`<div class="ctrl setting-row ${locked ? "locked" : ""} ${wide ? "wide" : ""}">
     <div class="txt"><span class="name"><b>${label}</b></span></div>
     ${control}
   </div>`;
@@ -55,6 +57,18 @@ const row = (label: string, control: TemplateResult, locked: boolean): TemplateR
 function numberField(c: OptionCtx, field: OptionField, label: string): TemplateResult {
   const current = c.options[field.key];
   const text = typeof current === "number" ? String(current) : "";
+  if (field.unit === "%" && field.min !== undefined && field.max !== undefined) {
+    return sliderField({
+      label,
+      min: field.min,
+      max: field.max,
+      step: field.step ?? 1,
+      value: typeof current === "number" ? current : field.min,
+      unit: "%",
+      disabled: !c.isAdmin || c.pending.has(field.key),
+      onCommit: (value) => c.onChange(field.key, value),
+    });
+  }
   return html`<label class="setting-num">
     <input
       type="number"
@@ -222,7 +236,7 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
       locked,
     );
   }
-  if (field.kind === "number") return row(label, numberField(c, field, label), locked);
+  if (field.kind === "number") return row(label, numberField(c, field, label), locked, field.unit === "%");
   if (field.kind === "select") {
     const choices = field.choices ?? [];
     const value = selectValue(c.options[field.key], choices);
@@ -249,8 +263,8 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
       locked,
     );
   }
-  if (field.kind === "action") return row(label, actionField(c, field), locked);
-  return row(label, entityField(c, field, label, field.kind === "entities"), locked);
+  if (field.kind === "action") return row(label, actionField(c, field), locked, true);
+  return row(label, entityField(c, field, label, field.kind === "entities"), locked, true);
 }
 
 const shown = (entity: HassEntity | undefined): string =>

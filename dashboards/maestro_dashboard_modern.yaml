@@ -4703,7 +4703,7 @@ views:
 
           | Schritt | Was einstellen | Warum |
           |---|---|---|
-          | **Tarif & Kosten** | **Preis-Sensor** wählen | Quelle der Preiskurve. Der Sensor braucht Attribute `raw_today` / `raw_tomorrow` (Nordpool, EPEX, aWATTar, Tibber mit `prices`) oder Listen `today` / `tomorrow` |
+          | **Tarif & Kosten** | **Preis-Sensor** wählen | Quelle der Preiskurve. Der Sensor braucht Attribute `raw_today` / `raw_tomorrow` (Nordpool, EPEX, aWATTar) oder Listen `today` / `tomorrow`. Den Tibber-Strompreis-Sensor liest Maestro direkt und holt die Kurve selbst |
           | **Tarif & Kosten** | **Preisplan berechnen** einschalten | Aktiviert die Berechnung (auch im Dashboard schaltbar) |
           | **Tarif & Kosten** | **Preisplan steuert den Akku** einschalten | Erst nach der Prüfphase: Maestro führt den Plan aus (auch im Dashboard schaltbar) |
           | **Tarif & Kosten** | Strompreis Bezug (fest), **Einspeisevergütung** | Bewertung von PV-Überschuss gegen Netzbezug |

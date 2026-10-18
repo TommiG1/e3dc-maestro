@@ -4,6 +4,7 @@ import { CONSUMER_ICON_PATH, CONSUMER_ICONS, MAX_CONSUMERS, consumerUnavailable,
 import { CONTROL_SWITCHES, E, isOn, num, type Hass } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
+import { sliderField } from "./slider-field";
 
 export interface ControlsInput {
   hass: Hass;
@@ -114,32 +115,31 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
       <div class="ctrl wrap">
         <div class="txt"><b>${t("ctrlForce")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
         ${toggle(E.forceDischarge, t("ctrlForce"))}
-        <input
-          type="range"
-          min=${min}
-          max=${max}
-          step=${step}
-          .value=${String(powerValue)}
-          aria-label=${t("ctrlForcePower", { v: "" })}
-          ?disabled=${!power || power.state === "unavailable"}
-          @input=${(e: Event) => c.onPowerDraft(Number((e.target as HTMLInputElement).value))}
-          @change=${(e: Event) => c.onPowerCommit(Number((e.target as HTMLInputElement).value))}
-        />
+        ${sliderField({
+          label: t("ctrlForcePower", { v: "" }),
+          min,
+          max,
+          step,
+          value: powerValue,
+          disabled: !power || power.state === "unavailable",
+          onPreview: c.onPowerDraft,
+          onCommit: c.onPowerCommit,
+        })}
       </div>
       <div class="ctrl wrap">
         <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
         ${toggle(E.fixedReserve, t("fixedReserve"))}
-        <input
-          type="range"
-          min=${reserveMin}
-          max=${reserveMax}
-          step=${reserveStep}
-          .value=${String(reserveValue)}
-          aria-label=${t("fixedReserve")}
-          ?disabled=${!reserve || reserve.state === "unavailable"}
-          @input=${(e: Event) => c.onReserveDraft(Number((e.target as HTMLInputElement).value))}
-          @change=${(e: Event) => c.onReserveCommit(Number((e.target as HTMLInputElement).value))}
-        />
+        ${sliderField({
+          label: t("fixedReserve"),
+          min: reserveMin,
+          max: reserveMax,
+          step: reserveStep,
+          value: reserveValue,
+          unit: "%",
+          disabled: !reserve || reserve.state === "unavailable",
+          onPreview: c.onReserveDraft,
+          onCommit: c.onReserveCommit,
+        })}
       </div>
       <div class="sheet-section">
         <h3>${t("actionsTitle")}</h3>

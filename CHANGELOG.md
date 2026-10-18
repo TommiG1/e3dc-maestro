@@ -11,6 +11,24 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1-beta.1] – Tibber-Kurve und Prozent-Regler (2026-10-18)
+
+> **Beta.** Enthält 0.5.0. In HACS Beta-Versionen anzeigen.
+
+### Neu
+- **Tibber-Preiskurve ohne Template.** Ist der Strompreis-Sensor der Tibber-Integration gewählt, holt Maestro die Stundenkurve selbst über `tibber.get_prices`. Der aktuelle Preis bleibt der Sensorstatus. Bei mehreren Wohnungen gilt `app_nickname`. Ein Abruf höchstens alle 15 Minuten; schlägt er fehl, bleibt die letzte Kurve liegen.
+- **Prozentwerte: Regler und Eingabe.** Jede Einstellung in Prozent hat einen Schieberegler und daneben ein Zahlenfeld. Der Regler rastet in einem 10-%-Raster der Spanne ein, das Zahlenfeld behält die feine Schrittweite. Die Greiffläche ist größer, damit der Regler auf dem iPad zu treffen ist.
+
+### Geändert
+- **Aktualisierungsintervall lässt sich schreiben.** Der Wert kam nicht aus den Regelparametern, der Status blieb `unknown` und jede Eingabe verschwand. Er zeigt jetzt die Sekunden des Coordinators (Standard 30 s, 10–120 s) und stellt den Takt sofort um.
+- **Sensorfelder nutzen die ganze Zeile.** Gewählte Entity-IDs werden nicht mehr auf einen kurzen Rest abgeschnitten. Lange IDs in der Trefferliste und in den Chips brechen um.
+
+### Hinweise
+- **Neustart nötig.** Danach das Cockpit einmal hart neu laden.
+- Der Preisplan braucht die Kurve. Ohne Tibber-Integration oder ohne passenden Strompreis-Sensor bleibt es bei Sensoren, die `raw_today` / `raw_tomorrow`, `today` / `tomorrow` oder `prices` schon mitbringen.
+
+---
+
 ## [0.5.0] – Erstes stabiles Cockpit (2026-10-18)
 
 > Stabiles Release. Enthält das Cockpit aus 0.4.0-beta.15 und die Punkte unten. Die Regelung ist unverändert.

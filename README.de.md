@@ -355,7 +355,7 @@ diesen Schalter bleibt er reine Anzeige (Schattenmodus). Berechnet wird er, sola
 **Einrichtung** (Einstellungen → Geräte & Dienste → E3DC Maestro → Konfigurieren):
 
 1. **Tarif & Kosten:** Preis-Sensor wählen (Attribute `raw_today`/`raw_tomorrow`,
-   z. B. Nordpool, EPEX, aWATTar oder Tibber mit `prices`), Einspeisevergütung,
+   z. B. Nordpool, EPEX, aWATTar; der Tibber-Strompreis-Sensor reicht, die Kurve holt Maestro selbst), Einspeisevergütung,
    Akku-Anschaffungskosten und Lebensdauer (Zyklen), Max. Netzladung/Tag.
 2. **Systemparameter:** Akku-Kapazität, max. Ladeleistung, Wechselrichter-Leistung.
 3. **PV-Prognose:** Prognose-Sensor (Solcast / Forecast.Solar) aktivieren – ohne
