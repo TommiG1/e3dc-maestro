@@ -36,11 +36,34 @@ export function rasterStep(min: number, max: number, step: number): number {
   return tenth;
 }
 
+const divides = (span: number, step: number): boolean =>
+  Math.abs(span / step - Math.round(span / step)) < 1e-6;
+
+/** Whole-number snap for a percent slider, with about ten stops and both ends on the grid. */
+export function percentStep(min: number, max: number, fine: number): number {
+  const span = max - min;
+  if (!(span > 0)) return fine > 0 ? fine : 1;
+  if (fine > 0 && fine >= span / 10 && Number.isInteger(fine)) return fine;
+  const fitting = [1, 2, 5, 10, 20, 25].filter(
+    (step) => divides(span, step) && span / step >= 4 && span / step <= 20,
+  );
+  if (fitting.length === 0) return 1;
+  return fitting.reduce((best, step) =>
+    Math.abs(span / step - 10) < Math.abs(span / best - 10) ? step : best,
+  );
+}
+
+export function percentMarks(min: number, max: number, step: number): number[] {
+  const count = Math.max(1, Math.round((max - min) / step));
+  return Array.from({ length: count + 1 }, (_, index) => Math.round(min + ((max - min) * index) / count));
+}
+
 /** Slider plus a number box for the same value. The box is how a precise value is entered. */
 export function sliderField(field: SliderField): TemplateResult {
   const text = String(field.value);
   const percent = field.unit === "%";
-  const coarse = percent ? rasterStep(field.min, field.max, field.step) : field.step;
+  const coarse = percent ? percentStep(field.min, field.max, field.step) : field.step;
+  const marks = percent ? percentMarks(field.min, field.max, coarse) : [];
   const commit = (raw: string) => {
     const value = Number.parseFloat(raw);
     if (!Number.isFinite(value)) return;
@@ -51,7 +74,7 @@ export function sliderField(field: SliderField): TemplateResult {
     if (Number.isFinite(value)) field.onPreview?.(value);
   };
   return html`<div class="slider-field">
-    <div class="slider-track">
+    <div class="slider-track ${percent ? "raster" : ""}">
     <input
       type="range"
       aria-label=${field.label}
@@ -75,7 +98,14 @@ export function sliderField(field: SliderField): TemplateResult {
         commit(input.value);
       }}
     />
-    <div class="slider-ticks" aria-hidden="true">${percent ? Array.from({ length: 11 }, () => html`<i></i>`) : nothing}</div>
+    ${percent
+      ? html`<div class="slider-scale" aria-hidden="true">
+          ${marks.map((mark) => {
+            const at = ((mark - field.min) / (field.max - field.min)) * 100;
+            return html`<span style="left: ${at}%">${mark}</span>`;
+          })}
+        </div>`
+      : nothing}
     </div>
     <input
       type="number"

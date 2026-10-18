@@ -363,6 +363,49 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
   });
 }
 
+/** Arc of the battery ring. 0 is the lower left, 1 the lower right, clockwise over the top. */
+export function socArc(fromPct: number, toPct: number, cx = 100, cy = 92, r = 72): string {
+  const from = Math.min(1, Math.max(0, fromPct));
+  const to = Math.min(1, Math.max(0, toPct));
+  if (to - from < 0.001) return "";
+  const start = 135;
+  const sweep = 270;
+  const at = (pct: number) => {
+    const rad = ((start + sweep * pct) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+  const a = at(from);
+  const b = at(to);
+  const large = sweep * (to - from) > 180 ? 1 : 0;
+  return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
+}
+
+/** Conic fill for the battery ring. 0 sits at the lower left and runs clockwise over the top. */
+export function socRingGradient(soc: number, reserve?: number): string {
+  const clamp = (value: number) => Math.min(1, Math.max(0, value / 100));
+  const socPct = clamp(soc);
+  const reservePct = reserve === undefined ? undefined : clamp(reserve);
+  const sweep = 270;
+  const deg = (pct: number) => `${+(pct * sweep).toFixed(2)}deg`;
+  const stops: string[] = [];
+  const band = (color: string, from: number, to: number) => {
+    if (to - from < 0.001) return;
+    stops.push(`${color} ${deg(from)}`, `${color} ${deg(to)}`);
+  };
+  const split = reservePct === undefined ? 0 : Math.min(socPct, reservePct);
+  if (reservePct !== undefined && reservePct > 0) {
+    band("var(--warn)", 0, split);
+    band("#fbbf2466", split, reservePct);
+  }
+  const chargeFrom = reservePct === undefined ? 0 : split;
+  if (socPct > chargeFrom) {
+    stops.push(`var(--bat) ${deg(chargeFrom)}`, `var(--accent-2) ${deg(socPct)}`);
+  }
+  band("var(--switch-track)", Math.max(socPct, reservePct ?? 0), 1);
+  stops.push(`transparent ${deg(1)}`, "transparent 360deg");
+  return `conic-gradient(from 225deg, ${stops.join(", ")})`;
+}
+
 export function ringOptions(soc: number, label: string): Opts {
   return withBase({
     chart: { type: "radialBar", height: 270, sparkline: { enabled: true } },

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -431,7 +432,17 @@ def _rscp_plant(hass: HomeAssistant, registry: Any) -> dict[str, Any]:
 
 
 def panel_module_url() -> str:
-    return f"{_PANEL_MODULE}?v={VERSION}"
+    """Panel script URL. The file time is part of it so a new build is a new address.
+
+    The iPad app keeps the previous script when only the file changes and this
+    query stays the same. Resetting the frontend cache does not drop that entry.
+    """
+    script = Path(__file__).resolve().parent / "frontend" / "panel" / "maestro-panel.js"
+    try:
+        token = script.stat().st_mtime_ns
+    except OSError:
+        token = 0
+    return f"{_PANEL_MODULE}?v={VERSION}-{token}"
 
 
 def _settings_for(registry: Any, entry_id: str) -> tuple[dict[str, str], list[str]]:

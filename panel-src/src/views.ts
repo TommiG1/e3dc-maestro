@@ -9,7 +9,7 @@ import {
   COLORS,
   forecastOptions,
   planOptions,
-  ringOptions,
+  socRingGradient,
   sparkOptions,
 } from "./charts";
 import type { ClassicStatus } from "./classic";
@@ -54,6 +54,8 @@ export interface Ctx {
   motion: boolean;
   collapsed: ReadonlySet<string>;
   onToggleGroup: (id: string) => void;
+  controlsOpen: boolean;
+  onToggleControls: () => void;
   groupId?: string;
   onOpenGroup: (id: string) => void;
   setupAck: boolean;
@@ -121,6 +123,16 @@ const debugText = (c: Ctx): string => {
 };
 
 // ---------------------------------------------------------------- Live
+
+function socRing(soc: number, label: string, reserve?: number): TemplateResult {
+  return html`<div class="soc-gauge" role="img" aria-label=${`${Math.round(soc)}% ${label}`}>
+    <div class="soc-disc" style=${`background:${socRingGradient(soc, reserve)}`}></div>
+    <div class="soc-readout">
+      <b>${Math.round(soc)}%</b>
+      <span>${label}</span>
+    </div>
+  </div>`;
+}
 
 export function liveView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
@@ -211,8 +223,11 @@ export function liveView(c: Ctx): TemplateResult {
       <div class="card soc-card">
         <h3 class="self-start">${t("battery")}</h3>
         ${soc !== undefined
-          ? html`<maestro-chart class="ring" .options=${memo("ring", [c.theme, soc, c.fmt.loc], () => ringOptions(soc, t("stateOfCharge")))}></maestro-chart>`
+          ? socRing(soc, t("stateOfCharge"), on(E.fixedReserve) ? reserveValue : undefined)
           : html`<p class="empty">${t("unavailable")}</p>`}
+        ${on(E.fixedReserve)
+          ? html`<p class="reserve-hint"><i></i>${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</p>`
+          : nothing}
         <div class="soc-meta">
           <div class="meta"><b>${target !== undefined ? `${Math.round(target)}%` : "–"}</b><span>${t("targetSoc")}</span></div>
           <div class="meta"><b>${shown(st(c, E.autonomy))}</b><span>${t("autonomy")}</span></div>
@@ -223,49 +238,62 @@ export function liveView(c: Ctx): TemplateResult {
     <div class="chips">
       ${chips.map(([label, active, cls]) => html`<span class="chip ${active ? cls : ""}"><i></i>${label}</span>`)}
     </div>
-    <div class="card force">
-      <div class="txt"><b>${t("forceTitle")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
-      <button
-        class="switch ${on(E.forceDischarge) ? "on" : ""}"
-        role="switch"
-        aria-checked=${on(E.forceDischarge)}
-        aria-label=${t("forceTitle")}
-        ?disabled=${!st(c, E.forceDischarge) || c.pending.has(E.forceDischarge)}
-        @click=${() => c.onToggle(E.forceDischarge)}
-      ></button>
-      ${sliderField({
-        label: t("ctrlForcePower", { v: "" }),
-        min: powerMin,
-        max: powerMax,
-        step: powerStep,
-        value: powerValue,
-        disabled: !power || power.state === "unavailable",
-        onPreview: c.onPowerDraft,
-        onCommit: c.onPowerCommit,
-      })}
-    </div>
-    <div class="card force">
-      <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
-      <button
-        class="switch ${on(E.fixedReserve) ? "on" : ""}"
-        role="switch"
-        aria-checked=${on(E.fixedReserve)}
-        aria-label=${t("fixedReserve")}
-        ?disabled=${!st(c, E.fixedReserve) || c.pending.has(E.fixedReserve)}
-        @click=${() => c.onToggle(E.fixedReserve)}
-      ></button>
-      ${sliderField({
-        label: t("fixedReserve"),
-        min: reserveMin,
-        max: reserveMax,
-        step: reserveStep,
-        value: reserveValue,
-        unit: "%",
-        disabled: !reserve || reserve.state === "unavailable",
-        onPreview: c.onReserveDraft,
-        onCommit: c.onReserveCommit,
-      })}
-    </div>
+    <section class="card grip">
+      <button type="button" class="grip-head ${c.controlsOpen ? "open" : ""}" aria-expanded=${c.controlsOpen} @click=${() => c.onToggleControls()}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        ${c.controlsOpen
+          ? html`<span class="grip-title">${t("controlsPair")}</span>`
+          : html`<span class="grip-state ${on(E.forceDischarge) ? "warn" : ""}">${on(E.forceDischarge) ? t("controlsForceOn", { v: c.fmt.w(powerValue) }) : t("controlsForceOff")}</span>
+              <span class="grip-state ${on(E.fixedReserve) ? "on" : ""}">${on(E.fixedReserve) ? t("controlsReserveOn", { v: Math.round(reserveValue) }) : t("controlsReserveOff")}</span>`}
+      </button>
+      ${c.controlsOpen
+        ? html`<div class="grip-body">
+            <div class="force">
+              <div class="txt"><b>${t("forceTitle")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
+              <button
+                class="switch ${on(E.forceDischarge) ? "on" : ""}"
+                role="switch"
+                aria-checked=${on(E.forceDischarge)}
+                aria-label=${t("forceTitle")}
+                ?disabled=${!st(c, E.forceDischarge) || c.pending.has(E.forceDischarge)}
+                @click=${() => c.onToggle(E.forceDischarge)}
+              ></button>
+              ${sliderField({
+                label: t("ctrlForcePower", { v: "" }),
+                min: powerMin,
+                max: powerMax,
+                step: powerStep,
+                value: powerValue,
+                disabled: !power || power.state === "unavailable",
+                onPreview: c.onPowerDraft,
+                onCommit: c.onPowerCommit,
+              })}
+            </div>
+            <div class="force">
+              <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
+              <button
+                class="switch ${on(E.fixedReserve) ? "on" : ""}"
+                role="switch"
+                aria-checked=${on(E.fixedReserve)}
+                aria-label=${t("fixedReserve")}
+                ?disabled=${!st(c, E.fixedReserve) || c.pending.has(E.fixedReserve)}
+                @click=${() => c.onToggle(E.fixedReserve)}
+              ></button>
+              ${sliderField({
+                label: t("fixedReserve"),
+                min: reserveMin,
+                max: reserveMax,
+                step: reserveStep,
+                value: reserveValue,
+                unit: "%",
+                disabled: !reserve || reserve.state === "unavailable",
+                onPreview: c.onReserveDraft,
+                onCommit: c.onReserveCommit,
+              })}
+            </div>
+          </div>`
+        : nothing}
+    </section>
     <div class="seg period" role="group" aria-label=${t("periodToday")}>
       ${(["today", "week", "month"] as const).map(
         (p) => html`<button class=${c.period === p ? "active" : ""} aria-pressed=${c.period === p} @click=${() => c.onPeriod(p)}>${t(p === "today" ? "periodToday" : p === "week" ? "periodWeek" : "periodMonth")}</button>`,

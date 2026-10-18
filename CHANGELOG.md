@@ -17,14 +17,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ### Neu
 - **Tibber-Preiskurve ohne Template.** Ist der Strompreis-Sensor der Tibber-Integration gewählt, holt Maestro die Stundenkurve selbst über `tibber.get_prices`. Der aktuelle Preis bleibt der Sensorstatus. Bei mehreren Wohnungen gilt `app_nickname`. Ein Abruf höchstens alle 15 Minuten; schlägt er fehl, bleibt die letzte Kurve liegen.
-- **Prozentwerte: Regler und Eingabe.** Jede Einstellung in Prozent hat einen Schieberegler und daneben ein Zahlenfeld. Der Regler rastet in einem 10-%-Raster der Spanne ein, das Zahlenfeld behält die feine Schrittweite. Die Greiffläche ist größer, damit der Regler auf dem iPad zu treffen ist.
+- **Prozentwerte: Regler und Eingabe.** Jede Einstellung in Prozent hat einen Schieberegler und daneben ein Zahlenfeld. Die Skala zeigt ganze Zahlen, Anfang und Ende liegen auf dem Raster. Das Zahlenfeld behält die feine Schrittweite.
+- **Entladung und Reserve klappen zu.** Auf Live sind Erzwungene Entladung und Notstromreserve ein Paar, starten zugeklappt und nennen den vollen Namen plus Zustand. Die Regler bleiben einen Tipp entfernt.
+- **Notstrom-Sockel im Akku-Ring.** Ist die Reserve an, ist der Sockel gelb, der Ladestand darüber in der gewohnten Farbe. Unter dem Ring steht der eingestellte Wert.
 
 ### Geändert
 - **Aktualisierungsintervall lässt sich schreiben.** Der Wert kam nicht aus den Regelparametern, der Status blieb `unknown` und jede Eingabe verschwand. Er zeigt jetzt die Sekunden des Coordinators (Standard 30 s, 10–120 s) und stellt den Takt sofort um.
 - **Sensorfelder nutzen die ganze Zeile.** Gewählte Entity-IDs werden nicht mehr auf einen kurzen Rest abgeschnitten. Lange IDs in der Trefferliste und in den Chips brechen um.
+- **Heute, Woche und Monat** stehen kompakt unter dem Regler-Paar und gehören zu den Kacheln darunter. Die letzte Kachel lässt sich auf dem Handy vollständig hochschieben.
 
 ### Hinweise
-- **Neustart nötig.** Danach das Cockpit einmal hart neu laden.
+- **Neustart nötig.** In der Home-Assistant-App den Frontend-Cache zurücksetzen und die App vollständig schließen.
 - Der Preisplan braucht die Kurve. Ohne Tibber-Integration oder ohne passenden Strompreis-Sensor bleibt es bei Sensoren, die `raw_today` / `raw_tomorrow`, `today` / `tomorrow` oder `prices` schon mitbringen.
 
 ---

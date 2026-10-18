@@ -483,6 +483,66 @@ export const styles = css`
   .ring {
     width: 100%;
   }
+  .soc-gauge {
+    position: relative;
+    width: min(100%, 250px);
+  }
+  .soc-disc {
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 1;
+    padding: 8%;
+    border-radius: 50%;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+  }
+  .soc-readout {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(-58%);
+    pointer-events: none;
+  }
+  .soc-readout b {
+    color: var(--text);
+    font-family: inherit;
+    font-size: 40px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .soc-readout span {
+    margin-top: 4px;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .reserve-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    color: var(--text);
+    font: 650 13px/1.2 Inter, system-ui, sans-serif;
+  }
+  .reserve-hint i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 8px var(--warn);
+  }
   .soc-meta {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -607,6 +667,7 @@ export const styles = css`
   }
   @media (prefers-reduced-motion: reduce) {
     .group-head svg,
+    .grip-head svg,
     .gauge-arc {
       transition: none;
     }
@@ -1207,8 +1268,79 @@ export const styles = css`
   .force .slider-field {
     grid-column: 1 / -1;
   }
-  .period {
-    margin: 0 0 4px;
+  .grip {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+  .grip-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+  }
+  .grip-head svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  .grip-head.open svg {
+    transform: rotate(90deg);
+  }
+  .grip-title {
+    font: 700 15px Inter, system-ui, sans-serif;
+  }
+  .grip-state {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--fill);
+    color: var(--muted);
+    font: 650 13px/1.2 Inter, system-ui, sans-serif;
+  }
+  .grip-state.on {
+    color: var(--text);
+    background: var(--accent-wash);
+  }
+  .grip-state.warn {
+    color: var(--text);
+    background: rgba(251, 191, 36, 0.16);
+  }
+  .grip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 16px 16px;
+    border-top: 1px solid var(--stroke);
+  }
+  .grip-body .force {
+    margin: 0;
+    padding-top: 12px;
+  }
+  .seg.period {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    grid-template-columns: none;
+    gap: 0;
+    margin: 22px 0 0;
+    padding: 2px;
+    border-radius: 10px;
+  }
+  .seg.period button {
+    flex: none;
+    padding: 5px 12px;
+    white-space: nowrap;
+  }
+  .seg.period + .group {
+    margin-top: 8px;
   }
   .debug-card {
     margin-top: 0;
@@ -2080,19 +2212,31 @@ export const styles = css`
     background: transparent;
     accent-color: var(--accent);
   }
-  .slider-ticks {
-    display: flex;
-    justify-content: space-between;
-    height: 6px;
-    margin: -6px 14px 0;
+  .slider-scale {
+    position: relative;
+    height: 30px;
+    margin: 2px 14px 0;
     pointer-events: none;
   }
-  .slider-ticks i {
+  .slider-scale span {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: var(--text);
+    font: 650 11px/1.1 Inter, system-ui, sans-serif;
+  }
+  .slider-scale span::before {
+    content: "";
+    display: block;
     width: 2px;
-    height: 6px;
+    height: 8px;
+    margin-bottom: 3px;
     border-radius: 1px;
-    background: var(--muted);
-    opacity: 0.55;
+    background: var(--accent);
   }
   .slider-field input[type="range"]::-webkit-slider-runnable-track {
     height: 8px;
@@ -2328,7 +2472,7 @@ export const styles = css`
       width: auto;
     }
     main {
-      padding: max(16px, env(safe-area-inset-top)) 14px 110px;
+      padding: max(16px, env(safe-area-inset-top)) 14px calc(148px + env(safe-area-inset-bottom));
     }
     .live-top,
     .plan-top,

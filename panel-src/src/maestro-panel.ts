@@ -25,7 +25,7 @@ import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
 import { makeFmt } from "./format";
-import { loadCollapsed, saveCollapsed } from "./groups";
+import { loadCollapsed, loadControlsOpen, saveCollapsed, saveControlsOpen } from "./groups";
 import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
@@ -114,6 +114,7 @@ class MaestroPanel extends LitElement {
   private _resolvedAt = 0;
   private _consumers: Consumer[] = loadConsumers();
   private _collapsed = loadCollapsed();
+  private _controlsOpen = loadControlsOpen();
   private _setupAck = loadSetupAck();
   private _period: Period = "today";
   private _periodSums?: Partial<Record<PeriodKey, number>>;
@@ -688,6 +689,12 @@ class MaestroPanel extends LitElement {
         if (!next.delete(id)) next.add(id);
         this._collapsed = next;
         saveCollapsed(next);
+        this.requestUpdate();
+      },
+      controlsOpen: this._controlsOpen,
+      onToggleControls: () => {
+        this._controlsOpen = !this._controlsOpen;
+        saveControlsOpen(this._controlsOpen);
         this.requestUpdate();
       },
       period: this._period,
