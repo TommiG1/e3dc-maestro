@@ -11,6 +11,26 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.15] – Einrichtung im Cockpit (2026-10-18)
+
+> **Beta.** Inhalt von beta.14 plus die Punkte unten. Die Regelung ändert sich beim Sperren der Entladung.
+
+### Neu
+- **Erste Schritte** stehen auf Live, solange etwas Pflichtiges fehlt: Anlage, Tarif, eingeschaltete Regelung und eine erste Entscheidung. Prognose, Notstromreserve und Verbraucher sind Hinweise. **Verstanden** blendet den fertigen Hinweis aus. Die Liste bleibt unter Einstellungen → Einrichtung.
+- **Optionen ohne eigene Entität** lassen sich im Cockpit setzen: Quellen, Preis-Sensor, Prognose, Tarif-Slots und die Anbindung von Wallbox, EVCC und Wärmepumpe.
+- **Zubau:** Schieber für zusätzlichen Akku und zusätzliche PV, dazu ein Jahres-Chart mit vermiedenem und bisherigem Netzbezug.
+
+### Behoben
+- **Entladesperre hebt das Ladelimit auf.** Beim Schutz der Reserve blieb ein altes Ladelimit auf der E3DC stehen, und PV-Überschuss ging ins Netz statt in den Akku.
+- **Maestro startet wieder**, wenn beim Einrichten der Anlage der RSCP-Eintrag neu geladen wird.
+- Der Zubau-Chart zeichnet sich neu, wenn du den Schieber bewegst.
+
+### Hinweise
+- **Neustart nötig.** Die neuen Panel-Befehle registriert Home Assistant beim Start.
+- Aktualisieren über HACS (Beta-Versionen anzeigen aktivieren), danach Home Assistant neu starten.
+
+---
+
 ## [0.4.0-beta.14] – Anlagen-Sensoren werden eingeschaltet (2026-10-18)
 
 > **Beta.** Inhalt von beta.13 plus der Punkt unten. Die Regelung ist unverändert.
