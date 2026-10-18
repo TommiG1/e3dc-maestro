@@ -96,6 +96,16 @@ export function newConsumerId(): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Server list wins. A browser-only list is published once, when the entry has no list yet. */
+export function consumersFromOptions(
+  raw: unknown,
+  local: Consumer[],
+): { list: Consumer[]; publishLocal: boolean } {
+  if (Array.isArray(raw)) return { list: parseConsumers(raw), publishLocal: false };
+  if (local.length) return { list: local, publishLocal: true };
+  return { list: [], publishLocal: false };
+}
+
 export function loadConsumers(): Consumer[] {
   try {
     return parseConsumers(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));

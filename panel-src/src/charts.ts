@@ -2,6 +2,7 @@ import type ApexChartsType from "apexcharts";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 import type { IstSeries } from "./history";
+import type { ThemeId } from "./theme";
 import {
   chartSlots,
   phaseBands,
@@ -18,16 +19,17 @@ type Opts = ApexChartsType.ApexOptions;
 
 type Surface = { text: string; muted: string; faint: string; bg: string; grid: string; series: string; track: string; mode: "dark" | "light" };
 
-const SURFACES: Record<"dark" | "classic", Surface> = {
+const SURFACES: Record<ThemeId, Surface> = {
   dark: { text: "#e8edf7", muted: "#8b96ad", faint: "#5a6580", bg: "#070b14", grid: "rgba(255,255,255,0.06)", series: "#ffffff", track: "rgba(255,255,255,0.06)", mode: "dark" as const },
   classic: { text: "#152033", muted: "#5b6b80", faint: "#8b97a8", bg: "#eef2f6", grid: "rgba(21,32,51,0.08)", series: "#152033", track: "rgba(21,32,51,0.08)", mode: "light" as const },
+  e3dc: { text: "#4a4a4a", muted: "#6e767c", faint: "#a4aaae", bg: "#f7f7f7", grid: "rgba(30,37,43,0.08)", series: "#4a4a4a", track: "rgba(30,37,43,0.08)", mode: "light" as const },
 };
 
 let surface: Surface = SURFACES.dark;
 
 /** Chart ink follows the panel look. Call this before building options. */
-export function useChartTheme(theme: "dark" | "classic"): void {
-  surface = theme === "classic" ? SURFACES.classic : SURFACES.dark;
+export function useChartTheme(theme: ThemeId): void {
+  surface = SURFACES[theme];
 }
 
 export const COLORS = {

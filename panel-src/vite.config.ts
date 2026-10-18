@@ -11,6 +11,7 @@ export default defineConfig({
     modulePreload: false,
     // ApexCharts alone is ~650 kB minified; it is a lazily loaded chunk.
     chunkSizeWarningLimit: 800,
+    assetsInlineLimit: 81920,
     rollupOptions: {
       input: "src/maestro-panel.ts",
       preserveEntrySignatures: "strict",

@@ -536,6 +536,7 @@ function lookView(c: SettingsCtx): TemplateResult {
   const copy: Record<ThemeId, { title: Key; hint: Key }> = {
     dark: { title: "themeDark", hint: "themeDarkHint" },
     classic: { title: "themeClassic", hint: "themeClassicHint" },
+    e3dc: { title: "themeE3dc", hint: "themeE3dcHint" },
   };
   return html`<div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
     ${THEMES.map(

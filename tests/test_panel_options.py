@@ -83,6 +83,25 @@ def test_rejects_unknown_missing_and_range():
     assert high.value.errors[CONF_BATTERY_CAPACITY_KWH] == "range"
 
 
+def test_flow_consumers_are_stored_without_a_reload():
+    params = SimpleNamespace(battery_capacity_kwh=10)
+    hass, entry, written, _reloaded = _hass({}, {"sensor.wb"}, params)
+    row = {"id": "a", "entityId": "sensor.wb", "name": " Wallbox ", "mode": "separate", "icon": "nope"}
+    result = apply_panel_options(hass, {"flow_consumers": [row, dict(row)]})
+    assert result["reloaded"] is False
+    assert written == []
+    assert entry.options["flow_consumers"] == [
+        {"id": "a", "entityId": "sensor.wb", "name": "Wallbox", "mode": "separate", "icon": "meter"}
+    ]
+
+
+def test_flow_consumers_reject_an_unknown_entity():
+    hass, _, _, _ = _hass({}, set(), SimpleNamespace())
+    with pytest.raises(PanelOptionsError) as err:
+        apply_panel_options(hass, {"flow_consumers": [{"entityId": "sensor.gone", "name": "x", "mode": "included"}]})
+    assert err.value.errors["flow_consumers"] == "unknown_entity"
+
+
 def test_payload_hides_nothing_but_returns_stored_options():
     hass, _, _, _ = _hass({CONF_SOC_SENSOR: "sensor.soc"}, {"sensor.soc"}, None)
     assert panel_options_payload(hass)["options"][CONF_SOC_SENSOR] == "sensor.soc"

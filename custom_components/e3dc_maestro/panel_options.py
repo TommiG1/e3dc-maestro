@@ -179,7 +179,13 @@ _SPECS: dict[str, _Spec] = {
     "sizing_battery_step_kwh": _n(0.5, 10),
     "sizing_max_pv_expansion_kwp": _n(0, 200),
     "sizing_pv_step_kwp": _n(0.5, 10),
+    # Display only. Stored on the entry so every browser shows the same flow.
+    "flow_consumers": ("consumers",),
 }
+
+_DISPLAY_OPTIONS = frozenset({"flow_consumers"})
+_CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
+_CONSUMER_ENTITY = re.compile(r"wallbox|evcc|easee|go-?e", re.IGNORECASE)
 
 
 class PanelOptionsError(Exception):
@@ -238,6 +244,37 @@ def _slot(value: Any) -> str | None:
     return None
 
 
+def _flow_consumers(value: Any, known) -> tuple[list[dict[str, str]] | None, str | None]:
+    """Clean the live-flow consumer list. Empty is valid."""
+    if not isinstance(value, list) or len(value) > 6:
+        return None, "consumers"
+    cleaned: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            return None, "consumers"
+        entity_id = item.get("entityId")
+        mode = item.get("mode")
+        if not isinstance(entity_id, str) or not entity_id.startswith("sensor."):
+            return None, "consumers"
+        if entity_id in seen:
+            continue
+        if mode not in ("included", "separate"):
+            return None, "consumers"
+        if not known(entity_id):
+            return None, "unknown_entity"
+        name = item.get("name")
+        name = name.strip()[:40] if isinstance(name, str) and name.strip() else entity_id
+        icon = item.get("icon")
+        if icon not in _CONSUMER_ICONS:
+            icon = "wallbox" if _CONSUMER_ENTITY.search(entity_id) else "meter"
+        row_id = item.get("id")
+        row_id = row_id[:64] if isinstance(row_id, str) and row_id else entity_id
+        cleaned.append({"id": row_id, "entityId": entity_id, "name": name, "mode": mode, "icon": icon})
+        seen.add(entity_id)
+    return cleaned, None
+
+
 def _check(spec: _Spec, value: Any, known) -> str | None:
     kind = spec[0]
     if kind == "number":
@@ -289,6 +326,13 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             else:
                 cleaned[key] = None
             continue
+        if spec[0] == "consumers":
+            parsed, reason = _flow_consumers(value, known)
+            if reason:
+                errors[key] = reason
+            else:
+                cleaned[key] = parsed
+            continue
         reason = _check(spec, value, known)
         if reason:
             errors[key] = reason
@@ -302,6 +346,23 @@ def _loaded_entry(hass: HomeAssistant):
     return next((entry for entry in entries if entry.state == ConfigEntryState.LOADED), None)
 
 
+def _store_options(hass: HomeAssistant, entry: Any, coordinator: Any, values: dict[str, Any], *, reload: bool) -> None:
+    """Write options. Display settings skip the integration reload."""
+    new_options = dict(entry.options)
+    for key, value in values.items():
+        if value is None:
+            new_options.pop(key, None)
+        else:
+            new_options[key] = value
+    if coordinator is not None:
+        coordinator._skip_reload = not reload
+    try:
+        hass.config_entries.async_update_entry(entry, options=new_options)
+    finally:
+        if coordinator is not None and not reload:
+            coordinator._skip_reload = False
+
+
 def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str, Any]:
     """Validate and store a partial options update for the loaded Maestro entry."""
     cleaned, errors = validate_panel_options(hass, values)
@@ -311,6 +372,13 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
     if entry is None:
         raise PanelOptionsError({"entry": "not_loaded"})
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    display = {key: value for key, value in cleaned.items() if key in _DISPLAY_OPTIONS}
+    live = {key: value for key, value in cleaned.items() if key not in _DISPLAY_OPTIONS}
+    if display:
+        _store_options(hass, entry, coordinator, display, reload=False)
+    if not live:
+        return {"entry_id": entry.entry_id, "reloaded": False}
+    cleaned = live
     needs_reload = coordinator is None or any(
         not hasattr(getattr(coordinator, "_params", None), key) for key in cleaned
     )

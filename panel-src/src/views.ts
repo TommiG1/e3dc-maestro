@@ -195,11 +195,12 @@ export function liveView(c: Ctx): TemplateResult {
             house: num(st(c, E.house)),
             grid: num(st(c, E.grid)),
             battery: bat,
+            soc,
             consumers: c.consumers,
             motion: c.motion,
             onSelect: c.onFlowNode,
             compact: c.mobile,
-            outline: c.theme === "classic",
+            outline: c.theme !== "dark",
             fmt: c.fmt,
             i18n: c.i18n,
           })}

@@ -1,11 +1,11 @@
 /** Panel look. Stored in the browser so a later theme can be added without a new setting. */
-export const THEMES = ["dark", "classic"] as const;
+export const THEMES = ["dark", "classic", "e3dc"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
 const STORAGE_KEY = "e3dc-maestro.theme.v1";
 
 export function parseTheme(raw: unknown): ThemeId {
-  return raw === "classic" ? "classic" : "dark";
+  return raw === "classic" || raw === "e3dc" ? raw : "dark";
 }
 
 export function loadTheme(): ThemeId {

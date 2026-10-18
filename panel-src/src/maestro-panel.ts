@@ -5,6 +5,7 @@ import {
   friendlyName,
   guessIcon,
   includedOverflow,
+  consumersFromOptions,
   loadConsumers,
   MAX_CONSUMERS,
   newConsumerId,
@@ -20,6 +21,7 @@ import { controlsSheet } from "./controls";
 import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
+import maestroLogo from "./maestro-logo.png";
 import { makeFmt } from "./format";
 import { loadCollapsed, saveCollapsed } from "./groups";
 import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
@@ -459,6 +461,7 @@ class MaestroPanel extends LitElement {
   private _setConsumers(next: Consumer[], closePicker = false): void {
     this._consumers = next.slice(0, MAX_CONSUMERS);
     saveConsumers(this._consumers);
+    void this._setOption("flow_consumers", this._consumers, true);
     if (closePicker) {
       this._picking = false;
       this._pickQuery = "";
@@ -565,13 +568,17 @@ class MaestroPanel extends LitElement {
       this._storedOptions = res.options ?? {};
       this._optionsReady = true;
       if (!this._slotsDirty) this._slots = slotsFrom(this._storedOptions.tariff_slots);
+      const stored = consumersFromOptions(this._storedOptions.flow_consumers, this._consumers);
+      this._consumers = stored.list;
+      saveConsumers(stored.list);
+      if (stored.publishLocal) void this._setOption("flow_consumers", stored.list, true);
     } catch (err) {
       this._optionError = this._fault(err);
     }
     this.requestUpdate();
   }
 
-  private async _setOption(key: string, value: unknown): Promise<void> {
+  private async _setOption(key: string, value: unknown, quiet = false): Promise<void> {
     const hass = this._hass;
     if (!hass) return;
     this._pending.add(key);
@@ -586,7 +593,7 @@ class MaestroPanel extends LitElement {
       if (value === null) delete next[key];
       else next[key] = value;
       this._storedOptions = next;
-      this._optionNotice = res.reloaded ? "reload" : "saved";
+      if (!quiet) this._optionNotice = res.reloaded ? "reload" : "saved";
       if (key === "tariff_slots") this._slotsDirty = false;
       if (res.reloaded) {
         this._resolvedAt = 0;
@@ -734,7 +741,7 @@ class MaestroPanel extends LitElement {
       <div class="app">
         <nav class="rail" aria-label="Maestro">
           <div class="logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#06101f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg>
+            <img src=${maestroLogo} alt="Maestro" />
           </div>
           ${SCREENS.map(navButton)}
           <div class="spacer"></div>

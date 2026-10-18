@@ -17,6 +17,12 @@ export const styles = css`
     --bat: #22d3ee;
     --accent: #38bdf8;
     --accent-2: #818cf8;
+    --accent-line: rgba(56, 189, 248, 0.6);
+    --accent-wash: rgba(56, 189, 248, 0.16);
+    --accent-glow: rgba(56, 189, 248, 0.35);
+    --btn-primary-bg: linear-gradient(180deg, rgba(56, 189, 248, 0.35), rgba(56, 189, 248, 0.15));
+    --btn-primary-border: rgba(56, 189, 248, 0.7);
+    --btn-primary-color: var(--text);
     --ok: #34d399;
     --warn: #fbbf24;
     --radius: 20px;
@@ -80,6 +86,44 @@ export const styles = css`
       radial-gradient(700px 520px at 50% 120%, rgba(217, 119, 6, 0.08), transparent 60%),
       var(--bg);
   }
+  :host([theme="e3dc"]) {
+    color-scheme: light;
+    --bg: #f7f7f7;
+    --glass: rgba(30, 37, 43, 0.04);
+    --glass-strong: rgba(30, 37, 43, 0.07);
+    --stroke: rgba(30, 37, 43, 0.1);
+    --stroke-strong: rgba(30, 37, 43, 0.16);
+    --text: #4a4a4a;
+    --muted: #6e767c;
+    --faint: #a4aaae;
+    --accent: #5cc244;
+    --accent-2: #3f9a32;
+    --ok: #5cc244;
+    --accent-line: rgba(92, 194, 68, 0.7);
+    --accent-wash: rgba(92, 194, 68, 0.16);
+    --accent-glow: rgba(92, 194, 68, 0.28);
+    --btn-primary-bg: #5cc244;
+    --btn-primary-border: #5cc244;
+    --btn-primary-color: #ffffff;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --rail: #1e252b;
+    --rail-solid: #1e252b;
+    --btn: #ffffff;
+    --card-bg: #ffffff;
+    --card-highlight: #ffffff;
+    --card-shadow: 0 1px 2px rgba(30, 37, 43, 0.08);
+    --fill: #f3f4f5;
+    --field: #ffffff;
+    --switch-track: rgba(30, 37, 43, 0.16);
+    --tip-bg: #ffffff;
+    --float: #ffffff;
+    --float-shadow: 0 16px 40px rgba(30, 37, 43, 0.14);
+    --scrim: rgba(30, 37, 43, 0.4);
+    --tooltip: #ffffff;
+    font-family: Roboto, Inter, system-ui, sans-serif;
+    background: var(--bg);
+  }
   * {
     box-sizing: border-box;
   }
@@ -121,16 +165,17 @@ export const styles = css`
   .logo {
     width: 44px;
     height: 44px;
-    border-radius: 14px;
+    border-radius: 50%;
     margin-bottom: 18px;
-    background: conic-gradient(from 200deg, var(--accent), var(--accent-2), var(--bat), var(--accent));
-    display: grid;
-    place-items: center;
-    box-shadow: 0 8px 30px rgba(56, 189, 248, 0.35);
+    overflow: hidden;
+    background: none;
+    box-shadow: none;
   }
-  .logo svg {
-    width: 24px;
-    height: 24px;
+  .logo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
   }
   .nav-btn {
     width: 68px;
@@ -164,6 +209,28 @@ export const styles = css`
   }
   .nav-btn.active svg {
     color: var(--accent);
+  }
+  :host([theme="e3dc"]) .rail {
+    color: #d7dee3;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  :host([theme="e3dc"]) .nav-btn {
+    color: #c5ced4;
+  }
+  :host([theme="e3dc"]) .nav-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  :host([theme="e3dc"]) .nav-btn.active {
+    color: #5cc244;
+    background: transparent;
+    box-shadow: inset 3px 0 0 #5cc244;
+  }
+  :host([theme="e3dc"]) .logo {
+    border-radius: 50%;
+    background: none;
+    box-shadow: none;
   }
   .spacer {
     flex: 1;
@@ -259,15 +326,16 @@ export const styles = css`
     font: 600 13px Inter, system-ui, sans-serif;
   }
   .btn:hover {
-    border-color: rgba(56, 189, 248, 0.6);
+    border-color: var(--accent-line);
   }
   .btn svg {
     width: 16px;
     height: 16px;
   }
   .btn.primary {
-    border-color: rgba(56, 189, 248, 0.7);
-    background: linear-gradient(180deg, rgba(56, 189, 248, 0.35), rgba(56, 189, 248, 0.15));
+    border-color: var(--btn-primary-border);
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-color);
   }
   .btn:disabled {
     opacity: 0.6;
@@ -383,7 +451,7 @@ export const styles = css`
   }
   .icon-btn:hover {
     color: var(--text);
-    border-color: rgba(56, 189, 248, 0.6);
+    border-color: var(--accent-line);
   }
   .flow-node {
     cursor: pointer;
@@ -1325,7 +1393,7 @@ export const styles = css`
     width: 380px;
     height: 380px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(56, 189, 248, 0.28), transparent 65%);
+    background: radial-gradient(circle, var(--accent-glow), transparent 65%);
     pointer-events: none;
   }
   .phase-name {
@@ -1761,6 +1829,9 @@ export const styles = css`
   .theme-choice .swatch.classic {
     background: linear-gradient(145deg, #f7fbff, #d5e4f2 68%, #0284c7);
   }
+  .theme-choice .swatch.e3dc {
+    background: linear-gradient(145deg, #1e252b 0 38%, #f7f7f7 38% 72%, #5cc244 72%);
+  }
   .theme-choice .txt {
     display: flex;
     flex-direction: column;
@@ -2060,8 +2131,8 @@ export const styles = css`
   }
   .icon-pick button.on {
     color: var(--text);
-    border-color: rgba(56, 189, 248, 0.7);
-    background: rgba(56, 189, 248, 0.16);
+    border-color: var(--accent-line);
+    background: var(--accent-wash);
   }
   .icon-pick svg {
     width: 18px;
@@ -2085,8 +2156,12 @@ export const styles = css`
     cursor: pointer;
   }
   .seg button.on {
-    background: rgba(56, 189, 248, 0.18);
+    background: var(--accent-wash);
     color: var(--text);
+  }
+  :host([theme="e3dc"]) .seg button.on {
+    background: #5cc244;
+    color: #ffffff;
   }
   .btn.add,
   .btn.ghost {

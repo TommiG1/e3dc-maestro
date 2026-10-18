@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consumerUnavailable, includedOverflow, newConsumerId, parseConsumers, wattsOf, type FlowConsumer } from "./consumers";
+import { consumerUnavailable, consumersFromOptions, includedOverflow, newConsumerId, parseConsumers, wattsOf, type Consumer, type FlowConsumer } from "./consumers";
 import type { HassEntity } from "./entities";
 
 const entity = (state: string, unit: string): HassEntity => ({
@@ -16,6 +16,26 @@ const flow = (watts: number, mode: FlowConsumer["mode"]): FlowConsumer => ({
   mode,
   missing: false,
   icon: "meter",
+});
+
+const stored = (entityId: string): Consumer => ({
+  id: "a",
+  entityId,
+  name: "Wallbox",
+  mode: "separate",
+  icon: "wallbox",
+});
+
+describe("consumersFromOptions", () => {
+  it("uses the stored list on every device and publishes a local list only once", () => {
+    const local = [stored("sensor.local")];
+    expect(consumersFromOptions([stored("sensor.server")], local)).toEqual({
+      list: [stored("sensor.server")],
+      publishLocal: false,
+    });
+    expect(consumersFromOptions(undefined, local)).toEqual({ list: local, publishLocal: true });
+    expect(consumersFromOptions([], local)).toEqual({ list: [], publishLocal: false });
+  });
 });
 
 describe("newConsumerId", () => {
