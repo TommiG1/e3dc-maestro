@@ -11,6 +11,21 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.4.0-beta.14] – Anlagen-Sensoren werden eingeschaltet (2026-10-18)
+
+> **Beta.** Inhalt von beta.13 plus der Punkt unten. Die Regelung ist unverändert.
+
+### Geändert
+- **Sieben RSCP-Entitäten der Anlage schaltet Maestro beim Start ein**, wenn hacs-e3dc sie nur wegen des Standards deaktiviert hat: `system-derate-power`, `system-ac-maxpower`, `system-pv-derated`, `pset-limit-discharge-minimum`, `battery-module-soh-reported`, `system-rescue-battery-enabled`, `pset-powersaving-enabled`. Danach wird der RSCP-Eintrag einmal neu geladen, damit die Entitäten Zustände liefern. Eine Abschaltung, die du selbst gesetzt hast, bleibt aus. Fehlt eine Entität in der Registry, passiert nichts.
+
+### Hinweise
+- **Neustart nötig.** Die Aktivierung läuft im Setup der Integration.
+- `additional-production` legt hacs-e3dc nur an, wenn eine externe Quelle vorhanden ist. `system-saved-errors` (Fehlermeldung in der Hero) ist [hacs-e3dc#373](https://github.com/torbennehmer/hacs-e3dc/pull/373) und noch nicht im Release von hacs-e3dc.
+- Phasen L1–L3 liefert hacs-e3dc weiterhin nicht. Offen ist [hacs-e3dc#401](https://github.com/torbennehmer/hacs-e3dc/pull/401).
+- Aktualisieren über HACS (Beta-Versionen anzeigen aktivieren), danach Home Assistant neu starten.
+
+---
+
 ## [0.4.0-beta.13] – Anlage im Cockpit, Netzladung endet im Normalmodus (2026-10-18)
 
 > **Beta.** Inhalt von beta.12 plus die Punkte unten. Die Regelung ändert sich beim Beenden einer Netzladung.
