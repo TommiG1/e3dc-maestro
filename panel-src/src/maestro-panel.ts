@@ -36,7 +36,10 @@ const NODE_META = {
   bat: { entity: "battery" as const, color: "#22d3ee", label: "nodeBatCharge" as const },
 };
 import { checkClassic, classicErrorText, createClassic, type ClassicStatus } from "./classic";
-import { CLASSIC_DASHBOARD, isSettingsArea, settingsHeading, settingsView } from "./settings";
+import { loadSetupAck, saveSetupAck } from "./onboarding";
+import { slotsFrom, type Slot } from "./options";
+import type { OptionCtx } from "./options-view";
+import { CLASSIC_DASHBOARD, resolveSettingsArea, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
@@ -65,7 +68,7 @@ const icon = (paths: string, cls = "") =>
 const readLocation = (): { screen: Screen; settingsGroup?: string; plantGroup?: string } => {
   const [rawScreen, rawGroup] = location.hash.slice(1).split("/");
   const screen = SCREENS.some((s) => s.id === rawScreen) ? (rawScreen as Screen) : "live";
-  const settingsGroup = screen === "settings" && isSettingsArea(rawGroup) ? rawGroup : undefined;
+  const settingsGroup = screen === "settings" ? resolveSettingsArea(rawGroup) : undefined;
   const plantGroup = screen === "plant" && isPlantRoom(rawGroup) ? rawGroup : undefined;
   return { screen, settingsGroup, plantGroup };
 };
@@ -107,6 +110,7 @@ class MaestroPanel extends LitElement {
   private _resolvedAt = 0;
   private _consumers: Consumer[] = loadConsumers();
   private _collapsed = loadCollapsed();
+  private _setupAck = loadSetupAck();
   private _period: Period = "today";
   private _periodSums?: Partial<Record<PeriodKey, number>>;
   private _debugOpen = false;
@@ -114,21 +118,46 @@ class MaestroPanel extends LitElement {
   private _pickQuery = "";
   private _focusConsumers = false;
   private _classic?: ClassicStatus;
+  private _storedOptions: Record<string, unknown> = {};
+  private _optionsLoaded = false;
+  private _optionsReady = false;
+  private _optionError?: string;
+  private _optionNotice?: string;
+  private _optionQuery: Record<string, string> = {};
+  private _slots: Slot[] = [];
+  private _slotsDirty = false;
   private _phasePoints: Record<string, Point[]> = {};
   private _phaseHistory: "idle" | "loading" | "ready" | "error" = "idle";
   private _phaseTicket = 0;
+  private _watchSig = "";
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
+  // Attribute-only updates (the sizing scenario keeps its state and changes the monthly
+  // series) must count too, so the signature includes last_updated and those attributes.
   set hass(hass: Hass) {
     this._stats.hassUpdates++;
     const prev = this._hass;
     this._hass = hass;
     if (!prev || this._missingKeys(hass).length) void this._resolveEntities();
-    if (!prev || prev.language !== hass.language || watched().some((id) => prev.states[id] !== hass.states[id])) {
+    const sig = this._watchSignature(hass);
+    if (!prev || prev.language !== hass.language || sig !== this._watchSig) {
+      this._watchSig = sig;
       this.requestUpdate();
     } else if (DEBUG) {
       this.requestUpdate();
     }
+  }
+
+  private _watchSignature(hass: Hass): string {
+    let sig = "";
+    for (const id of watched()) {
+      const entity = hass.states[id];
+      const stamp = entity ? ((entity as { last_updated?: string }).last_updated ?? entity.last_changed) : "";
+      sig += `${id}:${entity?.state ?? ""}:${stamp};`;
+    }
+    const scenario = hass.states[E.sizingScenario]?.attributes;
+    if (scenario) sig += JSON.stringify(scenario.slider_battery_kwh) + JSON.stringify(scenario.slider_pv_kwp) + JSON.stringify(scenario.scenario_monthly_avoided_kwh);
+    return sig;
   }
   get hass(): Hass | undefined {
     return this._hass;
@@ -158,6 +187,10 @@ class MaestroPanel extends LitElement {
     this.addEventListener("chart-error", this._onChartError as EventListener);
     window.addEventListener("keydown", this._onKey);
     window.addEventListener("popstate", this._onPop);
+    const rawGroup = location.hash.slice(1).split("/")[1];
+    if (this._screen === "settings" && rawGroup && this._settingsGroup && rawGroup !== this._settingsGroup) {
+      history.replaceState(null, "", `#settings/${this._settingsGroup}`);
+    }
     this._motion = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (this._motion) this._flowRaf = requestAnimationFrame(this._animateFlows);
   }
@@ -514,6 +547,59 @@ class MaestroPanel extends LitElement {
     this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
   }
 
+  private _fault(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (err && typeof err === "object" && "message" in err) {
+      const message = (err as { message?: unknown }).message;
+      if (typeof message === "string" && message) return message;
+    }
+    return String(err);
+  }
+
+  private async _loadOptions(): Promise<void> {
+    const hass = this._hass;
+    if (!hass || this._optionsLoaded) return;
+    this._optionsLoaded = true;
+    try {
+      const res = await hass.callWS<{ options?: Record<string, unknown> }>({ type: "e3dc_maestro/panel_options" });
+      this._storedOptions = res.options ?? {};
+      this._optionsReady = true;
+      if (!this._slotsDirty) this._slots = slotsFrom(this._storedOptions.tariff_slots);
+    } catch (err) {
+      this._optionError = this._fault(err);
+    }
+    this.requestUpdate();
+  }
+
+  private async _setOption(key: string, value: unknown): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    this._pending.add(key);
+    this._optionError = undefined;
+    this.requestUpdate();
+    try {
+      const res = await hass.callWS<{ reloaded?: boolean }>({
+        type: "e3dc_maestro/panel_options/set",
+        values: { [key]: value },
+      });
+      const next = { ...this._storedOptions };
+      if (value === null) delete next[key];
+      else next[key] = value;
+      this._storedOptions = next;
+      this._optionNotice = res.reloaded ? "reload" : "saved";
+      if (key === "tariff_slots") this._slotsDirty = false;
+      if (res.reloaded) {
+        this._resolvedAt = 0;
+        void this._resolveEntities();
+      }
+    } catch (err) {
+      this._optionError = this._fault(err);
+    } finally {
+      this._pending.delete(key);
+      this.requestUpdate();
+    }
+  }
+
   // ------------------------------------------------------------ render
 
   protected render(): TemplateResult {
@@ -523,6 +609,30 @@ class MaestroPanel extends LitElement {
     const i18n = makeI18n(hass.language);
     const fmt = makeFmt(hass.language);
     const { t } = i18n;
+    const options: OptionCtx = {
+      hass,
+      i18n,
+      isAdmin: hass.user?.is_admin === true,
+      options: this._storedOptions,
+      ready: this._optionsReady,
+      error: this._optionError,
+      notice: this._optionNotice,
+      query: this._optionQuery,
+      pending: this._pending,
+      slots: this._slots,
+      onQuery: (key, query) => {
+        this._optionQuery = { ...this._optionQuery, [key]: query };
+        this.requestUpdate();
+      },
+      onChange: (key, value) => void this._setOption(key, value),
+      onSlots: (slots) => {
+        this._slots = slots;
+        this._slotsDirty = true;
+        this.requestUpdate();
+      },
+      onSaveSlots: () => void this._setOption("tariff_slots", this._slots),
+      onRunSizing: () => this._press(E.btnSizing),
+    };
     const ctx: Ctx = {
       hass,
       i18n,
@@ -565,6 +675,12 @@ class MaestroPanel extends LitElement {
       pending: this._pending,
       groupId: this._screen === "plant" ? this._plantGroup : this._settingsGroup,
       onOpenGroup: (id) => this._openSettingsGroup(id),
+      setupAck: this._setupAck,
+      onAckSetup: () => {
+        this._setupAck = true;
+        saveSetupAck();
+        this.requestUpdate();
+      },
       onOpenRoom: (id: string) => this._openPlantRoom(id),
       onOpenClassic: () => this._openClassic(),
       classic: this._classic,
@@ -596,6 +712,7 @@ class MaestroPanel extends LitElement {
       onTheme: (theme) => this._setTheme(theme),
       phasePoints: this._phasePoints,
       phaseHistory: this._phaseHistory,
+      options,
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
     const settingsGroup = this._screen === "settings" ? settingsHeading(this._settingsGroup) : undefined;
@@ -750,6 +867,7 @@ class MaestroPanel extends LitElement {
       const main = this.renderRoot.querySelector("main");
       if (main && !this._focusConsumers) main.scrollTop = 0;
     }
+    void this._loadOptions();
     if (this._screen === "settings" && this._settingsGroup === CLASSIC_DASHBOARD.id && !this._classic) {
       void this._checkClassic();
     }

@@ -311,7 +311,7 @@ async def test_websocket_command_registered_once(ha_frontend, monkeypatch):
     panel.async_unregister_panel(hass)
     await panel.async_register_panel(hass)
 
-    assert registered == [panel._ws_panel_entities]
+    assert registered == [panel._ws_panel_entities, panel._ws_panel_options, panel._ws_panel_options_set]
 
 
 def test_panel_entity_keys_exist_in_platforms():
@@ -330,11 +330,13 @@ def test_panel_entity_keys_exist_in_platforms():
 def test_settings_group_keys_exist_on_platforms():
     """Every row in the settings screen must be a real number, switch, select or button."""
     src = (ROOT / "panel-src" / "src" / "settings.ts").read_text(encoding="utf-8")
-    groups = re.search(r"export const SETTINGS_GROUPS(.*?)\n\];", src, re.S)
+    groups = re.search(r"export const SETTINGS_GROUPS\b.*?= \[(.*?)\n\];", src, re.S)
     assert groups, "SETTINGS_GROUPS not found"
-    blocks = re.findall(r"rows: \[(.*?)\]", groups.group(1), re.S)
-    assert blocks, "SETTINGS_GROUPS rows not found"
-    keys = [key for block in blocks for key in re.findall(r'"([a-z0-9_]+)"', block)]
+    keys = [
+        key
+        for block in re.findall(r"\[((?:\s*\"[a-z0-9_]+\",?)+)\s*\]", groups.group(1))
+        for key in re.findall(r'"([a-z0-9_]+)"', block)
+    ]
     assert len(keys) == len(set(keys))
     blob = "\n".join(
         (ROOT / "custom_components" / "e3dc_maestro" / name).read_text(encoding="utf-8")

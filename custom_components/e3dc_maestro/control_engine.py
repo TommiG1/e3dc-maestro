@@ -154,6 +154,8 @@ class MaestroParams:
     hp_max_price: float = 0.15
     hp_min_run_minutes: int = 20
     hp_min_pause_minutes: int = 15
+    hp_time_start: str = "06:00"
+    hp_time_end: str = "22:00"
     # Failsafe
     watchdog_timeout: int = 10
     # A1: SoC hysteresis (applied in coordinator before calling decide)
@@ -2216,8 +2218,8 @@ def hp_desired_state(
         return None
 
     now_time = now.time()
-    start = time.fromisoformat(params.__dict__.get("hp_time_start", "06:00"))
-    end = time.fromisoformat(params.__dict__.get("hp_time_end", "22:00"))
+    start = time.fromisoformat(params.hp_time_start)
+    end = time.fromisoformat(params.hp_time_end)
     in_window = start <= now_time <= end
 
     surplus = state.pv_power - state.house_power

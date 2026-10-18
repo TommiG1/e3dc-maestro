@@ -106,6 +106,43 @@ const nowMarker = (label: string) => ({
   },
 });
 
+/** Twelve finite monthly values, or nothing when the series is missing. */
+export function asMonths(value: unknown): number[] | undefined {
+  if (!Array.isArray(value) || value.length !== 12) return undefined;
+  const months = value.map((item) => (typeof item === "number" && Number.isFinite(item) ? item : Number.NaN));
+  return months.some((item) => Number.isNaN(item)) ? undefined : months;
+}
+
+/** Area for avoided import and a line for the baseline, one point per month. */
+export function sizingYearOptions(language: string, avoided: number[], baseline: number[], avoidedName: string, baselineName: string): Opts {
+  const months = Array.from({ length: 12 }, (_, index) =>
+    new Intl.DateTimeFormat(language || "de", { month: "short" }).format(new Date(2024, index, 1)),
+  );
+  return withBase({
+    chart: { type: "line", height: 260 },
+    series: [
+      { name: avoidedName, type: "area", data: avoided },
+      { name: baselineName, type: "line", data: baseline },
+    ],
+    colors: [COLORS.bat, COLORS.gridIn],
+    stroke: { curve: "smooth", width: [2.5, 1.5] },
+    fill: {
+      type: ["gradient", "solid"],
+      gradient: { shadeIntensity: 0.2, opacityFrom: 0.45, opacityTo: 0.02, stops: [0, 100] },
+    },
+    xaxis: {
+      categories: months,
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      min: 0,
+      title: { text: "kWh" },
+      labels: { formatter: (value: number) => String(Math.round(value)) },
+    },
+  });
+}
+
 const xaxis = (extra: Obj = {}) => ({
   type: "datetime",
   labels: { datetimeUTC: false, format: "HH:mm" },

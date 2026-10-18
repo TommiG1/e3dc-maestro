@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { SETTING_TIPS } from "./setting-tips";
-import { PLAN_CONTROLS, SETTINGS_GROUPS } from "./settings";
+import { PLAN_CONTROLS, SETTINGS_GROUPS, resolveSettingsArea } from "./settings";
 
 describe("SETTINGS_GROUPS", () => {
   const rows = SETTINGS_GROUPS.flatMap((group) => group.rows);
 
   it("lists each setting once", () => {
     expect(new Set(rows).size).toBe(rows.length);
+  });
+
+  it("follows the setup order and keeps old links", () => {
+    expect(SETTINGS_GROUPS.map((group) => group.id)).toEqual([
+      "plant",
+      "safety",
+      "tariff",
+      "pv",
+      "loads",
+      "auto",
+      "system",
+    ]);
+    expect(resolveSettingsArea("hardware")).toBe("plant");
+    expect(resolveSettingsArea("flex")).toBe("loads");
+    expect(resolveSettingsArea("classic")).toBe("classic");
+    expect(resolveSettingsArea("sizing")).toBe("sizing");
+    expect(resolveSettingsArea("setup")).toBe("setup");
+    expect(resolveSettingsArea("nope")).toBeUndefined();
   });
 
   it("gives every area its own id and icon", () => {

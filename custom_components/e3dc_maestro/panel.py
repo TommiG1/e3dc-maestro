@@ -12,6 +12,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
+from .panel_options import (
+    WS_PANEL_OPTIONS,
+    WS_PANEL_OPTIONS_SET,
+    ws_panel_options,
+    ws_panel_options_set,
+)
 from .const import (
     E3DC_RSCP_DOMAIN,
     CONF_FORCE_DISCHARGE_POWER_W,
@@ -84,6 +90,12 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "tomorrowEnd": ("sensor", "tomorrow_charge_end"),
     "autoStrategy": ("sensor", "auto_active_strategy"),
     "autoSaving": ("sensor", "auto_estimated_savings"),
+    "targetCharge": ("sensor", "target_charge_power"),
+    "sizingStatus": ("sensor", "sizing_status"),
+    "sizingMatrix": ("sensor", "sizing_matrix"),
+    "sizingScenario": ("sensor", "sizing_scenario"),
+    "sizingInverter": ("binary_sensor", "sizing_inverter_upgrade_needed"),
+    "btnSizing": ("button", "run_sizing"),
     "saving": ("sensor", "pv_ersparnis_heute"),
     "selfUse": ("sensor", "eigenverbrauch_heute"),
     "importToday": ("sensor", "grid_draw_today"),
@@ -483,6 +495,20 @@ def _ws_panel_entities(hass: HomeAssistant, connection: Any, msg: dict[str, Any]
     connection.send_result(msg["id"], panel_entities(hass))
 
 
+@websocket_api.websocket_command({vol.Required("type"): WS_PANEL_OPTIONS})
+@callback
+def _ws_panel_options(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    ws_panel_options(hass, connection, msg)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_PANEL_OPTIONS_SET, vol.Required("values"): dict}
+)
+@callback
+def _ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    ws_panel_options_set(hass, connection, msg)
+
+
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Add the Maestro panel to the sidebar (once, for all users).
 
@@ -491,6 +517,8 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     if not hass.data.get(_WS_FLAG):
         # HA offers no way to unregister a command, so it stays across entry reloads.
         websocket_api.async_register_command(hass, _ws_panel_entities)
+        websocket_api.async_register_command(hass, _ws_panel_options)
+        websocket_api.async_register_command(hass, _ws_panel_options_set)
         hass.data[_WS_FLAG] = True
     if hass.data.get(_PANEL_FLAG):
         return

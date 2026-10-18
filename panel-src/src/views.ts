@@ -21,6 +21,8 @@ import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
 import { downloadCsv } from "./csv";
+import { setupBanner } from "./onboarding-view";
+import type { OptionCtx } from "./options-view";
 import { planControls } from "./settings";
 import {
   parseSlots,
@@ -53,6 +55,8 @@ export interface Ctx {
   onToggleGroup: (id: string) => void;
   groupId?: string;
   onOpenGroup: (id: string) => void;
+  setupAck: boolean;
+  onAckSetup: () => void;
   onOpenRoom: (id: string) => void;
   onOpenClassic: () => void;
   classic?: ClassicStatus;
@@ -79,6 +83,7 @@ export interface Ctx {
   onTheme: (theme: ThemeId) => void;
   phasePoints?: Readonly<Record<string, Point[]>>;
   phaseHistory?: "idle" | "loading" | "ready" | "error";
+  options: OptionCtx;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -172,6 +177,7 @@ export function liveView(c: Ctx): TemplateResult {
   };
 
   return html`
+    ${setupBanner(c)}
     <div class="grid live-top">
       <div class="card">
         <div class="card-head">
@@ -471,6 +477,39 @@ export function planView(c: Ctx): TemplateResult {
     ${planControls(c)}`;
 }
 
+const autoText = (value: unknown): string => {
+  if (typeof value === "string" && value) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "1" : "0";
+  return "–";
+};
+
+function autoRows(c: Ctx): TemplateResult {
+  const { t } = c.i18n;
+  const a = attrs(c, E.autoStrategy);
+  const overrides = a.overrides && typeof a.overrides === "object" ? (a.overrides as Record<string, unknown>) : {};
+  const names = Object.keys(overrides);
+  const signed = (label: string, value: unknown, digits: number, unit: string) =>
+    infoRow(label, `${c.fmt.n(n(value), digits)} ${unit}`);
+  return html`
+    ${infoRow(t("autoTitle"), shown(st(c, E.autoStrategy)))}
+    ${infoRow(t("autoObjective"), autoText(a.objective))}
+    ${infoRow(t("autoLastRun"), typeof a.last_run === "string" ? c.fmt.dayTime(a.last_run) : "–")}
+    ${infoRow(t("autoFallback"), a.fallback === true ? t("optYes") : a.fallback === false ? t("optNo") : "–")}
+    ${typeof a.fallback_reason === "string" && a.fallback_reason ? infoRow(t("autoReason"), a.fallback_reason) : nothing}
+    ${infoRow(t("autoGrid"), autoText(a.grid_size))}
+    ${infoRow(t("autoSaving"), `${c.fmt.n(num(st(c, E.autoSaving)), 2)} €`)}
+    ${signed(t("autoDeltaDraw"), a.delta_grid_draw_kwh, 2, "kWh")}
+    ${signed(t("autoDeltaFeed"), a.delta_grid_feed_in_kwh, 2, "kWh")}
+    ${signed(t("autoDeltaCurtail"), a.delta_curtailed_kwh, 2, "kWh")}
+    ${signed(t("autoDeltaSelf"), n(a.delta_self_sufficiency) !== undefined ? (n(a.delta_self_sufficiency) as number) * 100 : undefined, 1, "%")}
+    ${names.length
+      ? html`<div class="sub">${t("autoOverrides")}</div>${names.map((key) => infoRow(key, autoText(overrides[key])))}`
+      : a.fallback === false && typeof a.last_run === "string"
+        ? html`<p class="sub">${t("autoNone")}</p>`
+        : nothing}`;
+}
+
 // ---------------------------------------------------------------- Decision
 
 export function decisionView(c: Ctx): TemplateResult {
@@ -482,7 +521,7 @@ export function decisionView(c: Ctx): TemplateResult {
   const stamp = typeof d.timestamp === "string" ? c.fmt.time(d.timestamp) : undefined;
   const tags = [
     targetSoc !== undefined ? t("tagTargetSoc", { v: Math.round(targetSoc) }) : null,
-    (n(d.target_charge_power) ?? 0) > 0 ? t("tagTargetPower", { v: c.fmt.w(n(d.target_charge_power)) }) : null,
+    t("tagTargetPower", { v: c.fmt.w(n(d.target_charge_power) ?? num(st(c, E.targetCharge)) ?? 0) }),
     d.battery_priority === true ? t("tagBatteryPriority") : null,
     stamp ? t("tagSince", { t: stamp }) : null,
   ].filter((x): x is string => !!x);
@@ -513,6 +552,9 @@ export function decisionView(c: Ctx): TemplateResult {
         <div class="sub lim-sub">${t("limitsSub")}</div>
         <div class="limits">
           ${limit(t("limitCharge"), chargeSoll, chargeSent)}
+          <div class="limit-row">
+            <div class="lbl"><span>${t("targetPower")}</span><span>${c.fmt.w(n(d.target_charge_power) ?? num(st(c, E.targetCharge)) ?? 0)}</span></div>
+          </div>
           ${limit(t("limitDischarge"), dischargeSoll, dischargeSent)}
           ${targetSoc !== undefined
             ? html`<div class="limit-row">
@@ -562,10 +604,7 @@ export function decisionView(c: Ctx): TemplateResult {
       </div>
       <div class="card">
         <h3>${t("autoTitle")}</h3>
-        <div class="rows">
-          ${infoRow(t("autoTitle"), shown(st(c, E.autoStrategy)))}
-          ${infoRow(t("autoSaving"), `${c.fmt.n(num(st(c, E.autoSaving)), 2)} €`)}
-        </div>
+        <div class="rows">${autoRows(c)}</div>
       </div>
     </div>
     <section class="group">

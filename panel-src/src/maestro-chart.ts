@@ -6,6 +6,7 @@ type Opts = ApexChartsType.ApexOptions;
 interface ChartApi {
   render(): Promise<void>;
   updateOptions(o: Opts, redraw?: boolean, animate?: boolean): Promise<unknown>;
+  updateSeries(series: unknown, animate?: boolean): Promise<unknown>;
   zoomX(min: number, max: number): void;
   destroy(): void;
 }
@@ -121,6 +122,7 @@ export class MaestroChart extends LitElement {
 
     if (this._chart) {
       await this._chart.updateOptions(opts, false, false);
+      if (opts.series) await this._chart.updateSeries(opts.series, false);
     } else {
       this._chart = new Apex(this, opts);
       await this._chart.render();

@@ -1518,6 +1518,168 @@ export const styles = css`
     font-size: 12px;
     color: var(--muted);
   }
+  .ladder {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 16px 16px 8px;
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    background: var(--glass);
+  }
+  .ladder-head h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+  .ladder-head p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .ladder-band h4 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ladder-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ladder-step {
+    border: 1px solid var(--stroke);
+    background: transparent;
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .ladder-step.on {
+    border-color: var(--accent);
+    background: var(--glass-strong);
+  }
+  .settings-section h3 {
+    margin: 16px 0 2px;
+    font-size: 15px;
+  }
+  .settings-section .sub {
+    margin: 0 0 8px;
+  }
+  .setup-card {
+    margin-bottom: 18px;
+  }
+  .setup-card h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+  .setup-progress {
+    margin: 12px 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .setup-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .setup-step {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+  }
+  .setup-step b {
+    font-size: 15px;
+  }
+  .setup-step .tag {
+    margin-left: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .setup-step p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .setup-step .sub {
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .setup-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--muted);
+    border: 1px solid var(--stroke);
+  }
+  .setup-mark.done {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+    background: color-mix(in srgb, var(--ok) 16%, transparent);
+  }
+  .setup-mark.todo {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+    background: color-mix(in srgb, var(--warn) 16%, transparent);
+  }
+  .setup-done {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin: 0 0 18px;
+    padding: 8px 12px 8px 8px;
+    border-radius: 14px;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+    color: var(--text);
+  }
+  .setup-done-open {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .setup-done .btn {
+    flex: none;
+  }
+  .setup-done b,
+  .setup-done span span {
+    display: block;
+  }
+  .setup-done span span {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 2px;
+  }
   .settings-tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -1706,6 +1868,26 @@ export const styles = css`
   }
   .setting-num input {
     width: 7.5rem;
+  }
+  .setting-row {
+    flex-wrap: wrap;
+  }
+  .setting-num.range {
+    flex: 1 1 180px;
+    min-width: 180px;
+  }
+  .setting-num.range input[type="range"] {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    accent-color: var(--accent);
+  }
+  .setting-num.range b {
+    min-width: 5.5rem;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 650;
   }
   .setting-num span {
     color: var(--muted);
@@ -2037,5 +2219,68 @@ export const styles = css`
     .phase-name {
       font-size: 28px;
     }
+  }
+  .opt-entity,
+  .opt-action,
+  .opt-slot-fields,
+  .opt-actions,
+  .opt-top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .opt-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow: auto;
+    width: 100%;
+  }
+  .opt-choices button,
+  .opt-days button {
+    text-align: left;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+  .opt-days {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .opt-days button.on {
+    border-color: var(--accent);
+  }
+  .opt-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .slot-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--stroke);
+    border-radius: 16px;
+    margin-bottom: 10px;
+  }
+  .opt-slot-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .opt-entity input,
+  .opt-action input,
+  .opt-slot-fields input,
+  .opt-slot-fields select {
+    min-width: 0;
   }
 `;
