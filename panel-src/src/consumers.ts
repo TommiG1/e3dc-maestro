@@ -5,6 +5,8 @@ export const WALLBOX_ENTITY = "sensor.e3dc_maestro_wallbox_leistung";
 export const MAX_CONSUMERS = 6;
 const STORAGE_KEY = "e3dc-maestro.consumers.v1";
 const OVERFLOW_W = 50;
+/** The mismatch has to last this long. A late house reading must not flash the warning. */
+export const OVERFLOW_HOLD_MS = 10_000;
 
 export type ConsumerMode = "included" | "separate";
 
@@ -135,6 +137,18 @@ export function includedOverflow(house: number | undefined, items: FlowConsumer[
   if (house === undefined) return false;
   const sum = items.filter((i) => i.mode === "included").reduce((total, i) => total + Math.max(0, i.watts), 0);
   return sum > house + OVERFLOW_W;
+}
+
+/** Show the warning only after the mismatch has stayed true for the hold time. */
+export function overflowHeld(
+  active: boolean,
+  since: number | undefined,
+  now: number,
+  holdMs = OVERFLOW_HOLD_MS,
+): { show: boolean; since: number | undefined } {
+  if (!active) return { show: false, since: undefined };
+  const started = since ?? now;
+  return { show: now - started >= holdMs, since: started };
 }
 
 export function powerSensorChoices(hass: Hass, taken: ReadonlySet<string>, query: string): { id: string; name: string }[] {

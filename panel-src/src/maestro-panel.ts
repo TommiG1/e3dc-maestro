@@ -5,6 +5,8 @@ import {
   friendlyName,
   guessIcon,
   includedOverflow,
+  OVERFLOW_HOLD_MS,
+  overflowHeld,
   consumersFromOptions,
   loadConsumers,
   MAX_CONSUMERS,
@@ -132,6 +134,8 @@ class MaestroPanel extends LitElement {
   private _phaseHistory: "idle" | "loading" | "ready" | "error" = "idle";
   private _phaseTicket = 0;
   private _watchSig = "";
+  private _overflowSince?: number;
+  private _overflowTimer?: number;
 
   // HA sets `hass` on every state change in the house; only re-render for our entities.
   // Attribute-only updates (the sizing scenario keeps its state and changes the monthly
@@ -201,6 +205,7 @@ class MaestroPanel extends LitElement {
     super.disconnectedCallback();
     this._mq.removeEventListener("change", this._onMq);
     window.clearInterval(this._timer);
+    window.clearTimeout(this._overflowTimer);
     cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
     window.removeEventListener("keydown", this._onKey);
@@ -458,6 +463,19 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private _heldOverflow(active: boolean): boolean {
+    const now = Date.now();
+    const held = overflowHeld(active, this._overflowSince, now);
+    this._overflowSince = held.since;
+    window.clearTimeout(this._overflowTimer);
+    this._overflowTimer = undefined;
+    if (held.since !== undefined && !held.show) {
+      const wait = Math.max(0, OVERFLOW_HOLD_MS - (now - held.since));
+      this._overflowTimer = window.setTimeout(() => this.requestUpdate(), wait);
+    }
+    return held.show;
+  }
+
   private _setConsumers(next: Consumer[], closePicker = false): void {
     this._consumers = next.slice(0, MAX_CONSUMERS);
     saveConsumers(this._consumers);
@@ -660,7 +678,7 @@ class MaestroPanel extends LitElement {
         void this._ensureHistory();
       },
       consumers: toFlow(this._consumers, hass),
-      consumerOverflow: includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass)),
+      consumerOverflow: this._heldOverflow(includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass))),
       onEditConsumers: () => this._openConsumers(),
       onFlowNode: (key) => this._openFlow(key),
       motion: this._motion,

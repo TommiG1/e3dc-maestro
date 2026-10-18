@@ -29,7 +29,7 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
    - [Auswahlen (Selects)](#auswahlen-selects)
    - [Schaltflächen (Buttons)](#schaltflächen-buttons)
 8. [Regellogik & Phasenpriorität](#regellogik--phasenpriorität)
-9. [Maestro-Cockpit (Sidebar-Panel, Beta)](#maestro-cockpit-sidebar-panel-beta)
+9. [Maestro-Cockpit](#maestro-cockpit)
 10. [Dashboard einrichten](#dashboard-einrichten)
 11. [Sensor-Vorzeichen-Konventionen](#sensor-vorzeichen-konventionen)
 12. [Fehlerbehebung & FAQ](#fehlerbehebung--faq)
@@ -65,7 +65,7 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 | **Wallbox-Regelung** | Strombegrenzung für Fremdwallboxen via EVCC/generisch; bei nativer E3DC-Wallbox nur sinnvoll für phasenübergreifende Koordination |
 | **Wärmepumpen-Regelung** | Ein/Aus nach PV-Überschuss mit Mindestlaufzeit und Mindestpause |
 | **Erzwungene Entladung** | Dashboard-Schalter für manuelle Entladung, z. B. um vor einem Tibber-Niedrigpreisfenster Kapazität zu schaffen |
-| **Maestro-Cockpit (Sidebar-Panel, Beta)** | Eigenes Panel in der Seitenleiste ohne Custom Cards: Live-Energiefluss, 24-h-Prognose, Preisplan, Entscheidungs-Erklärung und Schnellsteuerung – [Anleitung](#maestro-cockpit-sidebar-panel-beta) |
+| **Maestro-Cockpit** | Eigenes Panel in der Seitenleiste ohne Custom Cards: Live-Energiefluss, 24-h-Prognose, Preisplan, Entscheidungs-Erklärung, Anlage und Schnellsteuerung – [Anleitung](#maestro-cockpit) |
 | **Regelungs-Cockpit** | Live Command Center mit Hero-Status, KPI-Kacheln, „Aktiv jetzt"-Chips, 24 h Phasenverlauf und „Warum diese Entscheidung?" |
 | **Entscheidungs-Erklärung** | Sensor `sensor.e3dc_maestro_entscheidungserklarung` mit vollständigem Erklärungssatz pro Regelphase |
 | **Anti-Flapping** | EWMA-Glättung von PV/Last (τ = 60 s, Jump-Reset bei 2 kW) + Feed-in-Limit-Hysterese + pv_delay-Cooldown verhindern schnelles Phasen-Pendeln |
@@ -76,10 +76,10 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 
 ## Screenshots
 
-### Maestro-Cockpit (Sidebar-Panel, ab 0.4.0-beta.8)
+### Maestro-Cockpit (seit 0.5.0 stabil)
 
 Eigenes Panel in der Seitenleiste, ohne Custom Cards. Anleitung:
-[Maestro-Cockpit](#maestro-cockpit-sidebar-panel-beta).
+[Maestro-Cockpit](#maestro-cockpit).
 
 ![Cockpit Live](Screenshots/cockpit_01_live.png)
 
@@ -200,6 +200,8 @@ Starte HA nach Änderungen neu.
 
 1. In der HACS-Integrationsliste nach **E3DC Maestro** suchen
 2. **Herunterladen** klicken → Version bestätigen
+
+Ab **0.5.0** ist das Cockpit im normalen Release. Dafür musst du in HACS keine Beta-Versionen anzeigen.
 
 ### Schritt 3: Home Assistant neu starten
 
@@ -865,24 +867,55 @@ Maestro entscheidet **jeden Tick** (Standard: 30 s) in absteigender Priorität. 
 
 ---
 
-## Maestro-Cockpit (Sidebar-Panel, Beta)
+## Maestro-Cockpit
 
-Seit **0.4.0-beta.8** bringt Maestro ein eigenes Panel mit. Es erscheint nach dem
-Update und einem Neustart von Home Assistant automatisch als **Maestro** in der
-Seitenleiste (Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards** und
-keine Einrichtung; das Classic- und das Moderne Dashboard bleiben unverändert
-bestehen.
+<a id="maestro-cockpit-sidebar-panel-beta"></a>
+
+Seit **0.5.0** ist das Cockpit Teil des stabilen Releases. Es erscheint nach dem
+Update und einem Neustart von Home Assistant als **Maestro** in der Seitenleiste
+(Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards**. Das Classic- und
+das Moderne Dashboard bleiben daneben bestehen.
+
+### Erste Schritte
+
+Auf **Live** steht eine Checkliste, solange etwas Pflichtiges fehlt. **Öffnen**
+springt zur passenden Einstellung.
+
+Pflicht, damit die Regelung arbeiten kann:
+
+- **Anlage:** SoC, PV, Haus, Netz und Akku liefern Werte, und die Akkukapazität ist gesetzt.
+- **Tarif:** fester Preis, ein Preis-Sensor oder mindestens ein Zeitfenster.
+- **Regelung** ist eingeschaltet.
+- **Erste Entscheidung:** Maestro hat eine Regelphase gewählt und zeigt den Grund.
+
+Hinweise, die die Regelung nicht blockieren:
+
+- **Prognose** (PV heute, morgen oder die Kurve)
+- **Notstromreserve** (fest, saisonal oder verbrauchsabhängig)
+- **Verbraucher** (Wallbox, EVCC oder Wärmepumpe)
+
+**Verstanden** blendet den Hinweis auf diesem Gerät aus, sobald alle Pflichtschritte
+erledigt sind. Die Liste bleibt unter **Einstellungen → Einrichtung**. Fehlt später
+wieder ein Pflichtschritt, erscheint sie auf Live von selbst.
+
+![Cockpit Einstellungen](Screenshots/cockpit_08_einstellungen.png)
+
+### Darstellung
+
+Unter **Einstellungen → Darstellung** gibt es drei Looks: **Dunkel**, **Classic**
+und **myE3DC**. Die Wahl gilt in diesem Browser. Die Farben der Energieflüsse
+bleiben in allen Looks dieselben.
 
 ### Ansichten
 
 | Ansicht | Inhalt |
 |---|---|
-| **Live** | Energiefluss (PV, Haus, Netz, Akku) mit leuchtenden Teilchen, deren Tempo mit der Leistung mitgeht. Zusätzliche Verbraucher lassen sich einblenden. Ein Klick auf ein Symbol öffnet den Verlauf der letzten 24 h. Dazu Ladezustand mit Ziel-SoC und Autonomie, Status-Chips und Tageswerte seit Mitternacht |
+| **Live** | Energiefluss (PV, Haus, Netz, Akku) mit leuchtenden Teilchen, deren Tempo mit der Leistung mitgeht. In der Mitte das Maestro-Logo, der Akku zeigt den Füllstand. Zusätzliche Verbraucher lassen sich einblenden. Ein Klick auf ein Symbol öffnet den Verlauf der letzten 24 h. Dazu Ladezustand mit Ziel-SoC und Autonomie, Status-Chips und Tageswerte seit Mitternacht |
 | **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
 | **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen. Darunter die Schwellwerte für dynamischen Tarif und Netzladung (Günstig-Schwelle, Ziel im günstigen Fenster, Tagesbudget, Mindest-Preisspanne, SoC-Obergrenze). Im Schattenmodus deutlich markiert |
 | **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
 | **Anlage** | Hero mit Modus, Autarkie, Eigenverbrauch, Modell, Seriennummer und Firmware. Räume Netz, Akku, PV, Wallbox und RSCP-Schalter. Phasen L1–L3 als Gauge plus 24-Stunden-Verlauf, sofern die Sensoren der E3DC-Integration vorhanden sind |
-| **Einstellungen** | Kachelübersicht der Regelbereiche plus die Kachel **Classic-Dashboard**: prüft die benötigten HACS-Karten (Mushroom Cards, ApexCharts Card) und legt das Dashboard mit einem Klick an (Administratoren) |
+| **Einstellungen** | Kachelübersicht der Regelbereiche, dazu **Einrichtung** und die Kachel **Classic-Dashboard**: prüft die benötigten HACS-Karten (Mushroom Cards, ApexCharts Card) und legt das Dashboard mit einem Klick an (Administratoren) |
 
 ![Cockpit Preisplan](Screenshots/cockpit_03_preisplan.png)
 
@@ -901,20 +934,23 @@ Auswertung der Auto-Optimierung und Sizing Advisor bleiben im Community-Dashboar
 unter `/e3dc-maestro`.
 
 Darunter, unter **Anzeige**, lassen sich bis zu sechs Verbraucher für den
-Energiefluss eintragen (Name, Symbol, Leistungssensor in Watt). Das Symbol ist
+Energiefluss eintragen (Name, Symbol, Leistungssensor). Das Symbol ist
 Wallbox, Heizstab, Klimaanlage, Wärmepumpe oder Leistungsmesser. **Im
 Hausverbrauch** hängt der Knoten am Haus, **Separat gemessen** bekommt eine
 eigene Kante vom Mittelpunkt (so wie die Wallbox, die Maestro neben dem
-Hausverbrauch führt). Die Liste gilt nur in diesem Browser. Liegt die Summe der
-enthaltenen Verbraucher über der Hausleistung, weist das Panel darauf hin.
+Hausverbrauch führt). Die Liste liegt in der Installation und gilt auf jedem
+Gerät, das dieses Cockpit öffnet. Liegt die Summe der enthaltenen Verbraucher
+mindestens 10 Sekunden um mehr als 50 W über der Hausleistung, weist das Panel
+darauf hin. Sobald die Werte wieder zusammenpassen, verschwindet der Hinweis
+sofort.
 
 ![Cockpit Schnellsteuerung](Screenshots/cockpit_05_steuerung.png)
 
 ### Handy und Tablet
 
 Auf schmalen Bildschirmen (≤ 960 px, z. B. Companion App) wandert die Navigation
-nach unten, der Energiefluss steht senkrecht und die Schnellsteuerung öffnet von
-unten.
+nach unten. Der Energiefluss steht senkrecht, zusätzliche Verbraucher stehen als
+Liste unter dem Haus, und die Schnellsteuerung öffnet von unten.
 
 <img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobil" width="300">
 
@@ -937,8 +973,8 @@ unten.
   in der Zeitzone des Geräts.
 - **Autonomie „–“** direkt nach einem Neustart ist normal: Maestro braucht rund
   10 Minuten Verbrauchsdaten, bevor die Autonomiezeit berechnet wird.
-- Das Panel ist **Beta**. Fehler bitte mit Screenshot, Gerät/Browser und – falls
-  sichtbar – der roten Fehlermeldung im Panel als Issue melden.
+- Fehler bitte mit Screenshot, Gerät und – falls sichtbar – der roten
+  Fehlermeldung im Panel als Issue melden.
 
 ---
 
@@ -1138,6 +1174,10 @@ Nur aktiv wenn entweder `curtailment_guard` oder `feed_in_limit` aktiv war. Prü
 
 ### Das Maestro-Cockpit zeigt Hinweise oder bleibt leer
 
+- **Checkliste auf Live:** Solange Anlage, Tarif, eingeschaltete Regelung oder eine
+  erste Entscheidung fehlen, bleibt die Liste sichtbar. **Verstanden** gilt nur
+  auf diesem Gerät und nur, wenn die Pflichtschritte erledigt sind. Die volle
+  Liste liegt unter Einstellungen → Einrichtung.
 - **„Nicht verfügbar: …“ mit Entity-IDs:** Diese Maestro-Entitäten fehlen oder sind
   deaktiviert. *Einstellungen → Entitäten* öffnen, nach „E3DC Maestro“ filtern und
   die genannte Entität aktivieren. Nach dem Aktivieren dauert es bis zu 30 s.

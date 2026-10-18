@@ -11,6 +11,27 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.0] – Erstes stabiles Cockpit (2026-10-18)
+
+> Stabiles Release. Enthält das Cockpit aus 0.4.0-beta.15 und die Punkte unten. Die Regelung ist unverändert.
+
+### Neu
+- **Das Cockpit ist kein Beta mehr.** Es erscheint nach dem Update als **Maestro** in der Seitenleiste. In HACS musst du dafür keine Beta-Versionen anzeigen.
+- **Drei Looks:** Dunkel, Classic und myE3DC, unter Einstellungen → Darstellung. Die Wahl gilt in diesem Browser.
+- **Maestro-Logo** in der Mitte des Energieflusses, in der Navigation und als Icon in HACS und Home Assistant.
+- **Akku im Energiefluss** zeigt den Füllstand.
+- **Zusätzliche Verbraucher gelten für die ganze Installation**, auf jedem Gerät, das das Cockpit öffnet. Auf dem Handy stehen sie als Liste unter dem Haus.
+
+### Geändert
+- **Hinweis zur Hausleistung wartet 10 Sekunden.** Er erscheint erst, wenn die enthaltenen Verbraucher mindestens 10 Sekunden um mehr als 50 W über der Hausleistung liegen, und verschwindet, sobald die Werte wieder passen.
+
+### Hinweise
+- **Neustart nötig**, wenn du von einer Version vor 0.5.0 kommst. Danach das Cockpit einmal hart neu laden.
+- Wer 0.4.0-beta.15 schon laufen hat, bekommt mit diesem Release den neuen Look, das Logo, die gemeinsame Verbraucherliste und den verzögerten Hinweis.
+- Der Preisplan, der den Akku steuert, bleibt als eigene Funktion gekennzeichnet. Das betrifft nicht das Cockpit.
+
+---
+
 ## [0.4.0-beta.15] – Einrichtung im Cockpit (2026-10-18)
 
 > **Beta.** Inhalt von beta.14 plus die Punkte unten. Die Regelung ändert sich beim Sperren der Entladung.

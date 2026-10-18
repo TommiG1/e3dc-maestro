@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consumerUnavailable, consumersFromOptions, includedOverflow, newConsumerId, parseConsumers, wattsOf, type Consumer, type FlowConsumer } from "./consumers";
+import { consumerUnavailable, consumersFromOptions, includedOverflow, newConsumerId, overflowHeld, parseConsumers, wattsOf, type Consumer, type FlowConsumer } from "./consumers";
 import type { HassEntity } from "./entities";
 
 const entity = (state: string, unit: string): HassEntity => ({
@@ -91,5 +91,14 @@ describe("includedOverflow", () => {
     expect(includedOverflow(2000, [flow(1800, "included"), flow(5000, "separate")])).toBe(false);
     expect(includedOverflow(2000, [flow(2100, "included")])).toBe(true);
     expect(includedOverflow(undefined, [flow(2100, "included")])).toBe(false);
+  });
+});
+
+describe("overflowHeld", () => {
+  it("waits out a short mismatch and starts again after the values agree", () => {
+    expect(overflowHeld(true, undefined, 1_000)).toEqual({ show: false, since: 1_000 });
+    expect(overflowHeld(true, 1_000, 10_999)).toEqual({ show: false, since: 1_000 });
+    expect(overflowHeld(true, 1_000, 11_000)).toEqual({ show: true, since: 1_000 });
+    expect(overflowHeld(false, 1_000, 12_000)).toEqual({ show: false, since: undefined });
   });
 });

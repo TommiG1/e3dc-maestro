@@ -29,7 +29,7 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
    - [Selects](#selects)
    - [Buttons](#buttons)
 8. [Rule Logic & Phase Priority](#rule-logic--phase-priority)
-9. [Maestro Cockpit (sidebar panel, beta)](#maestro-cockpit-sidebar-panel-beta)
+9. [Maestro Cockpit](#maestro-cockpit)
 10. [Set up Dashboard](#set-up-dashboard)
 11. [Sensor Sign Conventions](#sensor-sign-conventions)
 12. [Troubleshooting & FAQ](#troubleshooting--faq)
@@ -65,7 +65,7 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 | **Wallbox control** | Current limiting for third-party wallboxes via EVCC/generic; optional discharge guard so EV load is covered from the battery instead of the grid |
 | **Heat-pump control** | On/off based on PV surplus with minimum run and pause times |
 | **Forced discharge** | Dashboard switch for manual discharge, e.g. before a Tibber low-price window |
-| **Maestro Cockpit (sidebar panel, beta)** | Own sidebar panel without custom cards: live energy flow, 24 h forecast, price plan, decision explanation and quick controls – [guide](#maestro-cockpit-sidebar-panel-beta) |
+| **Maestro Cockpit** | Own sidebar panel without custom cards: live energy flow, 24 h forecast, price plan, decision explanation, plant view and quick controls – [guide](#maestro-cockpit) |
 | **Control cockpit** | Live command centre with hero status, KPI tiles, active-now chips, 24 h phase history and "Why this decision?" |
 | **Decision explanation** | `sensor.e3dc_maestro_entscheidungserklarung` with a full plain-text explanation for every phase |
 | **Anti-flapping** | EWMA smoothing of PV/load (τ = 60 s, jump-reset at 2 kW) + feed-in-limit hysteresis + pv-delay cooldown to prevent rapid phase oscillation |
@@ -76,10 +76,10 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 
 ## Screenshots
 
-### Maestro Cockpit (sidebar panel, since 0.4.0-beta.8)
+### Maestro Cockpit (stable since 0.5.0)
 
 A dedicated sidebar panel, no custom cards needed. Guide:
-[Maestro Cockpit](#maestro-cockpit-sidebar-panel-beta).
+[Maestro Cockpit](#maestro-cockpit).
 
 ![Cockpit live](Screenshots/cockpit_01_live.png)
 
@@ -200,6 +200,8 @@ Restart HA after changes.
 
 1. Search for **E3DC Maestro** in the HACS integration list
 2. Click **Download** → confirm version
+
+From **0.5.0** the cockpit is part of the normal release. You do not need to show beta versions in HACS for it.
 
 ### Step 3: Restart Home Assistant
 
@@ -818,22 +820,55 @@ Maestro decides **every tick** (default: 30 s) in descending priority. The first
 
 ---
 
-## Maestro Cockpit (sidebar panel, beta)
+## Maestro Cockpit
 
-Since **0.4.0-beta.8** Maestro ships its own panel. After updating and restarting
-Home Assistant it appears automatically as **Maestro** in the sidebar (path
-`/maestro-cockpit`). It needs **no custom cards** and no setup; the classic and
-modern dashboards stay as they are.
+<a id="maestro-cockpit-sidebar-panel-beta"></a>
+
+Since **0.5.0** the cockpit is part of the stable release. After updating and
+restarting Home Assistant it appears as **Maestro** in the sidebar (path
+`/maestro-cockpit`). It needs **no custom cards**. The classic and modern
+dashboards stay beside it.
+
+### First steps
+
+**Live** shows a checklist while something required is still missing. **Open**
+jumps to the matching setting.
+
+Required before the control loop can work:
+
+- **Plant:** SoC, PV, house, grid and battery report values, and the battery capacity is set.
+- **Tariff:** a fixed price, a price sensor, or at least one time window.
+- **Regulation** is on.
+- **First decision:** Maestro has chosen a control phase and shows the reason.
+
+Hints that do not block control:
+
+- **Forecast** (PV today, tomorrow, or the curve)
+- **Emergency reserve** (fixed, seasonal, or consumption-based)
+- **Loads** (wallbox, EVCC, or heat pump)
+
+**Got it** hides the notice on this device once every required step is done.
+The list stays under **Settings → Setup**. If a required step is missing again
+later, the notice returns on Live by itself.
+
+![Cockpit settings](Screenshots/cockpit_08_einstellungen.png)
+
+### Appearance
+
+Under **Settings → Appearance** there are three looks: **Dark**, **Classic** and
+**myE3DC**. The choice applies in this browser. Energy-flow colours stay the same
+in every look.
 
 ### Views
 
 | View | Content |
 |---|---|
-| **Live** | Energy flow (PV, house, grid, battery) with glowing particles whose speed follows the power. Extra consumers can be shown. A click on a symbol opens the last 24 h. Plus state of charge with target SoC and autonomy, status chips and today's counters since midnight |
+| **Live** | Energy flow (PV, house, grid, battery) with glowing particles whose speed follows the power. The Maestro logo sits in the middle, and the battery shows its fill level. Extra consumers can be shown. A click on a symbol opens the last 24 h. Plus state of charge with target SoC and autonomy, status chips and today's counters since midnight |
 | **Forecast** | SoC trajectory and power for the next 24 h with control phases, now marker and target SoC. Drag to zoom, overview bar below, 6/12/24 h. **Actuals** overlays the measured values of the last 6 h |
 | **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures. Below that, the thresholds for a dynamic tariff and grid charging (cheap threshold, cheap-window target, daily budget, minimum spread, SoC cap). Clearly marked in shadow mode |
 | **Decision** | Current control phase with its reason, charge/discharge limit "target vs. sent" and the phase changes of the last 24 h |
-| **Settings** | Tile overview of the control areas, plus a **Classic dashboard** tile that checks the required HACS cards (Mushroom Cards, ApexCharts Card) and creates the dashboard with one click (administrators) |
+| **Plant** | Hero with mode, autarky, self-consumption, model, serial number and firmware. Rooms for grid, battery, PV, wallbox and RSCP switches. Phases L1–L3 as gauges plus a 24-hour curve when the E3DC integration sensors exist |
+| **Settings** | Tile overview of the control areas, plus **Setup** and a **Classic dashboard** tile that checks the required HACS cards (Mushroom Cards, ApexCharts Card) and creates the dashboard with one click (administrators) |
 
 ![Cockpit price plan](Screenshots/cockpit_03_preisplan.png)
 
@@ -851,19 +886,21 @@ optimisation details and the sizing advisor stay in the community dashboard at
 `/e3dc-maestro`.
 
 Below that, under **Display**, up to six consumers can be added to the energy
-flow (name, icon, power sensor in watts). The icon is wallbox, heating rod, air
+flow (name, icon, power sensor). The icon is wallbox, heating rod, air
 conditioning, heat pump or power meter. **In house load** hangs the node off the
 house; **Measured separately** gets its own link from the hub (the same way
-Maestro keeps the wallbox beside house consumption). The list is stored in this
-browser only. If the included consumers exceed the house load, the panel says so.
+Maestro keeps the wallbox beside house consumption). The list is stored on the
+installation and applies on every device that opens this cockpit. If the included
+consumers stay more than 50 W above the house load for at least 10 seconds, the
+panel says so. The notice disappears as soon as the values agree again.
 
 ![Cockpit quick controls](Screenshots/cockpit_05_steuerung.png)
 
 ### Phone and tablet
 
 On narrow screens (≤ 960 px, e.g. the companion app) the navigation moves to the
-bottom, the energy flow is laid out vertically and the quick controls open from
-the bottom.
+bottom. The energy flow is laid out vertically, extra consumers are listed under
+the house, and the quick controls open from the bottom.
 
 <img src="Screenshots/cockpit_06_mobil.png" alt="Cockpit mobile" width="300">
 
@@ -885,8 +922,8 @@ the bottom.
   the device's time zone.
 - **Autonomy "–"** right after a restart is expected: Maestro needs about 10 minutes
   of consumption data before it computes the autonomy time.
-- The panel is **beta**. Please report problems as an issue with a screenshot,
-  device/browser and – if shown – the red error message in the panel.
+- Please report problems as an issue with a screenshot, the device and – if shown –
+  the red error message in the panel.
 
 ---
 
@@ -1068,6 +1105,10 @@ Only active if either `curtailment_guard` or `feed_in_limit` was triggered. Chec
 
 ### The Maestro Cockpit shows notices or stays empty
 
+- **Checklist on Live:** The list stays visible while plant, tariff, regulation
+  or a first decision is still missing. **Got it** applies only on this device,
+  and only after the required steps are done. The full list lives under
+  Settings → Setup.
 - **"Not available: …" with entity IDs:** These Maestro entities are missing or
   disabled. Open *Settings → Entities*, filter for "E3DC Maestro" and enable the
   named entity. It can take up to 30 s to show values.
