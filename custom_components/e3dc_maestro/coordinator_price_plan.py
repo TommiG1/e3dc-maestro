@@ -157,11 +157,17 @@ class CoordinatorPricePlanMixin:
         self, sensor_id: str, state: Any, now: datetime
     ) -> dict | None:
         """Stundenkurve des Tibber-Strompreis-Sensors, höchstens alle 15 Minuten neu."""
+        attributes = state.attributes if state is not None else {}
+        # Cheap attribute check first: every other price sensor ends here untouched.
+        if "app_nickname" not in attributes or "max_price" not in attributes:
+            return None
         platform = None
-        registry_entry = er.async_get(self.hass).async_get(sensor_id)
+        try:
+            registry_entry = er.async_get(self.hass).async_get(sensor_id)
+        except Exception:  # noqa: BLE001
+            registry_entry = None
         if registry_entry is not None:
             platform = registry_entry.platform
-        attributes = state.attributes if state is not None else {}
         if not is_tibber_electricity_price(platform, attributes):
             return None
 
