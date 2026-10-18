@@ -6,6 +6,8 @@ Eine Home Assistant Custom Integration für die **intelligente, vollautomatische
 
 E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänzt die `e3dc_rscp`-Integration um eine regelbasierte Steuerung mit 19 priorisierten Phasen, vorausschauendem Laden, Abregelschutz, PV-Prognose, Tarifspreizung, Wallbox- und Wärmepumpenregelung sowie einem Auto-Optimierungsmodus.
 
+**Ab 0.5.0 reicht das Maestro-Cockpit.** Onboarding, alle Einstellungen und der laufende Betrieb liegen im Panel in der Seitenleiste. Das Classic-Dashboard und das Moderne Dashboard sind optional.
+
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=for-the-badge)](LICENSE)
 [![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=for-the-badge&logo=paypal)](https://www.paypal.com/paypalme/tommigraf)
 
@@ -30,7 +32,7 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
    - [Schaltflächen (Buttons)](#schaltflächen-buttons)
 8. [Regellogik & Phasenpriorität](#regellogik--phasenpriorität)
 9. [Maestro-Cockpit](#maestro-cockpit)
-10. [Dashboard einrichten](#dashboard-einrichten)
+10. [Dashboards (optional)](#dashboards-optional)
 11. [Sensor-Vorzeichen-Konventionen](#sensor-vorzeichen-konventionen)
 12. [Fehlerbehebung & FAQ](#fehlerbehebung--faq)
 13. [Bekannte Kompatibilität](#bekannte-kompatibilität)
@@ -65,7 +67,7 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 | **Wallbox-Regelung** | Strombegrenzung für Fremdwallboxen via EVCC/generisch; bei nativer E3DC-Wallbox nur sinnvoll für phasenübergreifende Koordination |
 | **Wärmepumpen-Regelung** | Ein/Aus nach PV-Überschuss mit Mindestlaufzeit und Mindestpause |
 | **Erzwungene Entladung** | Dashboard-Schalter für manuelle Entladung, z. B. um vor einem Tibber-Niedrigpreisfenster Kapazität zu schaffen |
-| **Maestro-Cockpit** | Eigenes Panel in der Seitenleiste ohne Custom Cards: Live-Energiefluss, 24-h-Prognose, Preisplan, Entscheidungs-Erklärung, Anlage und Schnellsteuerung – [Anleitung](#maestro-cockpit) |
+| **Maestro-Cockpit** | Panel in der Seitenleiste für Onboarding, Einstellungen und Betrieb, ohne Custom Cards: Live-Energiefluss, 24-h-Prognose, Preisplan, Entscheidungs-Erklärung, Anlage und Schnellsteuerung – [Anleitung](#maestro-cockpit) |
 | **Regelungs-Cockpit** | Live Command Center mit Hero-Status, KPI-Kacheln, „Aktiv jetzt"-Chips, 24 h Phasenverlauf und „Warum diese Entscheidung?" |
 | **Entscheidungs-Erklärung** | Sensor `sensor.e3dc_maestro_entscheidungserklarung` mit vollständigem Erklärungssatz pro Regelphase |
 | **Anti-Flapping** | EWMA-Glättung von PV/Last (τ = 60 s, Jump-Reset bei 2 kW) + Feed-in-Limit-Hysterese + pv_delay-Cooldown verhindern schnelles Phasen-Pendeln |
@@ -85,9 +87,9 @@ Eigenes Panel in der Seitenleiste, ohne Custom Cards. Anleitung:
 
 ![Cockpit Prognose](Screenshots/cockpit_02_prognose.png)
 
-### Modernes Dashboard
+### Modernes Dashboard (optional)
 
-Aufnahmen von v0.3.26. Vier Ansichten: Übersicht, Cockpit, Laden und 24-h-Charts.
+Aufnahmen von v0.3.26. Vier Ansichten: Übersicht, Cockpit, Laden und 24-h-Charts. Für den Betrieb brauchst du dieses Dashboard nicht.
 
 ![Modern Übersicht](Screenshots/modern_01_uebersicht.png)
 
@@ -97,9 +99,9 @@ Aufnahmen von v0.3.26. Vier Ansichten: Übersicht, Cockpit, Laden und 24-h-Chart
 
 ![Modern 24h-Charts](Screenshots/modern_04_charts.png)
 
-### Classic-Dashboard
+### Classic-Dashboard (optional)
 
-Ein Screenshot pro Hauptmodul.
+Ein Screenshot pro Hauptmodul. Für den Betrieb brauchst du dieses Dashboard nicht.
 
 #### Tab 1 – Dashboard & Echtzeit-Übersicht
 ![Dashboard Übersicht](Screenshots/01_dashboard_uebersicht.png)
@@ -871,10 +873,11 @@ Maestro entscheidet **jeden Tick** (Standard: 30 s) in absteigender Priorität. 
 
 <a id="maestro-cockpit-sidebar-panel-beta"></a>
 
-Seit **0.5.0** ist das Cockpit Teil des stabilen Releases. Es erscheint nach dem
-Update und einem Neustart von Home Assistant als **Maestro** in der Seitenleiste
-(Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards**. Das Classic- und
-das Moderne Dashboard bleiben daneben bestehen.
+Seit **0.5.0** ist das Cockpit der normale Weg, vom Onboarding bis zum Betrieb.
+Es erscheint nach dem Update und einem Neustart von Home Assistant als **Maestro**
+in der Seitenleiste (Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards**.
+Alle Einstellungen liegen hier. Das Classic-Dashboard und das Moderne Dashboard
+sind optional und nur noch da, wenn du die alten Lovelace-Ansichten behalten willst.
 
 ### Erste Schritte
 
@@ -929,9 +932,8 @@ Preisplan steuert Akku, Preisplan-Schattenmodus und Erzwungene Entladung mit
 Leistungsregler. Änderungen wirken **sofort** auf die Regelung (gleiche Entitäten
 wie im Dashboard). Der Leistungsregler sendet erst beim Loslassen.
 Die vollständige Konfiguration liegt in der Ansicht **Einstellungen** in der
-Navigation; **Alle Einstellungen öffnen** im Sheet führt dorthin. Hilfe,
-Auswertung der Auto-Optimierung und Sizing Advisor bleiben im Community-Dashboard
-unter `/e3dc-maestro`.
+Navigation; **Alle Einstellungen öffnen** im Sheet führt dorthin. Die langen
+Hilfetexte liegen weiter im optionalen Classic-Dashboard unter `/e3dc-maestro`.
 
 Darunter, unter **Anzeige**, lassen sich bis zu sechs Verbraucher für den
 Energiefluss eintragen (Name, Symbol, Leistungssensor). Das Symbol ist
@@ -978,13 +980,19 @@ Liste unter dem Haus, und die Schnellsteuerung öffnet von unten.
 
 ---
 
-## Dashboard einrichten
+## Dashboards (optional)
+
+<a id="dashboard-einrichten"></a>
+
+Für Einrichtung und Betrieb brauchst du kein Dashboard. Onboarding und alle
+Einstellungen laufen im [Maestro-Cockpit](#maestro-cockpit).
 
 Das Classic-Dashboard ([`dashboards/maestro_dashboard.yaml`](dashboards/maestro_dashboard.yaml))
-bietet **11 Haupt-Tabs** (Dashboard, Cockpit, Laden, Zeitplanung, Netz & Tarif,
-Flexibilität, System, Diagnose, Hilfe, Auto-Optimierung, Sizing Advisor) plus
-themenspezifische Hilfe-Seiten. Seit der Community-Dashboard-Strategie muss es **nicht
-mehr per YAML eingefügt** werden.
+und das Moderne Dashboard bleiben verfügbar, wenn du die Lovelace-Ansichten
+weiter nutzen willst. Das Classic-Dashboard bietet **11 Haupt-Tabs** (Dashboard,
+Cockpit, Laden, Zeitplanung, Netz & Tarif, Flexibilität, System, Diagnose, Hilfe,
+Auto-Optimierung, Sizing Advisor) plus themenspezifische Hilfe-Seiten. Seit der
+Community-Dashboard-Strategie muss es **nicht mehr per YAML eingefügt** werden.
 
 ### Voraussetzungen
 
@@ -996,7 +1004,7 @@ mehr per YAML eingefügt** werden.
 Zusätzlich: **Home Assistant ≥ 2026.5** für den Eintrag unter *Community dashboards*
 (ohne Picker bleibt der manuelle YAML-Import unten als Fallback).
 
-### Empfohlen: direkt aus dem Cockpit
+### Anlegen aus dem Cockpit
 
 Im Sidebar-Panel **Maestro → Einstellungen → Classic-Dashboard** zeigt Maestro,
 ob Mushroom und ApexCharts installiert sind, und legt das Dashboard mit
@@ -1044,10 +1052,10 @@ Falls der Community-Picker fehlt (ältere HA-Version) oder du YAML bevorzugst:
 
 Oder in ein bestehendes Dashboard: Raw-Editor öffnen und YAML ersetzen.
 
-### Variante: Modernes Dashboard (manuell)
+### Variante: Modernes Dashboard (manuell, optional)
 
-Zusätzlich steht [`dashboards/maestro_dashboard_modern.yaml`](dashboards/maestro_dashboard_modern.yaml)
-zur Verfügung (moderner Look, Live-Energiefluss). Es wird **nicht** automatisch
+[`dashboards/maestro_dashboard_modern.yaml`](dashboards/maestro_dashboard_modern.yaml)
+steht zur Verfügung (moderner Look, Live-Energiefluss). Es wird **nicht** automatisch
 angeboten, weil es als Community-Dashboard nicht registriert ist — der manuelle
 YAML-Import unten ist nötig.
 

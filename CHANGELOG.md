@@ -16,6 +16,7 @@ einen eigenen Versionsabschnitt verschieben.
 > Stabiles Release. Enthält das Cockpit aus 0.4.0-beta.15 und die Punkte unten. Die Regelung ist unverändert.
 
 ### Neu
+- **Das Cockpit reicht.** Onboarding, alle Einstellungen und der Betrieb laufen im Panel **Maestro**. Classic-Dashboard und Modernes Dashboard sind optional.
 - **Das Cockpit ist kein Beta mehr.** Es erscheint nach dem Update als **Maestro** in der Seitenleiste. In HACS musst du dafür keine Beta-Versionen anzeigen.
 - **Drei Looks:** Dunkel, Classic und myE3DC, unter Einstellungen → Darstellung. Die Wahl gilt in diesem Browser.
 - **Maestro-Logo** in der Mitte des Energieflusses, in der Navigation und als Icon in HACS und Home Assistant.
