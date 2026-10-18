@@ -165,21 +165,27 @@ class CoordinatorActMixin:
                 # Nur Entladung begrenzen (z. B. EVCC Now-Modus) – kein Ladebefehl
                 _max_discharge_w = max(0, int(decision.discharge_power_limit))
                 ok = True
-                if self._last_sent_charge_limit is not None:
-                    ok = await self._call_e3dc(SERVICE_CLEAR_POWER_LIMITS, {})
-                    if ok:
-                        self._last_sent_charge_limit = None
                 if ok and mode_changed:
                     ok = await self._call_e3dc(
                         SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}
                     )
                 if ok:
+                    # max_charge explizit öffnen: set_power_limits sendet nur die
+                    # übergebenen Tags, ein altes Lade-Cap (z. B. 0/1 W aus Preisplan,
+                    # Hard-Cap oder vor einem HA-Neustart) bliebe sonst auf der E3DC
+                    # bestehen und der PV-Überschuss ginge ins Netz statt in den Akku.
                     ok = await self._call_e3dc(
                         SERVICE_SET_POWER_LIMITS,
-                        {"max_discharge": _max_discharge_w},
+                        {
+                            "max_charge": max(0, int(self._params.max_charge_power)),
+                            "max_discharge": _max_discharge_w,
+                        },
                     )
                 act_ok = ok
                 if ok:
+                    # Lade-Cap ist offen (= "kein Cap") → als nicht gesetzt tracken,
+                    # passend zu decision.charge_power_limit is None.
+                    self._last_sent_charge_limit = None
                     self._last_sent_discharge_limit = _max_discharge_w
                     self._log(
                         f"[{decision.phase}] set_power_limits max_discharge={_max_discharge_w}W → {decision.reason}"

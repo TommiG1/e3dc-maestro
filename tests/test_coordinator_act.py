@@ -72,9 +72,8 @@ def test_reserve_reached_ends_grid_charge_mode():
     asyncio.run(c._async_act(decision, _state(), {}, None))
 
     assert c.calls == [
-        (SERVICE_CLEAR_POWER_LIMITS, {}),
         (SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}),
-        (SERVICE_SET_POWER_LIMITS, {"max_discharge": 0}),
+        (SERVICE_SET_POWER_LIMITS, {"max_charge": 3000, "max_discharge": 0}),
     ]
     assert c._last_sent_charge_limit is None
     assert c._last_sent_discharge_limit == 0
@@ -92,7 +91,9 @@ def test_discharge_lock_without_mode_change_only_sets_limit():
     )
     asyncio.run(c._async_act(decision, _state(), {}, None))
 
-    assert c.calls == [(SERVICE_SET_POWER_LIMITS, {"max_discharge": 0})]
+    assert c.calls == [
+        (SERVICE_SET_POWER_LIMITS, {"max_charge": 3000, "max_discharge": 0})
+    ]
 
 
 def test_clear_after_charge_mode_resets_power_mode():
