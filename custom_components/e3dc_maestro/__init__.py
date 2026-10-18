@@ -134,6 +134,41 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
         )
         ent_reg.async_update_entity(current_id, new_entity_id=new_entity_id)
 
+
+async def _async_enable_rscp_plant_entities(hass: HomeAssistant) -> None:
+    """Enable plant entities that hacs-e3dc disables by default.
+
+    Only ``disabled_by == integration`` on the RSCP config entries. A user
+    who turned one of these off keeps that choice. The RSCP entry is reloaded
+    once, and only when something actually changed, so the new entities publish
+    state before the first control cycle.
+    """
+    from .panel import _PLANT_ENABLE_KEYS
+
+    ent_reg = er.async_get(hass)
+    reload_ids: set[str] = set()
+    for rscp_entry in hass.config_entries.async_entries(E3DC_RSCP_DOMAIN):
+        for entity_entry in er.async_entries_for_config_entry(ent_reg, rscp_entry.entry_id):
+            if getattr(entity_entry, "translation_key", None) not in _PLANT_ENABLE_KEYS:
+                continue
+            if not _is_disabled_by_integration(entity_entry):
+                continue
+            _LOGGER.info(
+                "E3DC Maestro: aktiviere %s – die Anlagenansicht braucht diese "
+                "RSCP-Entity, hacs-e3dc liefert sie standardmäßig deaktiviert",
+                entity_entry.entity_id,
+            )
+            ent_reg.async_update_entity(entity_entry.entity_id, disabled_by=None)
+            reload_ids.add(rscp_entry.entry_id)
+
+    for entry_id in reload_ids:
+        _LOGGER.info(
+            "E3DC Maestro: lade E3DC RSCP neu, damit die aktivierten "
+            "Anlagen-Entities Zustände liefern"
+        )
+        await hass.config_entries.async_reload(entry_id)
+
+
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -212,6 +247,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await async_setup_frontend(hass)
     await _async_migrate_entity_ids(hass, entry)
+    await _async_enable_rscp_plant_entities(hass)
 
     coordinator = E3DCMaestroCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()

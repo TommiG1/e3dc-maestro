@@ -203,6 +203,20 @@ _WALLBOX_CONTROLS: dict[str, str] = {
     "togglePhases": "wallbox-toggle-wallbox-phases",
     "toggleCharging": "wallbox-toggle-wallbox-charging",
 }
+# hacs-e3dc ships these with entity_registry_enabled_default=False. The plant
+# view reads them, so setup re-enables a copy that the integration itself
+# disabled. User opt-outs stay off. Keys that hacs-e3dc never creates
+# (additional-production without an external source, system-saved-errors)
+# are absent from the registry and are left alone.
+_PLANT_ENABLE_KEYS = frozenset({
+    "system-derate-power",
+    "system-ac-maxpower",
+    "system-pv-derated",
+    "pset-limit-discharge-minimum",
+    "battery-module-soh-reported",
+    "system-rescue-battery-enabled",
+    "pset-powersaving-enabled",
+})
 _WRITABLE = frozenset({"switch", "number", "select", "button"})
 _PLANT_DEVICE_KEYS = frozenset(
     {

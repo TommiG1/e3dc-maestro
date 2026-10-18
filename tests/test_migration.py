@@ -2,12 +2,22 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import custom_components.e3dc_maestro as maestro_init
-from custom_components.e3dc_maestro import _async_migrate_entity_ids, async_migrate_entry
+from custom_components.e3dc_maestro import (
+    _async_enable_rscp_plant_entities,
+    _async_migrate_entity_ids,
+    async_migrate_entry,
+)
+from custom_components.e3dc_maestro.panel import (
+    _GENERAL_CONTROLS,
+    _MODULE_KEYS,
+    _PLANT_ENABLE_KEYS,
+    _PLANT_KEYS,
+)
 from custom_components.e3dc_maestro.const import VERSION
 from custom_components.e3dc_maestro.sensor_device import device_info
 
@@ -248,6 +258,133 @@ def test_intentionally_disabled_keys_match_the_platform_sources():
         "listed in _KEYS_INTENTIONALLY_DISABLED, otherwise the migration "
         "re-enables them on every restart."
     )
+
+
+def _rscp_registry_entry(
+    entity_id: str,
+    translation_key: str | None,
+    disabled_by: str | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        entity_id=entity_id,
+        translation_key=translation_key,
+        disabled_by=disabled_by,
+    )
+
+
+@pytest.mark.asyncio
+async def test_rscp_plant_entities_disabled_by_integration_are_enabled(monkeypatch):
+    derate = _rscp_registry_entry(
+        "sensor.keller_s10e_pro_derate_power",
+        "system-derate-power",
+        disabled_by="integration",
+    )
+    powersave = _rscp_registry_entry(
+        "switch.keller_s10e_pro_powersave",
+        "pset-powersaving-enabled",
+        disabled_by="integration",
+    )
+    unrelated = _rscp_registry_entry(
+        "sensor.keller_s10e_pro_autarky", "autarky", disabled_by="integration"
+    )
+    fake_registry = MagicMock()
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(return_value=[derate, powersave, unrelated]),
+        raising=False,
+    )
+    hass = MagicMock()
+    hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="rscp-1")]
+    hass.config_entries.async_reload = AsyncMock()
+
+    await _async_enable_rscp_plant_entities(hass)
+
+    fake_registry.async_update_entity.assert_any_call(
+        "sensor.keller_s10e_pro_derate_power", disabled_by=None
+    )
+    fake_registry.async_update_entity.assert_any_call(
+        "switch.keller_s10e_pro_powersave", disabled_by=None
+    )
+    assert fake_registry.async_update_entity.call_count == 2
+    hass.config_entries.async_reload.assert_awaited_once_with("rscp-1")
+
+
+@pytest.mark.asyncio
+async def test_rscp_plant_enable_leaves_user_and_enabled_entities(monkeypatch):
+    user_off = _rscp_registry_entry(
+        "sensor.keller_ac_max", "system-ac-maxpower", disabled_by="user"
+    )
+    already_on = _rscp_registry_entry("sensor.keller_derate", "system-derate-power")
+    missing_key = _rscp_registry_entry(
+        "sensor.keller_unknown", None, disabled_by="integration"
+    )
+    fake_registry = MagicMock()
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(return_value=[user_off, already_on, missing_key]),
+        raising=False,
+    )
+    hass = MagicMock()
+    hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="rscp-1")]
+    hass.config_entries.async_reload = AsyncMock()
+
+    await _async_enable_rscp_plant_entities(hass)
+
+    fake_registry.async_update_entity.assert_not_called()
+    hass.config_entries.async_reload.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rscp_plant_enable_reloads_only_the_changed_entry(monkeypatch):
+    changed = _rscp_registry_entry(
+        "sensor.pack_soh", "battery-module-soh-reported", disabled_by="integration"
+    )
+    untouched = _rscp_registry_entry("sensor.other_autarky", "autarky")
+
+    def entries_for(_registry, entry_id):
+        if entry_id == "rscp-changed":
+            return [changed]
+        return [untouched]
+
+    fake_registry = MagicMock()
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(side_effect=entries_for),
+        raising=False,
+    )
+    hass = MagicMock()
+    hass.config_entries.async_entries.return_value = [
+        SimpleNamespace(entry_id="rscp-changed"),
+        SimpleNamespace(entry_id="rscp-quiet"),
+    ]
+    hass.config_entries.async_reload = AsyncMock()
+
+    await _async_enable_rscp_plant_entities(hass)
+
+    hass.config_entries.async_reload.assert_awaited_once_with("rscp-changed")
+
+
+def test_plant_enable_keys_are_shown_in_the_plant_view():
+    shown = (
+        set(_PLANT_KEYS.values())
+        | set(_MODULE_KEYS.values())
+        | set(_GENERAL_CONTROLS.values())
+    )
+    assert _PLANT_ENABLE_KEYS <= shown
+    assert "additional-production" not in _PLANT_ENABLE_KEYS
+    assert "system-saved-errors" not in _PLANT_ENABLE_KEYS
 
 
 def test_device_info_uses_manifest_version():
