@@ -329,7 +329,12 @@ async def test_websocket_command_registered_once(ha_frontend, monkeypatch):
     panel.async_unregister_panel(hass)
     await panel.async_register_panel(hass)
 
-    assert registered == [panel._ws_panel_entities, panel._ws_panel_options, panel._ws_panel_options_set]
+    assert registered == [
+        panel._ws_panel_entities,
+        panel._ws_panel_options,
+        panel._ws_panel_options_set,
+        panel._ws_panel_pause,
+    ]
 
 
 def test_panel_entity_keys_exist_in_platforms():
