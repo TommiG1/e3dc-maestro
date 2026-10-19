@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCollapsed } from "./groups";
+import { collapsedFromStorage, parseCollapsed } from "./groups";
 
 describe("parseCollapsed", () => {
   it("keeps known group ids", () => {
@@ -13,5 +13,16 @@ describe("parseCollapsed", () => {
   it("falls back to everything open for bad input", () => {
     expect(parseCollapsed(null).size).toBe(0);
     expect(parseCollapsed({ today: true }).size).toBe(0);
+  });
+});
+
+describe("collapsedFromStorage", () => {
+  it("starts with the live number groups closed", () => {
+    expect([...collapsedFromStorage(null, null)].sort()).toEqual(["balance", "today"]);
+  });
+
+  it("keeps a saved choice and a previously closed plant group", () => {
+    expect([...collapsedFromStorage(null, '["plant-phases"]')].sort()).toEqual(["balance", "plant-phases", "today"]);
+    expect([...collapsedFromStorage("[]", '["today"]')]).toEqual([]);
   });
 });

@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    GRID_CHARGE_STRATEGIES,
     CONF_TARIFF_MODE,
     CONF_WALLBOX_TYPE,
     DEFAULT_TARIFF_MODE,
@@ -25,6 +26,7 @@ from .const import (
     WALLBOX_TYPE_GENERIC,
 )
 from .coordinator import E3DCMaestroCoordinator
+from .grid_charge_strategy import current_strategy
 from .sensor import _device_info
 from .sensor_device import set_stable_entity_id
 
@@ -40,6 +42,7 @@ async def async_setup_entry(
         MaestroMorningDischargeModeSelect(coordinator),
         MaestroAutoModeObjectiveSelect(coordinator),
         MaestroTariffModeSelect(coordinator),
+        MaestroGridChargeStrategySelect(coordinator),
     ])
 
 
@@ -134,3 +137,26 @@ class MaestroTariffModeSelect(CoordinatorEntity[E3DCMaestroCoordinator], SelectE
     async def async_select_option(self, option: str) -> None:
         self.coordinator.update_param(CONF_TARIFF_MODE, option)
         self.async_write_ha_state()
+
+
+class MaestroGridChargeStrategySelect(CoordinatorEntity[E3DCMaestroCoordinator], SelectEntity):
+    _attr_has_entity_name = True
+    _attr_name = "Netzladung-Strategie"
+    _attr_icon = "mdi:transmission-tower-import"
+    _attr_translation_key = "grid_charge_strategy"
+    _attr_options = list(GRID_CHARGE_STRATEGIES)
+
+    def __init__(self, coordinator: E3DCMaestroCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_grid_charge_strategy"
+        self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
+
+    @property
+    def current_option(self) -> str | None:
+        return current_strategy(self.coordinator._params)
+
+    async def async_select_option(self, option: str) -> None:
+        self.coordinator.set_grid_charge_strategy(option)
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()

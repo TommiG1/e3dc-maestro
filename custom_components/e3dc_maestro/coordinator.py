@@ -90,6 +90,7 @@ from .coordinator_price_plan import CoordinatorPricePlanMixin
 from .coordinator_sensors import CoordinatorSensorsMixin
 from .coordinator_sizing import CoordinatorSizingMixin
 from .forecast import ForecastResult
+from .grid_charge_strategy import strategy_updates
 
 # Re-exports for tests and external imports (public API stability).
 __all__ = [
@@ -405,7 +406,19 @@ class E3DCMaestroCoordinator(
         """Persist the control-cycle interval and reschedule the coordinator."""
         seconds = int(seconds)
         self.update_param(CONF_UPDATE_INTERVAL, seconds)
-        self.async_set_update_interval(timedelta(seconds=seconds))
+        interval = timedelta(seconds=seconds)
+        # Home Assistant's DataUpdateCoordinator has no public setter. Writing
+        # update_interval only stores the value; the already scheduled tick
+        # still uses the old interval until something calls _schedule_refresh.
+        self.update_interval = interval
+        if getattr(self, "_listeners", None):
+            self._schedule_refresh()
+
+    def set_grid_charge_strategy(self, strategy: str) -> None:
+        """Switch every grid-charge toggle that the chosen strategy implies."""
+        for key, value in strategy_updates(strategy, self._params).items():
+            self.update_param(key, value)
+        self._create_background_task(self.async_request_refresh(), "e3dc_maestro_refresh")
 
     def update_param(self, key: str, value: Any) -> None:
         """Called by number/select/switch entities when user changes a value."""

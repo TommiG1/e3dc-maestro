@@ -114,6 +114,8 @@ class MaestroParams:
     price_plan_min_spread: float = 0.03     # €/kWh Mindestgewinn (Verluste/Verschleiß separat)
     price_plan_efficiency: float = 0.90     # Laden × Entladen
     price_plan_safety_factor: float = 1.15  # Verbrauchs-Sicherheitsfaktor
+    # "dynamic_auto" rechnet den Preisplan mit festen Werten, sonst gelten die drei oben.
+    grid_charge_strategy: str = ""
     # Phase C: explicit tariff slot schedule (optional override).
     # If None, a schedule is derived from the legacy ht_*/cheap_threshold fields.
     tariff_schedule: TariffSchedule | None = None

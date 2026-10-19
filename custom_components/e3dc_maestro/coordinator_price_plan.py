@@ -9,6 +9,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_PRICE_SENSOR
+from .grid_charge_strategy import plan_tuning
 from .control_engine import (
     PricePlanAction,
     adaptive_emergency_reserve_soc as _adaptive_emergency_reserve_soc,
@@ -103,9 +104,13 @@ class CoordinatorPricePlanMixin:
             pv_tomorrow = self._read_pv_forecast_profile(now, days_ahead=1, ignore_enabled=True)
 
             cap = max(float(params.battery_capacity_kwh), 0.1)
-            cycles = max(float(getattr(params, "battery_total_cycles", 5000.0)), 100.0)
-            capex = max(float(getattr(params, "battery_capex_eur", 8000.0)), 0.0)
-            wear = capex / (cycles * 2.0 * cap)
+            tuning = plan_tuning(params)
+            if tuning.wear_eur_per_kwh is None:
+                cycles = max(float(getattr(params, "battery_total_cycles", 5000.0)), 100.0)
+                capex = max(float(getattr(params, "battery_capex_eur", 8000.0)), 0.0)
+                wear = capex / (cycles * 2.0 * cap)
+            else:
+                wear = tuning.wear_eur_per_kwh
             charged_today = float(self.stats.get("grid_to_battery_today_kwh", 0.0))
 
             # Re-plan every 5 min (slot boundaries move "now") or when inputs change.
@@ -115,8 +120,7 @@ class CoordinatorPricePlanMixin:
                 tuple(horizon.prices) if horizon else None,
                 round(charged_today, 1),
                 round(floor_pct),
-                params.price_plan_max_soc, params.price_plan_min_spread,
-                params.price_plan_efficiency, params.price_plan_safety_factor,
+                params.price_plan_max_soc, tuning, wear,
                 params.max_grid_charge_kwh, params.battery_capacity_kwh,
             )
             if fingerprint == self._price_plan_fingerprint and self.price_plan is not None:
@@ -134,9 +138,9 @@ class CoordinatorPricePlanMixin:
                     max_discharge_kw=max(float(params.inverter_power), 100.0) / 1000.0,
                     budget_per_day_kwh=float(params.max_grid_charge_kwh),
                     grid_charged_today_kwh=charged_today,
-                    efficiency=float(params.price_plan_efficiency),
-                    min_spread=float(params.price_plan_min_spread),
-                    safety_factor=float(params.price_plan_safety_factor),
+                    efficiency=tuning.efficiency,
+                    min_spread=tuning.min_spread,
+                    safety_factor=tuning.safety_factor,
                     wear_eur_per_kwh=wear,
                     feed_in_price=float(params.feed_in_price),
                     cons_profile_w=cons_profile,

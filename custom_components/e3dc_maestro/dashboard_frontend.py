@@ -18,7 +18,8 @@ from homeassistant.components.lovelace.resources import (
 from homeassistant.const import CONF_ID, CONF_URL
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, VERSION
+from .const import DOMAIN
+from .frontend_cache import asset_query
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,12 +30,25 @@ _STATIC_URL_BASE = f"/{DOMAIN}/frontend"
 _LOCAL_URL_BASE = f"/local/{DOMAIN}"
 _SETUP_FLAG = f"{DOMAIN}_frontend_registered"
 _YAML_WARNED = f"{DOMAIN}_strategy_yaml_warned"
+_EXTRA_JS_URL = f"{DOMAIN}_extra_js_url"
+
+
+def asset_query(path: Path) -> str:
+    """Cache-busting query for a frontend file.
+
+    Uses the file content, not the mtime. Copies that keep the old timestamp
+    and iPad/app caches that ignore a silent overwrite still get a new URL.
+    """
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        digest = "0"
+    return f"v={VERSION}-{digest}"
 
 
 def _strategy_module_url(published_locally: bool) -> str:
-    # Bust caches when the integration version changes.
     base = _LOCAL_URL_BASE if published_locally else _STATIC_URL_BASE
-    return f"{base}/{_STRATEGY_JS}?v={VERSION}"
+    return f"{base}/{_STRATEGY_JS}?{asset_query(_FRONTEND_DIR / _STRATEGY_JS)}"
 
 
 def _strategy_module_path(url: str) -> str:
@@ -96,8 +110,13 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
                 )
             ]
         )
-        add_extra_js_url(hass, module_url)
         hass.data[_SETUP_FLAG] = True
+    # Always refresh the preload URL when the file content changed. Leaving the
+    # first URL in place after a HACS update kept the old strategy in the cache.
+    previous = hass.data.get(_EXTRA_JS_URL)
+    if previous != module_url:
+        add_extra_js_url(hass, module_url)
+        hass.data[_EXTRA_JS_URL] = module_url
         _LOGGER.debug("Registered E3DC Maestro dashboard strategy at %s", module_url)
 
     # Lovelace waits only 5s for ll-strategy-dashboard-* and starts that timer

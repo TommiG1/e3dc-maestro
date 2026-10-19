@@ -24,8 +24,8 @@ import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, 
 import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
-import { makeFmt } from "./format";
-import { loadCollapsed, loadControlsOpen, saveCollapsed, saveControlsOpen } from "./groups";
+import { makeFmt, type Fmt } from "./format";
+import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollapsed, saveControlsOpen } from "./groups";
 import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
@@ -43,7 +43,7 @@ import { checkClassic, classicErrorText, createClassic, type ClassicStatus } fro
 import { loadSetupAck, saveSetupAck } from "./onboarding";
 import { slotsFrom, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
-import { CLASSIC_DASHBOARD, resolveSettingsArea, settingsHeading, settingsView } from "./settings";
+import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
@@ -115,6 +115,9 @@ class MaestroPanel extends LitElement {
   private _consumers: Consumer[] = loadConsumers();
   private _collapsed = loadCollapsed();
   private _controlsOpen = loadControlsOpen();
+  private _autoOpen = loadAutoOpen();
+  private _expert = loadExpert();
+  private _planTuneOpen = loadPlanTuneOpen();
   private _setupAck = loadSetupAck();
   private _period: Period = "today";
   private _periodSums?: Partial<Record<PeriodKey, number>>;
@@ -319,6 +322,24 @@ class MaestroPanel extends LitElement {
       .map((k) => (disabled.has(k) ? `${E[k]} (${t("entityDisabled")})` : E[k]));
     const more = missing.length > MISSING_SHOWN ? ` +${missing.length - MISSING_SHOWN}` : "";
     return html`<p class="err">${t("entitiesMissing", { list: names.join(", ") + more })}</p>`;
+  }
+
+  private _liveFacts(hass: Hass, fmt: Fmt, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
+    if (this._screen !== "live") return nothing;
+    const kwh = (value: number | undefined) => (value === undefined ? "–" : `${fmt.n(value)} kWh`);
+    const configured = (key: string): number | undefined => {
+      const id = this._storedOptions[key];
+      return typeof id === "string" ? num(hass.states[id]) : undefined;
+    };
+    const p10 = hass.states[E.p10];
+    const p50 = p10?.attributes.p50_remaining_kwh;
+    const rest = configured("pv_forecast_sensor") ?? (typeof p50 === "number" ? p50 : num(p10));
+    const dayAfter = configured("pv_forecast_sensor_day2");
+    return html`<p class="facts">
+      <span>${t("factRest")} <b>${kwh(rest)}</b></span>
+      <span>${t("factTomorrow")} <b>${kwh(num(hass.states[E.pvTomorrow]))}</b></span>
+      ${dayAfter === undefined ? nothing : html`<span>${t("factDayAfter")} <b>${kwh(dayAfter)}</b></span>`}
+    </p>`;
   }
 
   private _alerts(hass: Hass, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
@@ -697,6 +718,12 @@ class MaestroPanel extends LitElement {
         saveControlsOpen(this._controlsOpen);
         this.requestUpdate();
       },
+      autoOpen: this._autoOpen,
+      onToggleAuto: () => {
+        this._autoOpen = !this._autoOpen;
+        saveAutoOpen(this._autoOpen);
+        this.requestUpdate();
+      },
       period: this._period,
       periodSums: this._periodSums,
       onPeriod: (period) => {
@@ -745,6 +772,18 @@ class MaestroPanel extends LitElement {
       phasePoints: this._phasePoints,
       phaseHistory: this._phaseHistory,
       options,
+      expert: this._expert,
+      onExpert: (on) => {
+        this._expert = on;
+        saveExpert(on);
+        this.requestUpdate();
+      },
+      planTuneOpen: this._planTuneOpen,
+      onTogglePlanTune: () => {
+        this._planTuneOpen = !this._planTuneOpen;
+        savePlanTuneOpen(this._planTuneOpen);
+        this.requestUpdate();
+      },
     };
     const current = SCREENS.find((s) => s.id === this._screen) ?? SCREENS[0];
     const settingsGroup = this._screen === "settings" ? settingsHeading(this._settingsGroup) : undefined;
@@ -787,6 +826,7 @@ class MaestroPanel extends LitElement {
             <div class="title grow">
               <h1>${area ? t(area.title) : t(current.label)}</h1>
               <p>${area ? t(area.hint) : t(current.sub)}</p>
+              ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>

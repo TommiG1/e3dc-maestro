@@ -21,6 +21,7 @@ from .panel_options import (
 )
 from .const import (
     E3DC_RSCP_DOMAIN,
+    CONF_AUTO_MODE_ENABLED,
     CONF_FORCE_DISCHARGE_POWER_W,
     CONF_FIXED_RESERVE_ENABLED,
     CONF_FIXED_RESERVE_SOC,
@@ -29,8 +30,8 @@ from .const import (
     CONF_PRICE_PLAN_ENABLED,
     CONF_PV_FORECAST_ENABLED,
     DOMAIN,
-    VERSION,
 )
+from .frontend_cache import asset_query
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,6 +122,7 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "ctrlPvDelay": ("switch", CONF_PV_FORECAST_ENABLED),
     "ctrlPlanControls": ("switch", CONF_PRICE_PLAN_ACTIVE),
     "ctrlPlanShadow": ("switch", CONF_PRICE_PLAN_ENABLED),
+    "ctrlAuto": ("switch", CONF_AUTO_MODE_ENABLED),
     "forceDischarge": ("switch", "force_discharge"),
     "fixedReserve": ("switch", CONF_FIXED_RESERVE_ENABLED),
     "debug": ("switch", "debug"),
@@ -131,6 +133,7 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "selMorning": ("select", "morning_discharge_mode"),
     "selAuto": ("select", "auto_mode_objective"),
     "selTariff": ("select", "tariff_mode"),
+    "selStrategy": ("select", "grid_charge_strategy"),
 }
 
 # Platforms whose entities are tunable from the settings screen. The key is the
@@ -432,17 +435,14 @@ def _rscp_plant(hass: HomeAssistant, registry: Any) -> dict[str, Any]:
 
 
 def panel_module_url() -> str:
-    """Panel script URL. The file time is part of it so a new build is a new address.
+    """Panel script URL. The file content is part of it so a new build is a new address.
 
-    The iPad app keeps the previous script when only the file changes and this
-    query stays the same. Resetting the frontend cache does not drop that entry.
+    The iPad app and many browsers keep the previous script when the path stays
+    the same. A content hash in the query forces them to fetch the new file
+    without clearing the frontend cache.
     """
     script = Path(__file__).resolve().parent / "frontend" / "panel" / "maestro-panel.js"
-    try:
-        token = script.stat().st_mtime_ns
-    except OSError:
-        token = 0
-    return f"{_PANEL_MODULE}?v={VERSION}-{token}"
+    return f"{_PANEL_MODULE}?{asset_query(script)}"
 
 
 def _settings_for(registry: Any, entry_id: str) -> tuple[dict[str, str], list[str]]:
@@ -521,7 +521,10 @@ def _ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, A
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
-    """Add the Maestro panel to the sidebar (once, for all users).
+    """Add the Maestro panel to the sidebar (for all users).
+
+    Re-registers when the script content changed, so a HACS update or a live
+    deploy gets a new module URL without clearing the browser cache.
 
     Never raises: a panel problem must not keep the control loop from starting.
     """
@@ -531,8 +534,13 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_options)
         websocket_api.async_register_command(hass, _ws_panel_options_set)
         hass.data[_WS_FLAG] = True
-    if hass.data.get(_PANEL_FLAG):
+    module_url = panel_module_url()
+    registered = hass.data.get(_PANEL_FLAG)
+    if registered == module_url:
         return
+    if registered:
+        frontend.async_remove_panel(hass, PANEL_URL_PATH)
+        hass.data.pop(_PANEL_FLAG, None)
     try:
         await panel_custom.async_register_panel(
             hass,
@@ -540,16 +548,16 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             webcomponent_name=PANEL_COMPONENT,
             sidebar_title="Maestro",
             sidebar_icon="mdi:battery-charging-high",
-            module_url=panel_module_url(),
+            module_url=module_url,
             require_admin=False,
         )
     except ValueError as err:
         _LOGGER.warning("E3DC Maestro: Cockpit-Panel nicht registriert: %s", err)
         return
-    hass.data[_PANEL_FLAG] = True
+    hass.data[_PANEL_FLAG] = module_url
 
 
 def async_unregister_panel(hass: HomeAssistant) -> None:
     """Remove the panel from the sidebar."""
-    if hass.data.pop(_PANEL_FLAG, False):
+    if hass.data.pop(_PANEL_FLAG, None) is not None:
         frontend.async_remove_panel(hass, PANEL_URL_PATH)

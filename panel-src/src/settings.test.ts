@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SETTING_TIPS } from "./setting-tips";
-import { PLAN_CONTROLS, SETTINGS_GROUPS, resolveSettingsArea } from "./settings";
+import { PLAN_CONTROLS, SETTINGS_GROUPS, resolveSettingsArea, rowVisible } from "./settings";
 
 describe("SETTINGS_GROUPS", () => {
   const rows = SETTINGS_GROUPS.flatMap((group) => group.rows);
@@ -41,6 +41,40 @@ describe("PLAN_CONTROLS", () => {
     const rows = PLAN_CONTROLS.flatMap((group) => group.rows);
     expect(new Set(rows).size).toBe(rows.length);
     for (const key of rows) expect(tariff).toContain(key);
+    expect(rows).toContain("grid_charge_strategy");
+  });
+});
+
+describe("rowVisible", () => {
+  const tariff = SETTINGS_GROUPS.find((group) => group.id === "tariff")?.rows ?? [];
+  const shown = (strategy: Parameters<typeof rowVisible>[1]["strategy"], expert = false) =>
+    tariff.filter((key) => rowVisible(key, { strategy, expert }));
+
+  it("shows everything while the backend has no strategy select", () => {
+    expect(shown(undefined)).toEqual(tariff);
+  });
+
+  it("keeps the standard view free of raw switches and plan tuning", () => {
+    for (const strategy of ["off", "slots", "threshold", "dynamic_auto", "dynamic_expert"] as const) {
+      const rows = shown(strategy);
+      expect(rows).toContain("grid_charge_strategy");
+      expect(rows).toContain("fixed_buy_price");
+      expect(rows).not.toContain("price_plan_enabled");
+      expect(rows).not.toContain("tariff_mode");
+    }
+    expect(shown("dynamic_auto", true)).toContain("tariff_mode");
+  });
+
+  it("shows only what the strategy reads", () => {
+    expect(shown("off")).not.toContain("max_grid_charge_kwh");
+    expect(shown("slots")).toContain("low_slot_target_soc");
+    expect(shown("slots")).not.toContain("cheap_threshold");
+    expect(shown("threshold")).toContain("cheap_threshold");
+    expect(shown("dynamic_auto")).toEqual(expect.arrayContaining(["price_plan_active", "price_plan_max_soc"]));
+    expect(shown("dynamic_auto")).not.toContain("price_plan_efficiency");
+    expect(shown("dynamic_expert")).toContain("price_plan_efficiency");
+    expect(shown("slots")).not.toContain("low_slot_hold_discharge");
+    expect(shown("slots", true)).toContain("low_slot_hold_discharge");
   });
 });
 

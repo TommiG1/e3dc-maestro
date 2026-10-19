@@ -75,31 +75,28 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     "setTariffHint",
     '<path d="M12 3v18"/><path d="M16 7.5A3.2 3.2 0 0 0 12.8 5H10a2.8 2.8 0 0 0 0 5.6h4a2.8 2.8 0 0 1 0 5.6H9.5A3.2 3.2 0 0 1 7 13.5"/>',
     [
-      sec("secPrices", "secPricesHint", [
-        "tariff_mode",
-        "dynamic_tariff_enabled",
-        "fixed_buy_price",
-        "feed_in_price",
-        "battery_capex_eur",
-        "battery_total_cycles",
-        "cheap_threshold",
-      ]),
-      sec("secGridCharge", "secGridChargeHint", [
+      sec("secStrategy", "secStrategyHint", ["grid_charge_strategy", "price_plan_active"]),
+      sec("secLimits", "secLimitsHint", [
         "max_grid_charge_kwh",
-        "low_slot_grid_charge_enabled",
+        "cheap_threshold",
         "low_slot_target_soc",
+        "price_plan_max_soc",
         "low_slot_forecast_based",
         "low_slot_hold_discharge",
       ]),
-      sec("secPlan", "secPlanHint", [
-        "price_plan_enabled",
-        "price_plan_active",
-        "price_plan_max_soc",
+      sec("secPlanTune", "secPlanTuneHint", [
         "price_plan_min_spread",
         "price_plan_efficiency",
         "price_plan_safety_factor",
       ]),
       sec("secHt", "secHtHint", ["ht_enabled", "ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"]),
+      sec("secCosts", "secCostsHint", ["fixed_buy_price", "feed_in_price", "battery_capex_eur", "battery_total_cycles"]),
+      sec("secSwitches", "secSwitchesHint", [
+        "tariff_mode",
+        "dynamic_tariff_enabled",
+        "low_slot_grid_charge_enabled",
+        "price_plan_enabled",
+      ]),
     ],
   ),
   area(
@@ -277,6 +274,8 @@ export interface SettingsCtx {
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
   options: OptionCtx;
+  expert: boolean;
+  onExpert: (on: boolean) => void;
 }
 
 const focused = (el: HTMLInputElement): boolean => {
@@ -405,6 +404,15 @@ function settingRow(c: ControlCtx, key: string): TemplateResult | typeof nothing
   </div>`;
 }
 
+export type StrategyCtx = ControlCtx & {
+  expert: boolean;
+  onExpert: (on: boolean) => void;
+  /** Saved tariff slots of class "low". Undefined while the options are not loaded. */
+  lowSlots?: number;
+  /** False when the options are loaded and no price sensor is set. */
+  priceSensor?: boolean;
+};
+
 const groupHasRows = (c: SettingsCtx, group: SettingsGroup): boolean =>
   group.rows.some((key) => {
     const id = S[key];
@@ -466,50 +474,173 @@ function classicGuide(c: SettingsCtx): TemplateResult {
   </div>`;
 }
 
-/** Knobs that decide when the price plan charges from the grid. Same entities as the tariff settings area. */
-export const PLAN_CONTROLS: readonly { title: Key; hint: Key; rows: readonly string[] }[] = [
-  {
-    title: "planTuneTariff",
-    hint: "planTuneTariffHint",
-    rows: ["tariff_mode", "dynamic_tariff_enabled", "cheap_threshold", "fixed_buy_price", "feed_in_price"],
-  },
-  {
-    title: "planTuneGrid",
-    hint: "planTuneGridHint",
-    rows: [
-      "low_slot_grid_charge_enabled",
-      "low_slot_target_soc",
-      "max_grid_charge_kwh",
-      "low_slot_forecast_based",
-      "low_slot_hold_discharge",
-    ],
-  },
-  {
-    title: "planTunePlan",
-    hint: "planTunePlanHint",
-    rows: [
-      "price_plan_enabled",
-      "price_plan_active",
-      "price_plan_max_soc",
-      "price_plan_min_spread",
-      "price_plan_efficiency",
-      "price_plan_safety_factor",
-      "battery_capex_eur",
-      "battery_total_cycles",
-    ],
-  },
-];
+export type GridChargeStrategy = "off" | "slots" | "threshold" | "dynamic_auto" | "dynamic_expert";
 
-export function planControls(c: ControlCtx): TemplateResult {
+export interface StrategyView {
+  /** Undefined when the backend has no strategy select yet: then every row stays visible. */
+  strategy?: GridChargeStrategy;
+  expert: boolean;
+}
+
+const STRATEGIES: readonly GridChargeStrategy[] = ["off", "slots", "threshold", "dynamic_auto", "dynamic_expert"];
+
+export const strategyOf = (hass: Hass): GridChargeStrategy | undefined => {
+  const id = S.grid_charge_strategy;
+  const state = id ? hass.states[id]?.state : undefined;
+  return STRATEGIES.find((item) => item === state);
+};
+
+export const isPlanStrategy = (strategy: GridChargeStrategy | undefined): boolean =>
+  strategy === "dynamic_auto" || strategy === "dynamic_expert";
+
+const ruleRows = (strategy: GridChargeStrategy | undefined): boolean => strategy === "slots" || strategy === "threshold";
+
+/** Which tariff rows the chosen strategy reads. Rows without a rule are always shown. */
+const ROW_WHEN: Record<string, (v: Required<StrategyView>) => boolean> = {
+  price_plan_active: (v) => isPlanStrategy(v.strategy),
+  max_grid_charge_kwh: (v) => v.strategy !== "off",
+  cheap_threshold: (v) => v.strategy === "threshold",
+  low_slot_target_soc: (v) => ruleRows(v.strategy),
+  price_plan_max_soc: (v) => isPlanStrategy(v.strategy),
+  low_slot_forecast_based: (v) => ruleRows(v.strategy) && v.expert,
+  low_slot_hold_discharge: (v) => ruleRows(v.strategy) && v.expert,
+  price_plan_min_spread: (v) => v.strategy === "dynamic_expert",
+  price_plan_efficiency: (v) => v.strategy === "dynamic_expert",
+  price_plan_safety_factor: (v) => v.strategy === "dynamic_expert",
+  tariff_mode: (v) => v.expert,
+  dynamic_tariff_enabled: (v) => v.expert,
+  low_slot_grid_charge_enabled: (v) => v.expert,
+  price_plan_enabled: (v) => v.expert,
+};
+
+export function rowVisible(key: string, view: StrategyView): boolean {
+  if (!view.strategy) return true;
+  const when = ROW_WHEN[key];
+  return !when || when({ strategy: view.strategy, expert: view.expert });
+}
+
+/** The grid-charge part of the tariff area, also shown below the price plan. */
+export const PLAN_CONTROLS: readonly SettingsSection[] = (
+  SETTINGS_GROUPS.find((group) => group.id === "tariff")?.sections ?? []
+).filter((section) => ["secStrategy", "secLimits", "secPlanTune", "secSwitches"].includes(section.title));
+
+const EXPERT_KEY = "e3dc-maestro.settings-expert";
+const PLAN_TUNE_KEY = "e3dc-maestro.plan-tune";
+
+/** The price-plan settings start collapsed so the chart stays in view. */
+export function loadPlanTuneOpen(): boolean {
+  try {
+    return localStorage.getItem(PLAN_TUNE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function savePlanTuneOpen(open: boolean): void {
+  try {
+    localStorage.setItem(PLAN_TUNE_KEY, open ? "1" : "0");
+  } catch {
+    // storage blocked or full: the block still toggles for this session
+  }
+}
+
+export function loadExpert(): boolean {
+  try {
+    return localStorage.getItem(EXPERT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveExpert(on: boolean): void {
+  try {
+    localStorage.setItem(EXPERT_KEY, on ? "1" : "0");
+  } catch {
+    // storage blocked or full: the view still switches for this session
+  }
+}
+
+const fmt = (hass: Hass, key: string, digits = 0): string => {
+  const id = S[key];
+  const value = id ? num(hass.states[id]) : undefined;
+  return value === undefined ? "–" : value.toLocaleString(hass.language, { maximumFractionDigits: digits });
+};
+
+/** One sentence that says what the chosen strategy does with the current values. */
+function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): TemplateResult {
   const { t } = c.i18n;
+  const kwh = fmt(c.hass, "max_grid_charge_kwh", 1);
+  const lines: string[] = [];
+  if (strategy === "off") lines.push(t("sumOff"));
+  if (strategy === "slots") {
+    lines.push(t("sumSlots", { soc: fmt(c.hass, "low_slot_target_soc"), kwh }));
+    if (c.lowSlots === 0) lines.push(t("sumSlotsNone"));
+  }
+  if (strategy === "threshold") {
+    lines.push(t("sumThreshold", { price: fmt(c.hass, "cheap_threshold", 3), soc: fmt(c.hass, "low_slot_target_soc"), kwh }));
+  }
+  if (isPlanStrategy(strategy)) {
+    lines.push(t("sumPlan", { soc: fmt(c.hass, "price_plan_max_soc"), kwh }));
+    lines.push(t(strategy === "dynamic_auto" ? "sumAuto" : "sumExpert"));
+    const active = S.price_plan_active ? isOn(c.hass.states[S.price_plan_active]) : false;
+    lines.push(t(active ? "sumActive" : "sumShadow"));
+  }
+  if ((strategy === "threshold" || isPlanStrategy(strategy)) && c.priceSensor === false) lines.push(t("sumNoPrice"));
+  return html`<div class="strategy-summary">${lines.map((line) => html`<p>${line}</p>`)}</div>`;
+}
+
+function expertToggle(c: StrategyCtx): TemplateResult {
+  const { t } = c.i18n;
+  return html`<div class="ctrl setting-row">
+    <div class="txt"><span class="name"><b>${t("expertView")}</b></span><span>${t("expertViewHint")}</span></div>
+    <button
+      class="switch ${c.expert ? "on" : ""}"
+      role="switch"
+      aria-checked=${c.expert}
+      aria-label=${t("expertView")}
+      @click=${() => c.onExpert(!c.expert)}
+    ></button>
+  </div>`;
+}
+
+function strategySections(c: StrategyCtx, sections: readonly SettingsSection[], headings: boolean): TemplateResult[] {
+  const { t } = c.i18n;
+  const strategy = strategyOf(c.hass);
+  const view: StrategyView = { strategy, expert: c.expert };
+  return sections.flatMap((section) => {
+    const rows = section.rows.filter((key) => rowVisible(key, view));
+    const lead = section.title === "secStrategy";
+    if (!rows.length && !lead) return [];
+    return [
+      html`<section class="settings-section">
+        ${headings ? html`<h3>${t(section.title)}</h3><p class="sub">${t(section.hint)}</p>` : nothing}
+        ${rows.map((key) => settingRow(c, key))}
+        ${lead && strategy ? strategySummary(c, strategy) : nothing}
+        ${lead ? expertToggle(c) : nothing}
+      </section>`,
+    ];
+  });
+}
+
+export function planControls(c: StrategyCtx & { planTuneOpen: boolean; onTogglePlanTune: () => void }): TemplateResult {
+  const { t } = c.i18n;
+  const strategy = strategyOf(c.hass);
+  const open = c.planTuneOpen;
   return html`<div class="card plan-tune">
-    <h3>${t("planTune")}</h3>
-    <p class="hint">${t("planTuneHint")}</p>
-    ${PLAN_CONTROLS.map(
-      (group) => html`<h4>${t(group.title)}</h4>
-        <p class="sub">${t(group.hint)}</p>
-        ${group.rows.map((key) => settingRow(c, key))}`,
-    )}
+    <button
+      type="button"
+      class="group-head ${open ? "open" : ""}"
+      aria-expanded=${open}
+      @click=${() => c.onTogglePlanTune()}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      <span>${t("planTune")}</span>
+      ${open || !strategy ? nothing : html`<b class="group-sum">${c.i18n.option(strategy)}</b>`}
+    </button>
+    ${open
+      ? html`<p class="hint">${t("planTuneHint")}</p>
+        ${strategySections(c, PLAN_CONTROLS, true)}`
+      : nothing}
   </div>`;
 }
 
@@ -549,6 +680,17 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     );
   }
   const current = SETTINGS_GROUPS.find((group) => group.id === c.groupId);
+  if (current?.id === "tariff") {
+    const strategyCtx: StrategyCtx = {
+      ...c,
+      lowSlots: c.options.ready ? c.options.slots.filter((slot) => slot.class_ === "low").length : undefined,
+      priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined,
+    };
+    return html`<div class="settings-detail">
+      ${strategySections(strategyCtx, current.sections, true)}
+      ${optionSections(c.options, current.id)}
+    </div>`;
+  }
   if (current) {
     return html`<div class="settings-detail">
       ${current.sections.map(

@@ -346,6 +346,13 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
     ),
 )
 
+_STRATEGY_SWITCHES = frozenset({
+    CONF_LOW_SLOT_GRID_CHARGE_ENABLED,
+    CONF_DYNAMIC_TARIFF_ENABLED,
+    CONF_PRICE_PLAN_ENABLED,
+    CONF_PRICE_PLAN_ACTIVE,
+})
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -384,8 +391,14 @@ class MaestroSwitch(CoordinatorEntity[E3DCMaestroCoordinator], SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.entity_description.on_fn(self.coordinator)
-        self.async_write_ha_state()
+        self._write_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.entity_description.off_fn(self.coordinator)
+        self._write_state()
+
+    def _write_state(self) -> None:
         self.async_write_ha_state()
+        # The strategy select is derived from these switches.
+        if self.entity_description.key in _STRATEGY_SWITCHES:
+            self.coordinator.async_update_listeners()

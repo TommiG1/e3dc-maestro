@@ -262,6 +262,20 @@ export const styles = css`
     color: var(--muted);
     font-size: 13px;
   }
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 14px;
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  .facts b {
+    color: var(--text);
+    font-weight: 650;
+  }
   .grow {
     flex: 1;
     min-width: 0;
@@ -366,6 +380,28 @@ export const styles = css`
   .sub {
     color: var(--faint);
     font-size: 12px;
+  }
+  .live-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .live-dot.ok {
+    background: var(--ok);
+    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--ok) 55%, transparent);
+  }
+  .live-dot.bad {
+    background: var(--grid-in);
+    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--grid-in) 55%, transparent);
+  }
+  .mode-line {
+    margin-top: 2px;
   }
   .grid {
     display: grid;
@@ -545,7 +581,7 @@ export const styles = css`
   }
   .soc-meta {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     width: 100%;
     margin-top: 8px;
@@ -610,6 +646,22 @@ export const styles = css`
   }
   .group {
     margin-top: 18px;
+  }
+  .group-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+  }
+  .group-bar .group-head {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .group-bar .seg.period {
+    flex: none;
+    margin: 0;
   }
   .group-head {
     display: flex;
@@ -684,6 +736,7 @@ export const styles = css`
     display: flex;
     flex-direction: column;
     gap: 16px;
+    margin-bottom: 18px;
     padding: 18px 18px 16px;
   }
   .hero-main {
@@ -1272,6 +1325,9 @@ export const styles = css`
     padding: 0;
     margin-bottom: 14px;
   }
+  .live-top + .grip {
+    margin-top: 18px;
+  }
   .grip-head {
     display: flex;
     align-items: center;
@@ -1296,6 +1352,7 @@ export const styles = css`
     transform: rotate(90deg);
   }
   .grip-title {
+    flex: none;
     font: 700 15px Inter, system-ui, sans-serif;
   }
   .grip-state {
@@ -1312,6 +1369,18 @@ export const styles = css`
   .grip-state.warn {
     color: var(--text);
     background: rgba(251, 191, 36, 0.16);
+  }
+  .auto-bar {
+    display: flex;
+    align-items: center;
+  }
+  .auto-bar .grip-head {
+    flex: 1;
+    min-width: 0;
+  }
+  .auto-bar .switch {
+    flex: none;
+    margin-right: 16px;
   }
   .grip-body {
     display: flex;
@@ -1444,9 +1513,30 @@ export const styles = css`
   .plan-tune {
     margin-top: 14px;
   }
+  .plan-tune > .group-head {
+    margin: 0;
+  }
   .plan-tune h4 {
     margin: 18px 0 0;
     font-size: 15px;
+  }
+  .plan-tune > .settings-section > h3 {
+    margin-top: 18px;
+  }
+  .strategy-summary {
+    margin: 10px 0 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-wash);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .strategy-summary p {
+    margin: 0;
+  }
+  .strategy-summary p + p {
+    margin-top: 6px;
   }
   .plan-tune .sub {
     margin: 4px 0 2px;
@@ -2051,6 +2141,7 @@ export const styles = css`
   .guide details[open] summary {
     margin-bottom: 12px;
   }
+  .grip-body select,
   .setting-row select,
   .setting-num input {
     border-radius: 10px;

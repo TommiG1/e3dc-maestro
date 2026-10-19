@@ -5566,11 +5566,13 @@ views:
           aktualisiert, per HA-Storage **persistiert** (überleben Neustarts)
           und um Mitternacht auf 0 zurückgesetzt.
 
-          Über `state_class: total_increasing` + `device_class: monetary`
-          erzeugt Home Assistant automatisch Langzeitstatistiken — damit
-          funktionieren auch **Wochen-, Monats- und Jahressummen** über das
-          Energy-Dashboard, `statistics-graph`-Karten oder Verbrauchszähler-
-          Helfer (Utility Meter).
+          Über `state_class: total_increasing` und die Einheit EUR erzeugt
+          Home Assistant Langzeitstatistiken — damit funktionieren
+          **Wochen-, Monats- und Jahressummen** über `statistics-graph`-Karten
+          oder Utility Meter. Die Geräteklasse `monetary` lässt Home Assistant
+          nur mit `state_class: total` zu. Die Tageszähler fallen um
+          Mitternacht auf 0, deshalb bleibt die Geräteklasse leer, damit der
+          Reset nicht als negativer Betrag in die Summe eingeht.
 
           ---
 

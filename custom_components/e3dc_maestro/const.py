@@ -101,6 +101,23 @@ CONF_PRICE_PLAN_MIN_SPREAD = "price_plan_min_spread"                # €/kWh
 CONF_PRICE_PLAN_EFFICIENCY = "price_plan_efficiency"                # 0–1
 CONF_PRICE_PLAN_SAFETY_FACTOR = "price_plan_safety_factor"          # Verbrauch ×
 
+# Netzladung-Strategie: eine Auswahl statt der einzelnen Schalter oben.
+# Gespeichert wird sie nur, um "automatisch" von "Experte" zu unterscheiden;
+# die übrigen Stufen ergeben sich aus den Schaltern.
+CONF_GRID_CHARGE_STRATEGY = "grid_charge_strategy"
+GRID_CHARGE_OFF = "off"
+GRID_CHARGE_SLOTS = "slots"              # HT/NT-Fenster aus den Tarif-Slots
+GRID_CHARGE_THRESHOLD = "threshold"      # dynamischer Preis unter der Günstig-Schwelle
+GRID_CHARGE_PLAN_AUTO = "dynamic_auto"   # Preisplan mit festen Werten
+GRID_CHARGE_PLAN_EXPERT = "dynamic_expert"
+GRID_CHARGE_STRATEGIES = [
+    GRID_CHARGE_OFF,
+    GRID_CHARGE_SLOTS,
+    GRID_CHARGE_THRESHOLD,
+    GRID_CHARGE_PLAN_AUTO,
+    GRID_CHARGE_PLAN_EXPERT,
+]
+
 # Phase C: generic tariff slot list (replaces the single HT-window).
 # Stored under entry options as a list of dicts:
 #   {"weekdays": [0,1,2,3,4], "start_h": 5, "end_h": 21,

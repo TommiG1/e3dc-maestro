@@ -794,6 +794,16 @@
       },
       "morning_discharge_mode": {
         "name": "Pre-discharge mode"
+      },
+      "grid_charge_strategy": {
+        "name": "Grid charge strategy",
+        "state": {
+          "off": "Off",
+          "slots": "Time windows (peak/off-peak)",
+          "threshold": "Dynamic: below price threshold",
+          "dynamic_auto": "Dynamic: automatic",
+          "dynamic_expert": "Dynamic: expert"
+        }
       }
     },
     "number": {

@@ -80,6 +80,7 @@ export const DEFAULT_IDS = {
   ctrlPvDelay: sw("pv_prognose_verzogerung"),
   ctrlPlanControls: sw("preisplan_steuert_akku"),
   ctrlPlanShadow: sw("preisplan_schattenmodus"),
+  ctrlAuto: sw("auto_optimierung"),
   forceDischarge: sw("erzwungene_entladung"),
   fixedReserve: sw("notstromreserve"),
   debug: sw("debug_logging"),
@@ -90,6 +91,7 @@ export const DEFAULT_IDS = {
   selMorning: "select.e3dc_maestro_vorentladungs_modus",
   selAuto: "select.e3dc_maestro_auto_optimierung_ziel",
   selTariff: "select.e3dc_maestro_tarif_modus",
+  selStrategy: "select.e3dc_maestro_netzladung_strategie",
 }
 
 export type EntityKey = keyof typeof DEFAULT_IDS;

@@ -24,7 +24,7 @@ import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
 import { downloadCsv } from "./csv";
 import { setupBanner } from "./onboarding-view";
 import type { OptionCtx } from "./options-view";
-import { planControls } from "./settings";
+import { isPlanStrategy, planControls, strategyOf } from "./settings";
 import {
   parseSlots,
   parseTrajectory,
@@ -56,6 +56,8 @@ export interface Ctx {
   onToggleGroup: (id: string) => void;
   controlsOpen: boolean;
   onToggleControls: () => void;
+  autoOpen: boolean;
+  onToggleAuto: () => void;
   groupId?: string;
   onOpenGroup: (id: string) => void;
   setupAck: boolean;
@@ -87,6 +89,10 @@ export interface Ctx {
   phasePoints?: Readonly<Record<string, Point[]>>;
   phaseHistory?: "idle" | "loading" | "ready" | "error";
   options: OptionCtx;
+  expert: boolean;
+  onExpert: (on: boolean) => void;
+  planTuneOpen: boolean;
+  onTogglePlanTune: () => void;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -140,20 +146,21 @@ export function liveView(c: Ctx): TemplateResult {
   const target = num(st(c, E.targetSoc));
   const bat = num(st(c, E.battery));
   const on = (id: string) => isOn(st(c, id));
-  const chips: [string, boolean, "on" | "warn"][] = [
-    [t("chipReachable"), on(E.reachable), "on"],
-    [t("chipChargeLock"), on(E.chargeLock), "warn"],
-    [t("chipDischargeLock"), on(E.dischargeLock), "warn"],
-    [t("chipHt"), on(E.htProtect), "warn"],
-    [t("chipCurtail"), on(E.curtail), "warn"],
-    [t("chipEmergency"), on(E.emergency), "warn"],
-    [t("chipFeedIn"), on(E.feedInLimit), "warn"],
-    [t("chipGridCharge"), on(E.gridCharge), "on"],
-    [t("chipBatteryPriority"), on(E.batteryPriority), "warn"],
-    [t("chipLowYield"), on(E.lowYield), "warn"],
-    [t("chipPredictive"), on(E.ctrlPredictive), "on"],
-    [t("chipShadow"), on(E.ctrlPlanShadow), "on"],
-  ];
+  const reachable = on(E.reachable);
+  const chips = (
+    [
+      [t("chipUnreachable"), !reachable, "warn"],
+      [t("chipChargeLock"), on(E.chargeLock), "warn"],
+      [t("chipDischargeLock"), on(E.dischargeLock), "warn"],
+      [t("chipHt"), on(E.htProtect), "warn"],
+      [t("chipCurtail"), on(E.curtail), "warn"],
+      [t("chipEmergency"), on(E.emergency), "warn"],
+      [t("chipFeedIn"), on(E.feedInLimit), "warn"],
+      [t("chipGridCharge"), on(E.gridCharge), "on"],
+      [t("chipBatteryPriority"), on(E.batteryPriority), "warn"],
+      [t("chipLowYield"), on(E.lowYield), "warn"],
+    ] as [string, boolean, "on" | "warn"][]
+  ).filter(([, active]) => active);
   const sp = (key: SparkKey, color: string) =>
     c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.theme, c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
   const flowH = flowBoxHeight(c.mobile, c.consumers.length);
@@ -177,14 +184,20 @@ export function liveView(c: Ctx): TemplateResult {
   const reserveMax = typeof reserveAttrs.max === "number" ? reserveAttrs.max : 100;
   const reserveStep = typeof reserveAttrs.step === "number" ? reserveAttrs.step : 1;
   const reserveValue = c.reserveDraft ?? num(reserve) ?? reserveMin;
-  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult) => {
+  const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult, extra?: TemplateResult) => {
     const open = !c.collapsed.has(id);
     return html`<section class="group">
-      <button type="button" class="group-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onToggleGroup(id)}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        <span>${title}</span>
-        ${open ? nothing : summary}
-      </button>
+      <div class="group-bar">
+        <button type="button" class="group-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onToggleGroup(id)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          <span>${title}</span>
+          ${open ? nothing : summary}
+        </button>
+        ${extra ?? nothing}
+      </div>
       ${open ? html`<div class="grid kpis">${body}</div>` : nothing}
     </section>`;
   };
@@ -196,7 +209,8 @@ export function liveView(c: Ctx): TemplateResult {
         <div class="card-head">
           <div>
             <h3>${t("flowTitle")}</h3>
-            <div class="sub">${t("flowSub")}</div>
+            <div class="sub live-state">${t("flowSub")}<i class="live-dot ${reachable ? "ok" : "bad"}" role="img" aria-label=${reachable ? t("chipReachable") : t("chipUnreachable")}></i></div>
+            ${modes ? html`<div class="sub mode-line">${modes}</div>` : nothing}
           </div>
           <button type="button" class="icon-btn" aria-label=${t("editConsumers")} @click=${c.onEditConsumers}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
@@ -231,20 +245,20 @@ export function liveView(c: Ctx): TemplateResult {
         <div class="soc-meta">
           <div class="meta"><b>${target !== undefined ? `${Math.round(target)}%` : "–"}</b><span>${t("targetSoc")}</span></div>
           <div class="meta"><b>${shown(st(c, E.autonomy))}</b><span>${t("autonomy")}</span></div>
-          <div class="meta"><b>${c.fmt.w(bat)}</b><span>${bat !== undefined && bat < 0 ? t("discharging") : t("charging")}</span></div>
         </div>
       </div>
     </div>
-    <div class="chips">
-      ${chips.map(([label, active, cls]) => html`<span class="chip ${active ? cls : ""}"><i></i>${label}</span>`)}
-    </div>
+    ${chips.length
+      ? html`<div class="chips">
+          ${chips.map(([label, , cls]) => html`<span class="chip ${cls}"><i></i>${label}</span>`)}
+        </div>`
+      : nothing}
     <section class="card grip">
       <button type="button" class="grip-head ${c.controlsOpen ? "open" : ""}" aria-expanded=${c.controlsOpen} @click=${() => c.onToggleControls()}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        ${c.controlsOpen
-          ? html`<span class="grip-title">${t("controlsPair")}</span>`
-          : html`<span class="grip-state ${on(E.forceDischarge) ? "warn" : ""}">${on(E.forceDischarge) ? t("controlsForceOn", { v: c.fmt.w(powerValue) }) : t("controlsForceOff")}</span>
-              <span class="grip-state ${on(E.fixedReserve) ? "on" : ""}">${on(E.fixedReserve) ? t("controlsReserveOn", { v: Math.round(reserveValue) }) : t("controlsReserveOff")}</span>`}
+        <span class="grip-title">${t("controlsPair")}</span>
+        ${on(E.forceDischarge) ? html`<span class="grip-state warn">${t("controlsForceOn", { v: c.fmt.w(powerValue) })}</span>` : nothing}
+        ${on(E.fixedReserve) ? html`<span class="grip-state on">${t("controlsReserveOn", { v: Math.round(reserveValue) })}</span>` : nothing}
       </button>
       ${c.controlsOpen
         ? html`<div class="grip-body">
@@ -294,12 +308,12 @@ export function liveView(c: Ctx): TemplateResult {
           </div>`
         : nothing}
     </section>
-    <div class="seg period" role="group" aria-label=${t("periodToday")}>
-      ${(["today", "week", "month"] as const).map(
-        (p) => html`<button class=${c.period === p ? "active" : ""} aria-pressed=${c.period === p} @click=${() => c.onPeriod(p)}>${t(p === "today" ? "periodToday" : p === "week" ? "periodWeek" : "periodMonth")}</button>`,
-      )}
-    </div>
-    ${group("today", groupTitle, html`<b class="group-sum">${euroOf(amount("costNet"))}<small>${t("groupNet")}</small></b>`, html`
+    ${autoLive(c)}
+    ${group(
+      "today",
+      groupTitle,
+      html`<b class="group-sum">${euroOf(amount("costNet"))}<small>${t("groupNet")}</small></b>`,
+      html`
       <div class="card kpi">
         <h3>${t("kpiCost", { when })}</h3>
         <div class="v">${unit(c.fmt.n(amount("costNet"), 2), "€")}</div>
@@ -324,7 +338,13 @@ export function liveView(c: Ctx): TemplateResult {
         <div class="delta">${t("kpiBatterySub", { out: c.fmt.n(amount("dischargedToday")) })}</div>
         ${sp("chargedToday", COLORS.bat)}
       </div>
-    `)}
+    `,
+      html`<div class="seg period" role="group" aria-label=${t("periodToday")}>
+        ${(["today", "week", "month"] as const).map(
+          (p) => html`<button class=${c.period === p ? "active" : ""} aria-pressed=${c.period === p} @click=${() => c.onPeriod(p)}>${t(p === "today" ? "periodToday" : p === "week" ? "periodWeek" : "periodMonth")}</button>`,
+        )}
+      </div>`,
+    )}
     ${group("balance", balanceTitle, html`<b class="group-sum ${balanceTone}">${euroOf(balance)}</b>`, html`
       <div class="card kpi">
         <h3>${t("kpiCostGross")}</h3>
@@ -453,8 +473,11 @@ export function planView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const a = attrs(c, E.plan);
   const slots = parseSlots(a.plan_slots);
+  const strategy = strategyOf(c.hass);
+  const controls = planControls({ ...c, priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined });
   if (!slots.length) {
-    return html`<div class="card"><p class="empty">${t("noPlan")}</p></div>${planControls(c)}`;
+    const why = strategy && !isPlanStrategy(strategy) ? t("noPlanStrategy") : t("noPlan");
+    return html`<div class="card"><p class="empty">${why}</p></div>${controls}`;
   }
   const ext = priceExtremes(slots);
   const legend: [string, string][] = [
@@ -495,6 +518,7 @@ export function planView(c: Ctx): TemplateResult {
           <div class="sub msg">${typeof a.message === "string" ? a.message : ""}</div>
         </div>
         <div>
+          ${row(t("planStrategy"), strategy ? c.i18n.option(strategy) : "–")}
           ${row(t("planGridCharge"), `${c.fmt.n(n(a.total_grid_charge_kwh), 2)} kWh`)}
           ${row(t("planSaving"), `${c.fmt.n(n(a.expected_saving_eur), 2)} €`, "var(--ok)")}
           ${ext ? row(t("planCheapest"), slotText(ext.min)) : nothing}
@@ -503,7 +527,96 @@ export function planView(c: Ctx): TemplateResult {
         </div>
       </div>
     </div>
-    ${planControls(c)}`;
+    ${controls}`;
+}
+
+const hourLabel = (value: number): string => {
+  const hours = Math.floor(value);
+  const minutes = Math.round((value - hours) * 60);
+  return minutes ? `${hours}:${String(minutes).padStart(2, "0")}` : String(hours);
+};
+
+function autoOverrideMap(c: Ctx): Record<string, unknown> {
+  const raw = attrs(c, E.autoStrategy).overrides;
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+}
+
+/** Plain sentence for the morning cap Auto actually applied. */
+function autoCapText(c: Ctx): string | undefined {
+  const overrides = autoOverrideMap(c);
+  const soc = n(overrides.morning_cap_soc);
+  const until = n(overrides.morning_cap_until_h);
+  if (soc === undefined || until === undefined) return undefined;
+  return c.i18n.t("autoCap", { soc: Math.round(soc), hour: hourLabel(until) });
+}
+
+function autoSummary(c: Ctx): { text: string; tone: string } {
+  const { t } = c.i18n;
+  if (!isOn(st(c, E.ctrlAuto))) return { text: t("autoOff"), tone: "" };
+  const a = attrs(c, E.autoStrategy);
+  const goal = typeof a.objective === "string" && a.objective ? c.i18n.option(a.objective) : "–";
+  if (a.fallback === true) return { text: t("autoData", { goal }), tone: "warn" };
+  if (typeof a.last_run !== "string") return { text: t("autoPending", { goal }), tone: "" };
+  const saving = num(st(c, E.autoSaving));
+  const eur = saving === undefined ? "–" : `${saving > 0 ? "+" : ""}${c.fmt.n(saving, 2)} €`;
+  return { text: t("autoOn", { goal, eur }), tone: "on" };
+}
+
+function autoLive(c: Ctx): TemplateResult {
+  const { t } = c.i18n;
+  const open = c.autoOpen;
+  const summary = autoSummary(c);
+  const enabled = isOn(st(c, E.ctrlAuto));
+  const a = attrs(c, E.autoStrategy);
+  const select = st(c, E.selAuto);
+  const options = Array.isArray(select?.attributes.options) ? (select.attributes.options as string[]) : [];
+  const saving = num(st(c, E.autoSaving));
+  const ran = typeof a.last_run === "string";
+  const cap = autoCapText(c);
+  const detail = !enabled
+    ? nothing
+    : a.fallback === true
+      ? html`<p class="sub">${t("autoFallback")}</p>`
+      : !ran
+        ? nothing
+        : html`<p class="sub">${cap ?? t("autoNone")}</p>`;
+  return html`<section class="card grip">
+    <div class="auto-bar">
+      <button type="button" class="grip-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onToggleAuto()}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="grip-title">${t("autoTitle")}</span>
+        <span class="grip-state ${summary.tone}">${summary.text}</span>
+      </button>
+      <button
+        class="switch ${enabled ? "on" : ""}"
+        role="switch"
+        aria-checked=${enabled}
+        aria-label=${t("autoTitle")}
+        ?disabled=${!st(c, E.ctrlAuto) || c.pending.has(E.ctrlAuto)}
+        @click=${() => c.onToggle(E.ctrlAuto)}
+      ></button>
+    </div>
+    ${open
+      ? html`<div class="grip-body">
+          <div class="force">
+            <div class="txt"><b>${t("autoObjective")}</b></div>
+            <select
+              aria-label=${t("autoObjective")}
+              .value=${select?.state ?? ""}
+              ?disabled=${!select || select.state === "unavailable" || c.pending.has(E.selAuto)}
+              @change=${(e: Event) => c.onSelect(E.selAuto, (e.target as HTMLSelectElement).value)}
+            >
+              ${options.map((option) => html`<option value=${option} ?selected=${option === select?.state}>${c.i18n.option(option)}</option>`)}
+            </select>
+          </div>
+          ${enabled && a.fallback !== true && saving !== undefined
+            ? html`<div class="row"><span>${t("autoSaving")}</span><b>${saving > 0 ? "+" : ""}${c.fmt.n(saving, 2)} €</b></div>`
+            : nothing}
+          ${detail}
+          <p class="sub">${t("autoLiveHint")}</p>
+        </div>`
+      : nothing}
+  </section>`;
 }
 
 const autoText = (value: unknown): string => {
@@ -516,8 +629,6 @@ const autoText = (value: unknown): string => {
 function autoRows(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const a = attrs(c, E.autoStrategy);
-  const overrides = a.overrides && typeof a.overrides === "object" ? (a.overrides as Record<string, unknown>) : {};
-  const names = Object.keys(overrides);
   const signed = (label: string, value: unknown, digits: number, unit: string) =>
     infoRow(label, `${c.fmt.n(n(value), digits)} ${unit}`);
   return html`
@@ -532,8 +643,8 @@ function autoRows(c: Ctx): TemplateResult {
     ${signed(t("autoDeltaFeed"), a.delta_grid_feed_in_kwh, 2, "kWh")}
     ${signed(t("autoDeltaCurtail"), a.delta_curtailed_kwh, 2, "kWh")}
     ${signed(t("autoDeltaSelf"), n(a.delta_self_sufficiency) !== undefined ? (n(a.delta_self_sufficiency) as number) * 100 : undefined, 1, "%")}
-    ${names.length
-      ? html`<div class="sub">${t("autoOverrides")}</div>${names.map((key) => infoRow(key, autoText(overrides[key])))}`
+    ${autoCapText(c)
+      ? html`<p class="sub">${autoCapText(c)}</p>`
       : a.fallback === false && typeof a.last_run === "string"
         ? html`<p class="sub">${t("autoNone")}</p>`
         : nothing}`;

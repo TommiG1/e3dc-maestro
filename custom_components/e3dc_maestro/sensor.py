@@ -223,7 +223,8 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Stromkosten heute",
         icon="mdi:cash-minus",
         native_unit_of_measurement="EUR",
-        device_class=SensorDeviceClass.MONETARY,
+        # Tageszähler, Reset um Mitternacht. monetary erlaubt nur state_class
+        # total; der Reset würde dann als negativer Betrag in die Summe laufen.
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("cost_today_eur", 0), 2),
     ),
@@ -232,7 +233,6 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Einspeise-Erlös heute",
         icon="mdi:cash-plus",
         native_unit_of_measurement="EUR",
-        device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("feed_in_revenue_today_eur", 0), 2),
     ),
@@ -264,7 +264,6 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="PV-Ersparnis heute",
         icon="mdi:piggy-bank-outline",
         native_unit_of_measurement="EUR",
-        device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("pv_savings_today_eur", 0), 2),
     ),
@@ -273,7 +272,6 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Akku-Verschleiß heute",
         icon="mdi:battery-minus-variant",
         native_unit_of_measurement="EUR",
-        device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("battery_wear_today_eur", 0), 3),
     ),
@@ -400,7 +398,7 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="PV-Restprognose (P10)",
         icon="mdi:weather-partly-cloudy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
+        # Restprognose steigt und fällt; energy erlaubt nur total/total_increasing.
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda coord: (
             round(coord.data["state"].pv_forecast_remaining_p10_kwh, 3)
@@ -523,7 +521,7 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Auto: Geschätzte Einsparung",
         icon="mdi:piggy-bank",
         native_unit_of_measurement="EUR",
-        device_class=SensorDeviceClass.MONETARY,
+        # Punktschätzung, kein Zähler. monetary erlaubt measurement nicht.
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda coord: (
             round(coord._auto_result.estimated_savings_eur, 3)

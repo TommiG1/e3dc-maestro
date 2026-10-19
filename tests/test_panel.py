@@ -37,11 +37,25 @@ async def test_register_panel_once_for_all_users(ha_frontend):
     assert kwargs["frontend_url_path"] == "maestro-cockpit"
     assert kwargs["webcomponent_name"] == "e3dc-maestro-panel"
     assert kwargs["require_admin"] is False
-    # The file time follows the version, so a new build is a new address for the app cache.
+    # The file content follows the version, so a new build is a new address for the app cache.
     prefix = f"/{DOMAIN}/frontend/panel/maestro-panel.js?v={VERSION}-"
     assert kwargs["module_url"] == panel.panel_module_url()
     assert kwargs["module_url"].startswith(prefix)
-    assert kwargs["module_url"][len(prefix):].isdigit()
+    token = kwargs["module_url"][len(prefix) :]
+    assert len(token) == 12
+    assert all(ch in "0123456789abcdef" for ch in token)
+
+
+@pytest.mark.asyncio
+async def test_register_panel_again_when_script_url_changes(ha_frontend, monkeypatch):
+    register, remove = ha_frontend
+    hass = SimpleNamespace(data={})
+    await panel.async_register_panel(hass)
+    monkeypatch.setattr(panel, "panel_module_url", lambda: "/e3dc_maestro/frontend/panel/maestro-panel.js?v=new")
+    await panel.async_register_panel(hass)
+    remove.assert_called_once_with(hass, "maestro-cockpit")
+    assert register.await_count == 2
+    assert register.await_args.kwargs["module_url"].endswith("v=new")
 
 
 @pytest.mark.asyncio

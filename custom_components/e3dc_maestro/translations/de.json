@@ -794,6 +794,16 @@
       },
       "morning_discharge_mode": {
         "name": "Vorentladungs-Modus"
+      },
+      "grid_charge_strategy": {
+        "name": "Netzladung-Strategie",
+        "state": {
+          "off": "Aus",
+          "slots": "Zeitfenster (HT/NT)",
+          "threshold": "Dynamisch: unter Preisschwelle",
+          "dynamic_auto": "Dynamisch: automatisch",
+          "dynamic_expert": "Dynamisch: Experte"
+        }
       }
     },
     "number": {

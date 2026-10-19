@@ -42,7 +42,8 @@ def test_dashboard_frontend_module_and_assets() -> None:
     module = (
         ROOT / "custom_components" / "e3dc_maestro" / "dashboard_frontend.py"
     ).read_text(encoding="utf-8")
-    assert 'DOMAIN, VERSION' in module or "from .const import DOMAIN, VERSION" in module
+    assert "from .const import DOMAIN" in module
+    assert "from .frontend_cache import asset_query" in module
     assert "async_register_static_paths" in module
     assert "add_extra_js_url" in module
     assert "async_create_item" in module

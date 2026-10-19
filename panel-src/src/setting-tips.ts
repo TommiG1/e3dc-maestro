@@ -1,5 +1,9 @@
 /** One short sentence per setting. Shown after a second of hover or press. */
 export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
+  grid_charge_strategy: {
+    de: "Aus: nie aus dem Netz. Zeitfenster: in NT-Fenstern. Preisschwelle: unter einem festen Preis. Automatisch: der Preisplan wählt die günstigsten Stunden. Experte: wie automatisch, mit eigenen Werten.",
+    en: "Off: never from the grid. Time windows: in off-peak windows. Price threshold: below a fixed price. Automatic: the price plan picks the cheapest hours. Expert: like automatic, with your own values.",
+  },
   inverter_power: {
     de: "Leistung des Wechselrichters. Begrenzt, wie stark Maestro den Akku entladen darf.",
     en: "Inverter power. Caps how hard Maestro may discharge the battery.",

@@ -143,7 +143,7 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
       </div>
       <div class="sheet-section">
         <h3>${t("actionsTitle")}</h3>
-        ${(["selWallbox", "selMorning", "selAuto", "selTariff"] as const).map((key) => {
+        ${(["selWallbox", "selMorning", "selAuto", "selStrategy"] as const).map((key) => {
           const entity = c.hass.states[E[key]];
           const options = Array.isArray(entity?.attributes.options) ? (entity.attributes.options as string[]) : [];
           return html`<label class="ctrl">
