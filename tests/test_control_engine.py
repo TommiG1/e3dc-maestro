@@ -102,6 +102,13 @@ class TestEmergencyCharge:
         decision = decide(state, DEFAULT_PARAMS, _now(6, 15, 10))
         assert decision.phase == PHASE_EMERGENCY
 
+    def test_product_default_does_not_charge_from_grid(self):
+        """A fresh install must not emergency-charge, even at 0 % SoC."""
+        state = MaestroState(soc=0, pv_power=0, house_power=1000, grid_power=0, battery_power=0)
+        decision = decide(state, MaestroParams(), _now(6, 15, 12))
+        assert decision.phase != PHASE_EMERGENCY
+        assert decision.power_mode != POWER_MODE_CHARGE
+
 
 class TestFeedInLimit:
     def test_triggers_when_grid_exceeds_limit(self):

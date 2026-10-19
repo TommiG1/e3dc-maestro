@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CoordinatorDiagnosticsMixin:
-    _AUTONOMY_MIN_SAMPLES = 60  # ~10 min bei 10 s-Polling
+    _AUTONOMY_MIN_SECONDS = 60  # erste Anzeige nach etwa einer Minute
 
 
     @property
@@ -45,15 +45,21 @@ class CoordinatorDiagnosticsMixin:
 
 
     @property
+    def autonomy_min_samples(self) -> int:
+        """Samples covering about one minute at the current poll interval."""
+        interval_s = max(1.0, float(self.update_interval.total_seconds()))
+        return max(1, round(self._AUTONOMY_MIN_SECONDS / interval_s))
+
+
+    @property
     def autonomy_hours(self) -> float | None:
         """Estimated battery autonomy in hours based on current SoC and typical house load."""
         if not self.data or "state" not in self.data:
             return None
         state = self.data["state"]
-        # Warm-up-Gate: Solange das Fenster zu kurz ist, ist der Median nicht
-        # belastbar (eine 30-s-Spitze würde die Schätzung verzerren). Wir
-        # zeigen lieber "unbekannt" als einen unsinnigen Wert.
-        if len(self._house_power_window) < self._AUTONOMY_MIN_SAMPLES:
+        # Erste Anzeige nach etwa einer Minute. Danach glättet der Median
+        # über das weiterlaufende Fenster, statt die Kachel leer zu lassen.
+        if len(self._house_power_window) < self.autonomy_min_samples:
             return None
         avg = self.avg_house_power_w
         if avg < 10:

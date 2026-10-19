@@ -25,8 +25,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Share of inverter power that may be exported at most.",
   },
   charge_threshold: {
-    de: "Unter diesem SoC lädt Maestro sofort, bevor jede andere Regel greift.",
-    en: "Below this SoC Maestro charges immediately, before any other rule.",
+    de: "Unter diesem SoC lädt Maestro sofort aus dem Netz. 0 schaltet die Notladung aus.",
+    en: "Below this SoC Maestro charges from the grid at once. 0 turns emergency charging off.",
   },
   advanced_corridor: {
     de: "Übersetzt die fehlende Strecke zum Ziel in eine Ladeleistung zwischen unterem und oberem Korridor, in Watt.",

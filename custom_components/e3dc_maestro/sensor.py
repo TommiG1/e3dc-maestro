@@ -930,7 +930,7 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "current_house_power_w": round(current, 1) if current is not None else None,
                 "window_minutes": round(len(window) * interval_s / 60, 1),
                 "samples": len(window),
-                "samples_required": coord._AUTONOMY_MIN_SAMPLES,
+                "samples_required": coord.autonomy_min_samples,
             }
         if key == "pv_forecast_remaining_p10":
             coord = self.coordinator

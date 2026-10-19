@@ -1,3 +1,5 @@
+import { helpDe, helpEn } from "./help-text";
+
 const de = {
   navLive: "Live",
   navForecast: "Prognose",
@@ -272,7 +274,7 @@ const de = {
   secPlantPower: "Leistung und Grenzen",
   secPlantPowerHint: "Nennwerte der Anlage.",
   secEmergency: "Notladung",
-  secEmergencyHint: "Unter dieser Schwelle lädt Maestro sofort, bevor jede andere Regel greift.",
+  secEmergencyHint: "Unter dieser Schwelle lädt Maestro sofort aus dem Netz. 0 schaltet die Notladung aus.",
   secReserve: "Notstromreserve",
   secReserveHint: "Eine feste Reserve ersetzt die saisonale und die adaptive.",
   secHard: "Akku-Deckel",
@@ -627,6 +629,7 @@ const de = {
   autoDeltaFeed: "Einspeisung gegenüber Basis",
   autoDeltaCurtail: "Abregelung gegenüber Basis",
   autoDeltaSelf: "Autarkie gegenüber Basis",
+  ...helpDe,
 };
 
 export type Key = keyof typeof de;
@@ -905,7 +908,7 @@ const en: Record<Key, string> = {
   secPlantPower: "Power and limits",
   secPlantPowerHint: "Nameplate values of the plant.",
   secEmergency: "Emergency charge",
-  secEmergencyHint: "Below this threshold Maestro charges immediately, before every other rule.",
+  secEmergencyHint: "Below this threshold Maestro charges from the grid at once. 0 turns emergency charging off.",
   secReserve: "Backup reserve",
   secReserveHint: "A fixed reserve replaces the seasonal and the adaptive one.",
   secHard: "Battery cap",
@@ -1260,6 +1263,7 @@ const en: Record<Key, string> = {
   autoDeltaFeed: "Feed-in versus baseline",
   autoDeltaCurtail: "Curtailment versus baseline",
   autoDeltaSelf: "Autarky versus baseline",
+  ...helpEn,
 };
 
 const OPTIONS_DE: Record<string, string> = {

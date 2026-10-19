@@ -77,7 +77,7 @@ class MaestroParams:
     lower_corridor: float = 500
     upper_corridor: float = 1500
     # Season
-    charge_threshold: float = 15
+    charge_threshold: float = 0  # 0 = Notladung aus (kein Laden aus dem Netz)
     charge_target: float = 85
     winter_minimum_hour: float = 11
     summer_maximum_hour: float = 14

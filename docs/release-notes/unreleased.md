@@ -2,6 +2,16 @@
 
 > Stand nach dem Commit auf `main` vom 19. Oktober 2026. Die Versionsnummer bleibt **0.5.1-beta.1**. Nicht taggen und nicht in HACS veröffentlichen, bis die noch offenen Änderungen dazukommen. Enthält 0.5.1-beta.1.
 
+## Ladeschwelle
+
+Neue Einrichtungen starten mit **Ladeschwelle 0 %**. Die Notladung (`emergency`) lädt dann nicht aus dem Netz, auch bei leerem Akku. Wer das will, setzt die Schwelle selbst, zum Beispiel auf 15 %. Bestehende Installationen behalten den gespeicherten Wert.
+
+## Hilfe im Panel
+
+Die Navigation hat einen Punkt **Hilfe**. Auf schmalen Bildschirmen liegt zusätzlich ein Fragezeichen in der Kopfzeile. Die Taste `?` öffnet dieselbe Ansicht, solange der Fokus nicht in einem Eingabefeld steht. Escape schließt sie.
+
+Die Hilfe liegt über der Seite, die gerade offen ist. Sie springt zum Kapitel dieser Seite, bei einer Einstellungsgruppe zum passenden Abschnitt. Inhalt links, auf dem Handy als Liste zum Aufklappen. Die Suche filtert Abschnitte. In der Regellogik ist die gerade aktive Stufe markiert. „In den Einstellungen öffnen“ schließt die Hilfe und wechselt dorthin.
+
 ## Netzladung-Strategie
 
 Die Netzladung hat eine Auswahl, `select.e3dc_maestro_netzladung_strategie`. Sie setzt die bisherigen Schalter selbst. Tarifmodus, dynamischer Tarif, Laden im günstigen Fenster und Preisplan laufen nicht mehr nebeneinander.
@@ -74,6 +84,14 @@ Tageszähler in Euro (Kosten, Einspeise-Erlös, PV-Ersparnis, Akku-Verschleiß) 
 Panel und Dashboard-Strategie hängen in der URL am Inhalt der Datei, nicht an der Änderungszeit. Ein stilles Überschreiben, das die Uhrzeit der Datei behält, ergibt trotzdem eine neue Adresse. Home Assistant registriert das Panel neu, sobald sich diese Adresse ändert.
 
 Nach einem Update reicht ein Neustart von Home Assistant oder ein Neuladen der Integration. Danach lädt ein normales Öffnen von Maestro das neue Skript. Den Browser-Cache und den Frontend-Cache der iPad-App muss man dafür nicht leeren.
+
+## Autonomie am Akku
+
+Die Autonomiezeit erscheint, sobald etwa eine Minute Hausverbrauch vorliegt. Bei einem Takt von 60 Sekunden ist das die erste Messung, bei 10 Sekunden sechs Messungen. Vorher blieb die Kachel bis zu 60 Messungen leer, bei langsamem Takt also bis zu einer Stunde. Der angezeigte Wert folgt danach weiter dem Median im rollierenden Fenster.
+
+## PV morgen
+
+Die Kopfzeile und die Statistik zeigen die morgige PV-Prognose, sobald unter den Prognose-Sensoren ein Sensor für morgen gewählt ist. Vorausschauende Ladung und die prognosebasierte Netzlade-Menge bleiben aus, solange ihre Schalter aus sind. Sie lesen denselben Wert nur, wenn sie an sind.
 
 ## Hinweise
 

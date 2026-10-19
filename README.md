@@ -260,7 +260,7 @@ Defines when and to what SoC target the battery is charged each day.
 
 | Parameter | Default | Description |
 |---|---|---|
-| **Charge threshold (%)** | 15 | SoC floor for emergency charging (`emergency` phase) |
+| **Charge threshold (%)** | 0 | SoC floor for emergency charging (`emergency` phase). 0 turns it off: no grid charging after setup |
 | **Charge target SoC (%)** | 85 | Daily target SoC for the seasonal corridor |
 | **Winter minimum charge end (h)** | 11:00 | Earliest charge end in winter (local time) |
 | **Summer maximum charge end (h)** | 14:00 | Latest charge end in summer (local time) |
@@ -1079,7 +1079,7 @@ For a fixed 30 % reserve:
 - Turn **seasonal emergency reserve** on
 - Set **emergency reserve winter** and **equinox** both to 30 % (same value = fixed all year, no seasonal interpolation)
 - Turn **adaptive reserve** off
-- Leave the **charge threshold** well below that; the default is 15 %
+- Leave the **charge threshold** well below that. The default is 0 % (emergency charging off). Set it deliberately, for example to 15 %, only if a grid top-up is wanted
 
 Below 30 % discharge stays blocked and only PV may recharge. From 30 % upward the battery covers the house until it reaches the reserve again.
 

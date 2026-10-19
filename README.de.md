@@ -268,7 +268,7 @@ Definiert wann und auf welches SoC-Ziel der Akku täglich geladen wird.
 
 | Parameter | Standard | Erläuterung |
 |---|---|---|
-| **Ladeschwelle (%)** | 15 | SoC-Unterkante für Notfallladung (Phase `emergency`) |
+| **Ladeschwelle (%)** | 0 | SoC-Unterkante für Notfallladung (Phase `emergency`). 0 schaltet sie aus: kein Laden aus dem Netz nach dem Setup |
 | **Ladeende SoC (%)** | 85 | Tages-Ziel-SoC für den saisonalen Korridor |
 | **Winterminimum Ladebeginn (h)** | 11:00 | Frühestens ab dieser Uhrzeit im Winter laden (Ortszeit) |
 | **Sommermaximum Ladebeginn (h)** | 14:00 | Spätester Ladebeginn im Sommer (Ortszeit) |
@@ -1148,7 +1148,7 @@ Für eine feste 30-%-Reserve:
 - **Saisonale Notstromreserve** einschalten
 - **Notstromreserve Winter** und **Äquinoktium** beide auf 30 % (gleicher Wert = ganzjährig fest, ohne saisonale Interpolation)
 - **Adaptive Reserve** aus
-- **Ladeschwelle** deutlich darunter lassen, Standard ist 15 %
+- **Ladeschwelle** deutlich darunter lassen. Standard ist 0 % (Notladung aus). Wer aus dem Netz nachladen will, setzt sie bewusst, zum Beispiel auf 15 %
 
 Liegt der SoC unter 30 %, bleibt die Entladung gesperrt, und nur PV darf nachladen. Ab 30 % versorgt der Akku das Haus, bis er die Reserve wieder erreicht.
 

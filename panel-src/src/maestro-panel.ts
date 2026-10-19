@@ -46,6 +46,8 @@ import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
+import { helpAnchor, type HelpAction } from "./help-content";
+import { helpOverlay } from "./help-view";
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
@@ -59,6 +61,7 @@ const SCREENS: { id: Screen; label: Key; sub: Key; icon: string }[] = [
   { id: "settings", label: "navSettings", sub: "subSettings", icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
 ];
 const SLIDERS_ICON = '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>';
+const HELP_ICON = '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1-1.3 1.8V14"/><path d="M12 17h.01"/>';
 const MOBILE = "(max-width: 960px)";
 const HISTORY_TTL = 5 * 60e3;
 const HISTORY_RETRY = 60e3;
@@ -89,6 +92,11 @@ class MaestroPanel extends LitElement {
   private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
   private _sheet = false;
+  private _help = false;
+  private _helpQuery = "";
+  private _helpAnchor?: string;
+  private _helpCurrent = "";
+  private _helpListening = false;
   private _mobile = window.matchMedia(MOBILE).matches;
   private _mq = window.matchMedia(MOBILE);
   private _range = 24;
@@ -214,6 +222,7 @@ class MaestroPanel extends LitElement {
     cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
     window.removeEventListener("keydown", this._onKey);
+    this._unbindHelpScroll();
     window.removeEventListener("popstate", this._onPop);
   }
 
@@ -232,10 +241,96 @@ class MaestroPanel extends LitElement {
   };
 
   private _onKey = (e: KeyboardEvent) => {
-    if (e.key !== "Escape") return;
-    if (this._hist) this._closeHistory();
-    else if (this._sheet) this._setSheet(false);
+    if (e.key === "Escape") {
+      if (this._help) this._closeHelp();
+      else if (this._hist) this._closeHistory();
+      else if (this._sheet) this._setSheet(false);
+      return;
+    }
+    if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey || this._help) return;
+    const typing = e.composedPath().some((node) => node instanceof HTMLElement && (node.tagName === "INPUT" || node.tagName === "TEXTAREA" || node.tagName === "SELECT" || node.isContentEditable));
+    if (typing) return;
+    e.preventDefault();
+    this._openHelp();
   };
+
+  private _openHelp(): void {
+    this._help = true;
+    this._helpAnchor = helpAnchor(this._screen, this._settingsGroup);
+    this._helpCurrent = this._helpAnchor.startsWith("ch-") ? this._helpAnchor.slice(3) : this._helpAnchor;
+    this.requestUpdate();
+  }
+
+  private _closeHelp(): void {
+    this._help = false;
+    this._helpQuery = "";
+    this._helpAnchor = undefined;
+    this._unbindHelpScroll();
+    this.requestUpdate();
+  }
+
+  private _jumpHelp(id: string): void {
+    this._helpCurrent = id;
+    if (this._helpQuery) {
+      this._helpQuery = "";
+      this._helpAnchor = id;
+      this.requestUpdate();
+      return;
+    }
+    const fold = this.renderRoot.querySelector(".help-fold");
+    if (fold instanceof HTMLDetailsElement) fold.open = false;
+    this._scrollHelp(id);
+  }
+
+  private _scrollHelp(id: string): void {
+    const align = () => {
+      const doc = this.renderRoot.querySelector(".help-doc");
+      if (!(doc instanceof HTMLElement)) return;
+      const chapterId = id.startsWith("ch-") ? id.slice(3) : id;
+      const el = doc.querySelector(`[data-help="${chapterId}"]`) ?? doc.querySelector(`[data-chapter="${chapterId}"]`);
+      if (!(el instanceof HTMLElement)) return;
+      const top = el.getBoundingClientRect().top - doc.getBoundingClientRect().top + doc.scrollTop;
+      doc.scrollTop = Math.max(0, top - 4);
+    };
+    align();
+    requestAnimationFrame(align);
+  }
+
+  private _helpAction(action: HelpAction): void {
+    this._closeHelp();
+    if (action.kind === "controls") {
+      this._setSheet(true);
+      return;
+    }
+    if (action.group && action.screen === "settings") this._openSettingsGroup(action.group);
+    else if (action.group && action.screen === "plant") this._openPlantRoom(action.group);
+    else this._go(action.screen);
+  }
+
+  private _onHelpScroll = () => {
+    const doc = this.renderRoot.querySelector(".help-doc");
+    if (!(doc instanceof HTMLElement)) return;
+    const edge = doc.getBoundingClientRect().top + 12;
+    let id = "";
+    for (const el of doc.querySelectorAll<HTMLElement>("[data-help]")) {
+      if (el.getBoundingClientRect().top <= edge) id = el.dataset.help ?? id;
+    }
+    if (!id || id === this._helpCurrent) return;
+    this._helpCurrent = id;
+    this.requestUpdate();
+  };
+
+  private _bindHelpScroll(): void {
+    const doc = this.renderRoot.querySelector(".help-doc");
+    if (!(doc instanceof HTMLElement) || this._helpListening) return;
+    doc.addEventListener("scroll", this._onHelpScroll, { passive: true });
+    this._helpListening = true;
+  }
+
+  private _unbindHelpScroll(): void {
+    this.renderRoot.querySelector(".help-doc")?.removeEventListener("scroll", this._onHelpScroll);
+    this._helpListening = false;
+  }
 
   private _closeHistory(): void {
     this._hist = undefined;
@@ -819,6 +914,7 @@ class MaestroPanel extends LitElement {
           ${SCREENS.map(navButton)}
           <div class="spacer"></div>
           <button class="nav-btn" @click=${() => this._setSheet(true)}>${icon(SLIDERS_ICON)}${t("navControls")}</button>
+          <button class="nav-btn ${this._help ? "active" : ""}" aria-expanded=${this._help ? "true" : "false"} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}${t("navHelp")}</button>
         </nav>
         <main>
           <header class="topbar">
@@ -837,6 +933,7 @@ class MaestroPanel extends LitElement {
               <p>${area ? t(area.hint) : t(current.sub)}</p>
               ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
+            <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
             <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
           ${this._entityNotice(hass, t)}
@@ -913,6 +1010,27 @@ class MaestroPanel extends LitElement {
         },
         onRemoveConsumer: (id) => this._setConsumers(this._consumers.filter((c) => c.id !== id)),
       })}
+      ${this._help
+        ? helpOverlay({
+            i18n,
+            query: this._helpQuery,
+            phase,
+            planActive: isOn(hass.states[E.ctrlPlanControls]),
+            lowYield: isOn(hass.states[E.lowYield]),
+            current: this._helpCurrent,
+            onQuery: (query) => {
+              this._helpQuery = query;
+              this.requestUpdate();
+            },
+            onClose: () => this._closeHelp(),
+            onJump: (id) => this._jumpHelp(id),
+            onAction: (action) => this._helpAction(action),
+            onTop: () => {
+              const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+              this.renderRoot.querySelector(".help-doc")?.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+            },
+          })
+        : nothing}
       ${this._hist
         ? html`<div class="scrim open hist-scrim" @click=${() => this._closeHistory()}></div>
             <aside class="overlay" role="dialog" aria-modal="true" aria-label=${this._hist.name}>
@@ -955,6 +1073,15 @@ class MaestroPanel extends LitElement {
     if (this._focusConsumers) {
       this._focusConsumers = false;
       this.renderRoot.querySelector("#display-consumers")?.scrollIntoView({ block: "start" });
+    }
+    if (this._help) this._bindHelpScroll();
+    else this._unbindHelpScroll();
+    if (this._helpAnchor) {
+      const anchor = this._helpAnchor;
+      this._helpAnchor = undefined;
+      this._helpCurrent = anchor.startsWith("ch-") ? anchor.slice(3) : anchor;
+      this._scrollHelp(anchor);
+      this.renderRoot.querySelector<HTMLInputElement>(".help-query")?.focus({ preventScroll: true });
     }
     if (this._screen !== "forecast" || !this._hass) return;
     const traj = parseTrajectory(this._hass.states[E.trajectory]?.attributes);

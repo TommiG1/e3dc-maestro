@@ -33,19 +33,6 @@ _YAML_WARNED = f"{DOMAIN}_strategy_yaml_warned"
 _EXTRA_JS_URL = f"{DOMAIN}_extra_js_url"
 
 
-def asset_query(path: Path) -> str:
-    """Cache-busting query for a frontend file.
-
-    Uses the file content, not the mtime. Copies that keep the old timestamp
-    and iPad/app caches that ignore a silent overwrite still get a new URL.
-    """
-    try:
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
-    except OSError:
-        digest = "0"
-    return f"v={VERSION}-{digest}"
-
-
 def _strategy_module_url(published_locally: bool) -> str:
     base = _LOCAL_URL_BASE if published_locally else _STATIC_URL_BASE
     return f"{base}/{_STRATEGY_JS}?{asset_query(_FRONTEND_DIR / _STRATEGY_JS)}"

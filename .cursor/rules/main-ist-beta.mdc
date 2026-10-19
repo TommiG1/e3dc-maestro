@@ -1,0 +1,21 @@
+# main ist das letzte stabile Release
+
+`main` entspricht dem zuletzt veröffentlichten stabilen Release. Neue Arbeit startet nicht auf `main`.
+
+## Fixes
+
+- Hotfix von `main` abzweigen, nicht von einem Feature-Branch.
+- Nur den Fix nach `main` mergen, Version und Changelog anheben, als eigene Version taggen.
+- Danach `main` in offene Feature-Branches mergen.
+
+## Features
+
+- Eigener Branch ab `main` (`feat/…`).
+- Nicht nach `main` mergen und nicht taggen, solange das Feature nicht selbst release-reif ist.
+- Die Live-HA darf vom Feature-Branch per Datei-Kopie geprüft werden. Das ist kein Merge und kein Release.
+
+## Nicht tun
+
+- Feature-Commits direkt auf `main`, auch nicht „kurz mit“ einem Fix.
+- `manifest.json` auf einem Feature-Branch anheben.
+- Tags von einem Feature-Branch setzen.

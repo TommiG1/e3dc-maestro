@@ -2756,4 +2756,170 @@ export const styles = css`
   .opt-chips .chip {
     overflow-wrap: anywhere;
   }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  .help-menu {
+    display: none;
+  }
+  .help-scrim {
+    z-index: 40;
+  }
+  .help {
+    position: fixed;
+    z-index: 41;
+    inset: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 22px;
+    border-radius: 24px;
+    background: var(--float);
+    border: 1px solid var(--stroke-strong);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .help-search {
+    display: block;
+  }
+  .help-query {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 500 14px inherit;
+    padding: 10px 12px;
+  }
+  .help-body {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 18px;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+  .help-toc,
+  .help-doc {
+    overflow: auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+  .help-toc-ch {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+  .help-toc button {
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font: 500 13px inherit;
+    padding: 4px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .help-toc-ch > button:first-child {
+    color: var(--text);
+    font-weight: 700;
+  }
+  .help-toc button.on,
+  .help-toc button[aria-current="true"] {
+    background: var(--accent-wash);
+    color: var(--text);
+  }
+  .help-fold {
+    display: none;
+  }
+  .help-doc article + article {
+    margin-top: 22px;
+  }
+  .help-doc h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+  }
+  .help-doc h4 {
+    margin: 14px 0 4px;
+    font-size: 15px;
+  }
+  .help-doc p {
+    margin: 0 0 8px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .help-doc mark {
+    background: var(--accent-wash);
+    color: inherit;
+    border-radius: 3px;
+  }
+  .help-link,
+  .help-action {
+    margin: 4px 8px 4px 0;
+  }
+  .help-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--accent-2, var(--accent));
+    font: 600 14px inherit;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .help-live {
+    margin: 8px 0 12px;
+    padding: 12px;
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    background: var(--glass);
+  }
+  .help-now {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-weight: 650;
+  }
+  .help-top {
+    margin-top: 16px;
+  }
+  @media (max-width: 960px) {
+    .help {
+      inset: 8px;
+      padding: 16px;
+    }
+    .help-body {
+      grid-template-columns: 1fr;
+    }
+    .help-body > .help-toc {
+      display: none;
+    }
+    .help-menu {
+      display: grid;
+    }
+    .help-fold {
+      display: block;
+    }
+    .help-fold nav {
+      max-height: 40vh;
+      overflow: auto;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .help,
+    .help-scrim {
+      transition: none;
+    }
+  }
 `;

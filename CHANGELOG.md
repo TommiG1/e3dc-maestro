@@ -12,6 +12,8 @@ einen eigenen Versionsabschnitt verschieben.
 > Entwurf, noch kein Release. Versionsnummer bleibt 0.5.1-beta.1. Ausführlich: [docs/release-notes/unreleased.md](docs/release-notes/unreleased.md).
 
 ### Neu
+- **Hilfe ausführlicher.** Jede Einstellung beschreibt, was sie tut und was sich am Akku, am Netz oder an der PV ändert. Fragen und Antworten sammeln die wiederkehrenden Fälle: keine Netzladung, Takten, Hochtarif mit Netzbezug, Überschuss trotz leerem Akku, Tibber, Neustart.
+- **Hilfe im Panel.** Eigener Punkt in der Navigation und, auf schmalen Bildschirmen, ein Fragezeichen in der Kopfzeile. Die Anleitung liegt über der offenen Seite, mit Inhalt, Suche und Sprung zur passenden Stelle. Sie erklärt die Seiten, die Einstellungen und jede Stufe der Regelung.
 - **Netzladung-Strategie.** Eine Auswahl ersetzt die verstreuten Schalter: Aus, Zeitfenster (HT/NT), Dynamisch unter Preisschwelle, Dynamisch automatisch, Dynamisch Experte. Automatisch rechnet fest mit Wirkungsgrad 0,90, Mindestspanne 0,03 €/kWh und Sicherheitsfaktor 1,15, ohne Verschleiß. Experte behält die eigenen Werte. Bestehende Preisplan-Nutzer erscheinen als Experte. Der erste Wechsel in den Plan startet im Schattenmodus.
 - **Einstellungen folgen der Strategie.** Sichtbar sind nur Werte, die die Strategie liest, plus ein Satz mit den aktuellen Grenzen. Kosten & Auswertung steuern nicht, wann geladen wird. Die Expertenansicht gilt nur für diesen Browser.
 - **Dieselben Blöcke auf der Preisplan-Seite**, zugeklappt, mit dem Strategienamen. Die Kachel Plan nennt die aktive Strategie.
@@ -19,6 +21,10 @@ einen eigenen Versionsabschnitt verschieben.
 - **Live ohne Dauerlärm.** Entladung & Reserve zeigt Pillen nur, wenn etwas an ist. Heute und Tagesbilanz starten zugeklappt, der Zeitraum sitzt in der Heute-Zeile. Chips nur bei aktivem Zustand. Erreichbarkeit ist ein grüner oder roter Punkt hinter „Jetzt · aktualisiert live“. Vorausschau und Schattenmodus stehen als Satz unter dem Energiefluss.
 
 ### Geändert
+- **Ladeschwelle startet bei 0 %.** Eine neue Einrichtung lädt den Akku nicht aus dem Netz, nur weil der Ladestand unter 15 % liegt. Die Notladung bleibt aus, bis die Schwelle selbst gesetzt wird. Bestehende Installationen behalten ihren gespeicherten Wert.
+- **Start.** Die Dashboard-Strategie nutzt wieder die vorhandene Cache-Adresse. Eine zweite Kopie ohne `hashlib` hat den Komponentenstart mit `NameError` abgebrochen.
+- **Autonomie am Akku** erscheint nach etwa einer Minute, nicht erst nach 60 Messungen. Der Wert wird danach mit dem laufenden Verbrauchsfenster nachgeführt.
+- **PV morgen** steht in der Kopfzeile und unter Statistik, sobald der Sensor gewählt ist. Vorausschauende Ladung und prognosebasierte Netzladung müssen dafür nicht an sein.
 - **Aktualisierungsintervall.** `number/set_value` rief eine nicht vorhandene Methode auf. Der Takt wird jetzt über das vorhandene Intervall umgestellt.
 - **Tageszähler in Euro** haben keine Geräteklasse `monetary` mehr. Die passt nicht zu `total_increasing`. Einheit und Zähler bleiben.
 - **Panel- und Strategie-URL hängen am Dateiinhalt.** Nach Neustart oder Reload lädt Maestro das neue Skript ohne geleerten Browser- oder iPad-Cache.
