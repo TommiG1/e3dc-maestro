@@ -33,6 +33,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.cursor/rules/coding-leiter.mdc
 *.swp
 *.swo
 .DS_Store
