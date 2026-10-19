@@ -29,6 +29,7 @@ import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollap
 import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
+import { pauseMenu, pauseStatus, pauseUntil } from "./pause";
 import { styles } from "./styles";
 import { loadTheme, saveTheme, type ThemeId } from "./theme";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
@@ -92,6 +93,8 @@ class MaestroPanel extends LitElement {
   private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
   private _sheet = false;
+  private _pauseOpen = false;
+  private _pauseClock?: number;
   private _help = false;
   private _helpQuery = "";
   private _helpAnchor?: string;
@@ -218,6 +221,7 @@ class MaestroPanel extends LitElement {
     super.disconnectedCallback();
     this._mq.removeEventListener("change", this._onMq);
     window.clearInterval(this._timer);
+    window.clearInterval(this._pauseClock);
     window.clearTimeout(this._overflowTimer);
     cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
@@ -242,7 +246,10 @@ class MaestroPanel extends LitElement {
 
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
-      if (this._help) this._closeHelp();
+      if (this._pauseOpen) {
+        this._pauseOpen = false;
+        this.requestUpdate();
+      } else if (this._help) this._closeHelp();
       else if (this._hist) this._closeHistory();
       else if (this._sheet) this._setSheet(false);
       return;
@@ -624,7 +631,40 @@ class MaestroPanel extends LitElement {
 
   private _toggle(id: string): void {
     const on = isOn(this._hass?.states[id]);
+    if (id === E.ctrlActive && on) {
+      this._pauseOpen = true;
+      this.requestUpdate();
+      return;
+    }
     void this._call(id, "switch", on ? "turn_off" : "turn_on", { entity_id: id });
+  }
+
+  private async _pause(hours: number | null): Promise<void> {
+    const hass = this._hass;
+    this._pauseOpen = false;
+    if (!hass) return;
+    this._pending.add(E.ctrlActive);
+    this._error = undefined;
+    this.requestUpdate();
+    try {
+      await hass.callWS({ type: "e3dc_maestro/pause", hours });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : typeof err === "object" && err && "message" in err ? String((err as { message: unknown }).message) : String(err);
+      this._error = makeI18n(hass.language).t("callFailed", { err: msg });
+    } finally {
+      this._pending.delete(E.ctrlActive);
+      this.requestUpdate();
+    }
+  }
+
+  private _syncPauseClock(until: number | undefined): void {
+    const running = until !== undefined && until * 1000 > Date.now();
+    if (running && this._pauseClock === undefined) {
+      this._pauseClock = window.setInterval(() => this.requestUpdate(), 30_000);
+    } else if (!running && this._pauseClock !== undefined) {
+      window.clearInterval(this._pauseClock);
+      this._pauseClock = undefined;
+    }
   }
 
   private _press(id: string): void {
@@ -894,6 +934,9 @@ class MaestroPanel extends LitElement {
     const plantGroup = this._screen === "plant" ? plantHeading(this._plantGroup) : undefined;
     const area = settingsGroup ?? plantGroup;
     const regulation = isOn(hass.states[E.ctrlActive]);
+    const pauseEnd = pauseUntil(hass.states[E.ctrlActive]);
+    this._syncPauseClock(pauseEnd);
+    const pauseText = pauseStatus(t, hass.states[E.ctrlActive]);
     const phase = hass.states[E.phase]?.state;
     const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, plant: plantView, settings: settingsView }[current.id](ctx);
 
@@ -931,10 +974,11 @@ class MaestroPanel extends LitElement {
             <div class="title grow">
               <h1>${area ? t(area.title) : t(current.label)}</h1>
               <p>${area ? t(area.hint) : t(current.sub)}</p>
+              ${pauseText ? html`<p class="sub">${pauseText}</p>` : nothing}
               ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
             <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
-            <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
+            <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
           </header>
           ${this._entityNotice(hass, t)}
           ${this._alerts(hass, t)}
@@ -1029,6 +1073,12 @@ class MaestroPanel extends LitElement {
               const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
               this.renderRoot.querySelector(".help-doc")?.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
             },
+          })
+        : nothing}
+      ${this._pauseOpen
+        ? pauseMenu(t, (hours) => void this._pause(hours), () => {
+            this._pauseOpen = false;
+            this.requestUpdate();
           })
         : nothing}
       ${this._hist

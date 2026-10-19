@@ -14,6 +14,7 @@ einen eigenen Versionsabschnitt verschieben.
 ### Neu
 - **Hilfe ausführlicher.** Jede Einstellung beschreibt, was sie tut und was sich am Akku, am Netz oder an der PV ändert. Fragen und Antworten sammeln die wiederkehrenden Fälle: keine Netzladung, Takten, Hochtarif mit Netzbezug, Überschuss trotz leerem Akku, Tibber, Neustart.
 - **Hilfe im Panel.** Eigener Punkt in der Navigation und, auf schmalen Bildschirmen, ein Fragezeichen in der Kopfzeile. Die Anleitung liegt über der offenen Seite, mit Inhalt, Suche und Sprung zur passenden Stelle. Sie erklärt die Seiten, die Einstellungen und jede Stufe der Regelung.
+- **PV-Laden nach Aufgabe.** Tagesziel, Zeitfenster, Ladeleistung und Sonderfälle stehen in eigenen Karten. Ladeende ist eine Frist, danach lädt Überschuss weiter. Die Prognose-Sensoren liegen zusammen.
 - **Netzladung-Strategie.** Eine Auswahl ersetzt die verstreuten Schalter: Aus, Zeitfenster (HT/NT), Dynamisch unter Preisschwelle, Dynamisch automatisch, Dynamisch Experte. Automatisch rechnet fest mit Wirkungsgrad 0,90, Mindestspanne 0,03 €/kWh und Sicherheitsfaktor 1,15, ohne Verschleiß. Experte behält die eigenen Werte. Bestehende Preisplan-Nutzer erscheinen als Experte. Der erste Wechsel in den Plan startet im Schattenmodus.
 - **Einstellungen folgen der Strategie.** Sichtbar sind nur Werte, die die Strategie liest, plus ein Satz mit den aktuellen Grenzen. Kosten & Auswertung steuern nicht, wann geladen wird. Die Expertenansicht gilt nur für diesen Browser.
 - **Dieselben Blöcke auf der Preisplan-Seite**, zugeklappt, mit dem Strategienamen. Die Kachel Plan nennt die aktive Strategie.
@@ -21,6 +22,7 @@ einen eigenen Versionsabschnitt verschieben.
 - **Live ohne Dauerlärm.** Entladung & Reserve zeigt Pillen nur, wenn etwas an ist. Heute und Tagesbilanz starten zugeklappt, der Zeitraum sitzt in der Heute-Zeile. Chips nur bei aktivem Zustand. Erreichbarkeit ist ein grüner oder roter Punkt hinter „Jetzt · aktualisiert live“. Vorausschau und Schattenmodus stehen als Satz unter dem Energiefluss.
 
 ### Geändert
+- **Hauptschalter bleibt nach dem Neustart.** War die Regelung aus, geht sie nicht von allein wieder an. Beim Ausschalten gibt es 1, 3, 6, 12 oder 24 Stunden oder dauerhaft. Die Ablaufzeit übersteht einen Neustart.
 - **Ladeschwelle startet bei 0 %.** Eine neue Einrichtung lädt den Akku nicht aus dem Netz, nur weil der Ladestand unter 15 % liegt. Die Notladung bleibt aus, bis die Schwelle selbst gesetzt wird. Bestehende Installationen behalten ihren gespeicherten Wert.
 - **Start.** Die Dashboard-Strategie nutzt wieder die vorhandene Cache-Adresse. Eine zweite Kopie ohne `hashlib` hat den Komponentenstart mit `NameError` abgebrochen.
 - **Autonomie am Akku** erscheint nach etwa einer Minute, nicht erst nach 60 Messungen. Der Wert wird danach mit dem laufenden Verbrauchsfenster nachgeführt.

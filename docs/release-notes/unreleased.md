@@ -1,6 +1,6 @@
 # Entwurf – noch kein Release
 
-> Stand nach dem Commit auf `main` vom 19. Oktober 2026. Die Versionsnummer bleibt **0.5.1-beta.1**. Nicht taggen und nicht in HACS veröffentlichen, bis die noch offenen Änderungen dazukommen. Enthält 0.5.1-beta.1.
+> Stand auf `feat/help`, 19. Oktober 2026. Die Versionsnummer bleibt **0.5.1-beta.1**. Nicht taggen und nicht in HACS veröffentlichen. Enthält 0.5.1-beta.1.
 
 ## Ladeschwelle
 
@@ -11,6 +11,24 @@ Neue Einrichtungen starten mit **Ladeschwelle 0 %**. Die Notladung (`emergency`)
 Die Navigation hat einen Punkt **Hilfe**. Auf schmalen Bildschirmen liegt zusätzlich ein Fragezeichen in der Kopfzeile. Die Taste `?` öffnet dieselbe Ansicht, solange der Fokus nicht in einem Eingabefeld steht. Escape schließt sie.
 
 Die Hilfe liegt über der Seite, die gerade offen ist. Sie springt zum Kapitel dieser Seite, bei einer Einstellungsgruppe zum passenden Abschnitt. Inhalt links, auf dem Handy als Liste zum Aufklappen. Die Suche filtert Abschnitte. In der Regellogik ist die gerade aktive Stufe markiert. „In den Einstellungen öffnen“ schließt die Hilfe und wechselt dorthin.
+
+Jede Einstellung beschreibt, was sie tut und was sich am Akku, am Netz oder an der PV ändert. Die Kapitel:
+
+- **Schnellstart** und die Seiten Live, Vorausschau, Plan, Entscheidung, Anlage.
+- **Einstellungen** nach Aufgabe: Einrichtung, Anlage, Schutz, Netz und Tarif, PV-Laden, Verbraucher, Automatik, System, Darstellung.
+- **Regelung:** jede Stufe der Leiter, plus warum gerade Netzbezug da ist.
+- **Begriffe** zu Preisplan, PV, schwachem Tag, Einspeisung und Verbrauchern.
+- **Wenn etwas nicht passt:** keine Netzladung, Takten, Hochtarif mit Netzbezug, Überschuss trotz leerem Akku, Mindest-Ladeleistung, Hauptschalter nach dem Neustart, Tibber ohne Preise, feste Schwelle oder Preisplan, alte Ansicht nach dem Update.
+- Ein **Glossar**.
+
+## PV-Laden
+
+Die Seite **Einstellungen › PV-Laden** ist nach der Aufgabe sortiert. Schalter und die Werte, die nur für sie gelten, stehen in einer Karte.
+
+- **Tagesziel** nennt den Ladestand bis zum Ladeende. Das spätere Ziel steht nur, wenn der Schalter an ist. Darunter ein Satz mit dem aktuellen Ziel.
+- **Zeitfenster** trennt Astro von den festen Uhrzeiten. Mit Astro folgen Start und Ende der Sonne. Sonst liegen Winter- und Sommer-Ladeende fest. Die Morning-Cap steht in demselben Block. Ladeende ist eine Frist: danach lädt Überschuss weiter.
+- **Ladeleistung** und **Wenn der Tag anders läuft** starten zugeklappt. Zugeklappt steht, was gerade gilt. Werte, deren Schalter aus ist, sind ausgegraut. Schwellen und Referenzen für Prognose, schwachen Tag und Abregelung liegen in der Expertenansicht.
+- **Prognose-Sensoren** stehen zusammen: Rest heute, Tagessumme, morgen und übermorgen.
 
 ## Netzladung-Strategie
 
@@ -85,6 +103,8 @@ Panel und Dashboard-Strategie hängen in der URL am Inhalt der Datei, nicht an d
 
 Nach einem Update reicht ein Neustart von Home Assistant oder ein Neuladen der Integration. Danach lädt ein normales Öffnen von Maestro das neue Skript. Den Browser-Cache und den Frontend-Cache der iPad-App muss man dafür nicht leeren.
 
+Die Dashboard-Strategie nutzt dieselbe vorhandene Adresse. Eine zweite Kopie ohne `hashlib` hat den Komponentenstart mit `NameError` abgebrochen.
+
 ## Autonomie am Akku
 
 Die Autonomiezeit erscheint, sobald etwa eine Minute Hausverbrauch vorliegt. Bei einem Takt von 60 Sekunden ist das die erste Messung, bei 10 Sekunden sechs Messungen. Vorher blieb die Kachel bis zu 60 Messungen leer, bei langsamem Takt also bis zu einer Stunde. Der angezeigte Wert folgt danach weiter dem Median im rollierenden Fenster.
@@ -92,6 +112,12 @@ Die Autonomiezeit erscheint, sobald etwa eine Minute Hausverbrauch vorliegt. Bei
 ## PV morgen
 
 Die Kopfzeile und die Statistik zeigen die morgige PV-Prognose, sobald unter den Prognose-Sensoren ein Sensor für morgen gewählt ist. Vorausschauende Ladung und die prognosebasierte Netzlade-Menge bleiben aus, solange ihre Schalter aus sind. Sie lesen denselben Wert nur, wenn sie an sind.
+
+## Hauptschalter
+
+Die Stellung **an** oder **aus** liegt in den Optionen der Integration. Nach einem Neustart von Home Assistant oder einem Reload steht der Schalter wieder so, wie er vorher stand. War er aus, geht Maestro nicht von allein an und schickt keine neuen Limits. Fehlt der gespeicherte Wert, bleibt der Schalter an, wie bisher.
+
+Beim Ausschalten im Cockpit erscheint die Auswahl **1 Stunde, 3 Stunden, 6 Stunden, 12 Stunden, 24 Stunden oder dauerhaft**. Maestro merkt sich die Ablaufzeit als Uhrzeit. Der Zähler in der Kopfzeile, in der Steuerung und unter System läuft nach einem Neustart weiter. Ist die Zeit um, geht die Regelung von allein wieder an, auch wenn Home Assistant in der Zwischenzeit aus war. Dauerhaft bleibt aus, bis jemand den Schalter wieder einschaltet.
 
 ## Hinweise
 

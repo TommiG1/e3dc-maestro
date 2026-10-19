@@ -297,6 +297,11 @@ export const styles = css`
     height: 22px;
     fill: currentColor;
   }
+  .help-menu svg,
+  .help-menu svg * {
+    fill: none;
+    stroke: currentColor;
+  }
   .pill {
     display: inline-flex;
     align-items: center;
@@ -1778,9 +1783,43 @@ export const styles = css`
     gap: 12px;
   }
   .sheet h2,
-  .overlay h2 {
+  .overlay h2,
+  .pause-menu h2 {
     margin: 0 0 4px;
     font-size: 20px;
+  }
+  .pause-menu {
+    position: fixed;
+    z-index: 40;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100% - 24px));
+    padding: 18px;
+    border-radius: 20px;
+    background: var(--float);
+    border: 1px solid var(--stroke-strong);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  }
+  .pause-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 14px 0;
+  }
+  .pause-choice {
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--stroke);
+    background: var(--fill);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .pause-choice:hover,
+  .pause-choice:focus-visible {
+    border-color: var(--accent);
   }
   .ctrl {
     display: flex;
@@ -2635,7 +2674,17 @@ export const styles = css`
       max-width: 420px;
       margin: 0 auto;
     }
-    .pill.hide-sm,
+    .topbar {
+      flex-wrap: wrap;
+      row-gap: 10px;
+    }
+    .pill.hide-sm {
+      display: inline-flex;
+      flex-basis: 100%;
+      width: max-content;
+      max-width: 100%;
+      white-space: normal;
+    }
     .topbar .btn span {
       display: none;
     }

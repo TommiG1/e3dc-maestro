@@ -389,8 +389,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Below this price the pre-discharge may export to the grid.",
   },
   regelung_aktiv: {
-    de: "Hauptschalter. Aus heißt: Maestro sendet keine Limits mehr.",
-    en: "Master switch. Off means Maestro stops sending limits.",
+    de: "Hauptschalter. Aus heißt: Maestro sendet keine Limits mehr. Beim Ausschalten wählst du 1, 3, 6, 12 oder 24 Stunden oder dauerhaft. Die Stellung und die restliche Zeit bleiben nach einem Neustart.",
+    en: "Master switch. Off means Maestro stops sending limits. Turning it off offers 1, 3, 6, 12 or 24 hours, or until turned on. The position and the time left survive a restart.",
   },
   auto_mode_enabled: {
     de: "Rechnet einmal täglich passende Regelparameter aus dem Verbrauchs- und PV-Verlauf aus. Braucht mindestens 7 Tage Daten.",

@@ -30,6 +30,7 @@ from .const import (
     CONF_PRICE_PLAN_ENABLED,
     CONF_PV_FORECAST_ENABLED,
     DOMAIN,
+    PAUSE_HOURS,
 )
 from .frontend_cache import asset_query
 
@@ -42,6 +43,7 @@ PANEL_COMPONENT = "e3dc-maestro-panel"
 _PANEL_MODULE = f"/{DOMAIN}/frontend/panel/maestro-panel.js"
 _PANEL_FLAG = f"{DOMAIN}_panel_registered"
 _WS_FLAG = f"{DOMAIN}_panel_ws_registered"
+WS_PANEL_PAUSE = f"{DOMAIN}/pause"
 WS_PANEL_ENTITIES = f"{DOMAIN}/panel_entities"
 
 # Panel key -> (platform, entity description key). unique_id is "<entry_id>_<key>", so
@@ -520,6 +522,24 @@ def _ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, A
     ws_panel_options_set(hass, connection, msg)
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_PANEL_PAUSE,
+        vol.Required("hours"): vol.Any(None, vol.In(PAUSE_HOURS)),
+    }
+)
+@callback
+def _ws_panel_pause(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    entries = hass.config_entries.async_entries(DOMAIN)
+    entry = next((item for item in entries if item.state == ConfigEntryState.LOADED), None)
+    coordinator = None if entry is None else hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_loaded", "Maestro is not loaded")
+        return
+    coordinator.pause_for(msg["hours"])
+    connection.send_result(msg["id"], {"hours": msg["hours"]})
+
+
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Add the Maestro panel to the sidebar (for all users).
 
@@ -533,6 +553,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_entities)
         websocket_api.async_register_command(hass, _ws_panel_options)
         websocket_api.async_register_command(hass, _ws_panel_options_set)
+        websocket_api.async_register_command(hass, _ws_panel_pause)
         hass.data[_WS_FLAG] = True
     module_url = panel_module_url()
     registered = hass.data.get(_PANEL_FLAG)

@@ -7,6 +7,7 @@ import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
 import { optionSections, sizingPage, type OptionCtx } from "./options-view";
 import { settingTip } from "./setting-tips";
+import { pauseStatus } from "./pause";
 import { sliderField } from "./slider-field";
 import "./setting-tip";
 import { THEMES, type ThemeId } from "./theme";
@@ -413,10 +414,12 @@ function settingRow(c: ControlCtx, key: string, quiet = false, plain = false): T
               >${label}</button>`
             : nothing;
   const tip = settingTip(c.hass.language, key);
+  const paused = key === "regelung_aktiv" ? pauseStatus(c.i18n.t, entity) : undefined;
   const dim = locked || (quiet && !plain);
   return html`<div class="${plain ? "setting-line" : "ctrl setting-row"} ${plain && domain === "number" ? "stack" : ""} ${dim ? "locked" : ""}">
     <div class="txt">
       <span class="name"><b>${label}</b>${tip ? html`<maestro-setting-tip .text=${tip} .label=${c.i18n.t("settingHelp")}></maestro-setting-tip>` : nothing}</span>
+      ${paused ? html`<span>${paused}</span>` : nothing}
       ${registryOff ? html`<span>${c.i18n.t("entityDisabled")}</span>` : nothing}
     </div>
     ${control}

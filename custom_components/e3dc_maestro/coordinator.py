@@ -11,6 +11,7 @@ import dataclasses
 import logging
 from collections import deque
 from datetime import date, datetime, timedelta
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -29,7 +30,10 @@ from .const import (
     CONF_HOUSE_POWER_SENSOR,
     CONF_PRICE_SENSOR,
     CONF_PV_POWER_SENSOR,
+    CONF_REGELUNG_AKTIV,
+    CONF_REGELUNG_PAUSE_UNTIL,
     CONF_UPDATE_INTERVAL,
+    PAUSE_HOURS,
     DEFAULT_CURTAILMENT_ACTIVATION_W,
     DEFAULT_CURTAILMENT_RELEASE_W,
     DEFAULT_UPDATE_INTERVAL,
@@ -112,6 +116,24 @@ __all__ = [
 _LOGGER = logging.getLogger(__name__)
 
 
+def regelung_aktiv_from_options(options: Mapping[str, Any]) -> bool:
+    """Last master-switch position. Missing means on, so existing installs stay on."""
+    if CONF_REGELUNG_AKTIV not in options:
+        return True
+    return bool(options[CONF_REGELUNG_AKTIV])
+
+
+def pause_until_from_options(options: Mapping[str, Any]) -> float | None:
+    """Unix time when a temporary off period ends. Missing means permanent."""
+    raw = options.get(CONF_REGELUNG_PAUSE_UNTIL)
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class E3DCMaestroCoordinator(
     CoordinatorActMixin,
     CoordinatorForecastMixin,
@@ -139,8 +161,12 @@ class E3DCMaestroCoordinator(
         self._params.astro_latitude = hass.config.latitude
         self._params.astro_longitude = hass.config.longitude
 
-        # Runtime state
-        self.regelung_aktiv: bool = True
+        # Runtime state. The master switch is stored in options so a restart
+        # keeps the last position instead of turning control back on.
+        self.regelung_aktiv: bool = regelung_aktiv_from_options(opts)
+        self.regelung_pause_until: float | None = (
+            None if self.regelung_aktiv else pause_until_from_options(opts)
+        )
         self.force_discharge: bool = False
         self.last_decision: MaestroDecision | None = None
         self.last_phase: str = PHASE_OFF
@@ -336,31 +362,72 @@ class E3DCMaestroCoordinator(
 
 
     def set_regelung_aktiv(self, active: bool) -> None:
-        """Called by the master switch entity."""
+        """Called by the master switch entity. Off from here stays off."""
+        self._apply_regelung(active, None, refresh=True)
+
+
+    def pause_for(self, hours: int | None) -> None:
+        """Turn control off for a fixed slot, or until someone turns it on."""
+        if hours is not None and hours not in PAUSE_HOURS:
+            raise ValueError(f"unsupported pause: {hours}")
+        until = None if hours is None else dt_util.utcnow().timestamp() + hours * 3600
+        self._apply_regelung(False, until, refresh=True)
+
+
+    def resume_pause_if_due(self, now: datetime | None = None) -> None:
+        """Turn control back on once the stored end time has passed."""
+        until = self.regelung_pause_until
+        if self.regelung_aktiv or until is None:
+            return
+        moment = dt_util.utcnow() if now is None else now
+        if moment.timestamp() < until:
+            return
+        self._apply_regelung(True, None, refresh=False)
+
+
+    def _apply_regelung(self, active: bool, until: float | None, *, refresh: bool) -> None:
         was_active = self.regelung_aktiv
         self.regelung_aktiv = active
+        self.regelung_pause_until = None if active else until
+        self._persist_regelung(active, self.regelung_pause_until)
         if was_active and not active:
-            # Transition to OFF: release all limits immediately
             self._create_background_task(
                 self._async_release_limits("Master-Switch deaktiviert"),
                 "e3dc_maestro_release_limits",
             )
         elif not was_active and active:
-            # Transition to ON: reset smoothing state so stale values don't
-            # persist from when the rule was off.
             self._ewma_pv = None
             self._ewma_house = None
             self._ewma_wallbox = None
             self._forecast_house_ewma = None
             self._forecast_battery_ewma = None
             self._last_phase_changed_at = None
-            # Force a fresh decide+act cycle so any new phase
-            # (e.g. CURTAILMENT_GUARD) is applied without waiting for the next poll.
             self.last_decision = None
-            self._create_background_task(
-                self.async_request_refresh(),
-                "e3dc_maestro_refresh",
-            )
+            if refresh:
+                self._create_background_task(
+                    self.async_request_refresh(),
+                    "e3dc_maestro_refresh",
+                )
+        self.async_update_listeners()
+
+
+    def _persist_regelung(self, active: bool, until: float | None) -> None:
+        """Store the master switch and its end time without reloading."""
+        stored_until = self.entry.options.get(CONF_REGELUNG_PAUSE_UNTIL)
+        same_until = stored_until == until or (stored_until is None and until is None)
+        if self.entry.options.get(CONF_REGELUNG_AKTIV) is active and same_until:
+            return
+        new_options = dict(self.entry.options)
+        new_options[CONF_REGELUNG_AKTIV] = active
+        if until is None:
+            new_options.pop(CONF_REGELUNG_PAUSE_UNTIL, None)
+        else:
+            new_options[CONF_REGELUNG_PAUSE_UNTIL] = until
+        self._skip_reload = True
+        try:
+            self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        finally:
+            self._skip_reload = False
 
 
     def set_force_discharge(self, active: bool) -> None:
@@ -476,6 +543,7 @@ class E3DCMaestroCoordinator(
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch sensor states and run the rule engine."""
+        self.resume_pause_if_due()
         opts = self.entry.options
         now = dt_util.now()
 

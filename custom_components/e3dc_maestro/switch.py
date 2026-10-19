@@ -389,6 +389,15 @@ class MaestroSwitch(CoordinatorEntity[E3DCMaestroCoordinator], SwitchEntity):
             return bool(getattr(self.coordinator._params, self.entity_description.param_key, False))
         return False
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key != "regelung_aktiv":
+            return None
+        until = self.coordinator.regelung_pause_until
+        if self.coordinator.regelung_aktiv or until is None:
+            return None
+        return {"pause_until": until}
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.entity_description.on_fn(self.coordinator)
         self._write_state()

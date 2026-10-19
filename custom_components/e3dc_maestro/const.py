@@ -55,6 +55,9 @@ CONF_FEED_IN_LIMIT_PERCENT = "feed_in_limit_percent"  # % of installed kWp
 CONF_INSTALLED_KWP = "installed_kwp"                  # kWp, e.g. 10.0
 CONF_MIN_CHARGE_POWER = "min_charge_power"            # W, e.g. 300
 CONF_UPDATE_INTERVAL = "update_interval"              # seconds, default 30
+CONF_REGELUNG_AKTIV = "regelung_aktiv"                # Hauptschalter, bleibt über Neustart
+CONF_REGELUNG_PAUSE_UNTIL = "regelung_pause_until"    # Unix-Zeit, danach geht der Schalter wieder an
+PAUSE_HOURS = (1, 3, 6, 12, 24)
 
 # Config entry keys – season / corridor (Step 3)
 CONF_CHARGE_THRESHOLD = "charge_threshold"            # % SoC, e.g. 15

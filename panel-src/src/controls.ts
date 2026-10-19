@@ -4,6 +4,7 @@ import { CONSUMER_ICON_PATH, CONSUMER_ICONS, MAX_CONSUMERS, consumerUnavailable,
 import { CONTROL_SWITCHES, E, isOn, num, type Hass } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
+import { pauseStatus } from "./pause";
 import { sliderField } from "./slider-field";
 
 export interface ControlsInput {
@@ -106,12 +107,13 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
         >${t("btnClear")}</button>
         <p class="sub">${t("btnClearSub")}</p>
       </div>
-      ${CONTROL_SWITCHES.map(
-        (key) => html`<div class="ctrl">
-          <div class="txt"><b>${t(key)}</b><span>${t(SUBS[key])}</span></div>
+      ${CONTROL_SWITCHES.map((key) => {
+        const paused = key === "ctrlActive" ? pauseStatus(t, c.hass.states[E.ctrlActive]) : undefined;
+        return html`<div class="ctrl">
+          <div class="txt"><b>${t(key)}</b><span>${paused ?? t(SUBS[key])}</span></div>
           ${toggle(E[key], t(key))}
-        </div>`,
-      )}
+        </div>`;
+      })}
       <div class="ctrl wrap">
         <div class="txt"><b>${t("ctrlForce")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
         ${toggle(E.forceDischarge, t("ctrlForce"))}
