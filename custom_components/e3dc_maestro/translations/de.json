@@ -317,9 +317,9 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Nutzbare (Netto-)Kapazität eintragen. Der Auto-Detect-Wert oben ist die Brutto-Kapazität aus der RSCP-Diagnose und sollte NICHT 1:1 übernommen werden.",
-          "advanced_corridor": "Aktiviert getrennte Ober-/Untergrenze für den Ladekorridor. Deaktiviert: Maestro nutzt symmetrische Standardwerte.",
-          "lower_corridor": "Mindest-Ladeleistung im Korridor-Betrieb (W). Unterschreitet der Überschuss diesen Wert, lädt Maestro nicht.",
-          "upper_corridor": "Maximale Ladeleistung im Korridor-Betrieb (W). Überschuss darüber wird ins Netz eingespeist (sofern Einspeisegrenze nicht erreicht).",
+          "advanced_corridor": "Die fehlende Strecke zum Ziel-SoC wird in eine Ladeleistung zwischen unterem und oberem Korridor (Watt) übersetzt. Aus: die Leistung folgt der noch nötigen Energie und der Restzeit.",
+          "lower_corridor": "Untere Ladeleistung in Watt. Mit erweitertem Korridor ist das die kleinste angeforderte Leistung. Mit Pause stoppt die Korridorladung darunter.",
+          "upper_corridor": "Obere Ladeleistung in Watt. Gilt nur mit erweitertem Korridor.",
           "soc_hysteresis_percent": "Verhindert ständiges Ein-/Ausschalten bei SoC-Schwellenwerten. Maestro schaltet erst wieder, wenn der SoC um diesen Wert über-/unterschritten wurde.",
           "charge_ramp_w_per_cycle": "Ladeleistung wird je Zyklus um diesen Wert hochgefahren statt sofort auf Maximum zu springen. Reduziert WR-Stress.",
           "update_interval": "Intervall in Sekunden, in dem Maestro neue Daten liest und eine Regelentscheidung trifft. Standardwert 30 s."
@@ -346,7 +346,7 @@
         "data_description": {
           "charge_threshold": "Unter diesem SoC lädt Maestro sofort nach, unabhängig von PV oder Tarif (Notfall-Schutz).",
           "charge_target": "Maximaler Lade-SoC im Normalbetrieb. Werte >95 % beschleunigen Zellalterung.",
-          "winter_minimum_hour": "Bis zu dieser Stunde (z. B. 7 = 07:00 Uhr) stellt Maestro im Winter sicher, dass der Akku für den Morgen vollgeladen ist.",
+          "winter_minimum_hour": "Uhrzeit des Ladeendes am kürzesten Tag. Bis zum Sommer-Ladeende rechnet Maestro dazwischen linear.",
           "summer_charge_end": "Zielzeit für das Ladeende im Sommer – danach wird nur noch PV-Überschuss nachgeladen.",
           "reserve_winter_percent": "Fest gehaltene Mindest-Reserve im Winter (Dez.–Feb.) für Stromausfälle.",
           "reserve_equinox_percent": "Reserve zur Tagundnachtgleiche (Mrz./Sep.) – Übergangswert zwischen Winter und Sommer.",

@@ -93,6 +93,8 @@ export interface Ctx {
   onExpert: (on: boolean) => void;
   planTuneOpen: boolean;
   onTogglePlanTune: () => void;
+  pvOpen: ReadonlySet<string>;
+  onTogglePv: (section: string) => void;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];

@@ -25,36 +25,36 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Share of inverter power that may be exported at most.",
   },
   charge_threshold: {
-    de: "Ab diesem SoC beginnt das gezielte Laden zum Tagesziel.",
-    en: "Targeted charging towards the daily goal starts at this SoC.",
+    de: "Unter diesem SoC lädt Maestro sofort, bevor jede andere Regel greift.",
+    en: "Below this SoC Maestro charges immediately, before any other rule.",
   },
   advanced_corridor: {
-    de: "Statt einer Schwelle gilt ein SoC-Band zwischen unterem und oberem Korridor.",
-    en: "A SoC band between the lower and upper corridor replaces a single threshold.",
+    de: "Übersetzt die fehlende Strecke zum Ziel in eine Ladeleistung zwischen unterem und oberem Korridor, in Watt.",
+    en: "Turns the gap to the target into a charge power between the lower and upper corridor, in watts.",
   },
   lower_corridor: {
-    de: "Untergrenze des Ladebands. Darunter wird nachgeladen.",
-    en: "Bottom of the charge band. Below it, Maestro charges again.",
+    de: "Kleinste Ladeleistung im Korridor, in Watt. Darunter pausiert die Ladung, wenn die Pause an ist.",
+    en: "Lowest charge power in the corridor, in watts. Charging pauses below it while the pause is on.",
   },
   upper_corridor: {
-    de: "Obergrenze des Ladebands. Darüber stoppt die gezielte Ladung.",
-    en: "Top of the charge band. Targeted charging stops above it.",
+    de: "Größte Ladeleistung im erweiterten Korridor, in Watt.",
+    en: "Highest charge power in the advanced corridor, in watts.",
   },
   charge_target: {
     de: "SoC, den der Akku bis zum Ladeende erreichen soll.",
     en: "SoC the battery should reach by the end of charging.",
   },
   winter_minimum_hour: {
-    de: "Früheste Stunde, zu der das Ladeende im Winter liegen darf.",
-    en: "Earliest hour the charge window may end in winter.",
+    de: "Frist fürs Tagesziel am kürzesten Tag. Danach lädt Überschuss weiter.",
+    en: "Deadline for the daily target on the shortest day. Surplus keeps charging after that.",
   },
   summer_maximum_hour: {
-    de: "Späteste Stunde, zu der das Ladeende im Sommer liegen darf.",
-    en: "Latest hour the charge window may end in summer.",
+    de: "Wird von der Regelung nicht gelesen. Das Sommer-Ladeende steht im anderen Feld.",
+    en: "The control logic does not read this. The summer end of charging is the other field.",
   },
   summer_charge_end: {
-    de: "SoC-Ziel für das Sommer-Ladeende.",
-    en: "SoC target for the summer end of charging.",
+    de: "Frist fürs Tagesziel am längsten Tag. Dazwischen nach Tageslänge.",
+    en: "Deadline for the daily target on the longest day. Other days fall in between by day length.",
   },
   hard_soc_limit_enabled: {
     de: "Harter Deckel: darüber lädt Maestro den Akku nicht weiter.",
@@ -85,8 +85,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Delays charging when the PV forecast covers the need.",
   },
   delay_min_soc: {
-    de: "Nur oberhalb dieses SoC darf die Prognose die Ladung verzögern.",
-    en: "The forecast may delay charging only above this SoC.",
+    de: "Unter diesem SoC verzögert weder die Prognose noch das Warten auf die Sonne die Ladung.",
+    en: "Below this SoC neither the forecast nor waiting for the sun delays charging.",
   },
   pv_forecast_threshold_kwh: {
     de: "Ab dieser prognostizierten Energiemenge gilt der Tag als ergiebig genug.",

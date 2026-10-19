@@ -1860,6 +1860,13 @@ export const styles = css`
   .settings-section .sub {
     margin: 0 0 8px;
   }
+  .settings-fold > .group-head {
+    margin: 8px 0 0;
+    font-size: 15px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text);
+  }
   .setup-card {
     margin-bottom: 18px;
   }
@@ -2230,8 +2237,42 @@ export const styles = css`
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
     pointer-events: none;
   }
-  .setting-row.locked {
+  .setting-row.locked,
+  .setting-line.locked {
     opacity: 0.7;
+  }
+  .setting-bundle {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .setting-line {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .setting-line.stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .bundle-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+  }
+  .bundle-fields.quiet {
+    opacity: 0.55;
+  }
+  .bundle-fields .slider-field,
+  .bundle-fields .setting-num,
+  .bundle-fields select {
+    width: 100%;
+    max-width: none;
   }
   .switch {
     width: 46px;
@@ -2684,12 +2725,21 @@ export const styles = css`
   .setting-row.wide .txt {
     flex: none;
   }
+  .setting-bundle > .setting-line + .setting-line {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+  }
   .setting-row.wide .opt-entity,
-  .setting-row.wide .opt-action {
+  .setting-row.wide .opt-action,
+  .setting-bundle > .setting-line .opt-entity,
+  .setting-bundle > .setting-line .opt-action {
     width: 100%;
   }
   .setting-row.wide .opt-entity input,
-  .setting-row.wide .opt-action input {
+  .setting-row.wide .opt-action input,
+  .setting-bundle > .setting-line .opt-entity input,
+  .setting-bundle > .setting-line .opt-action input {
     flex: 1 1 100%;
     box-sizing: border-box;
     border-radius: 10px;

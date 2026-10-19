@@ -16,6 +16,8 @@ export interface SettingsSection {
   title: Key;
   hint: Key;
   rows: readonly string[];
+  /** Starts closed. The one-line summary stays visible. */
+  fold?: boolean;
 }
 
 /** One settings area. `rows` are unique_id suffixes resolved by the backend settings map. */
@@ -43,7 +45,12 @@ const area = (
   rows: sections.flatMap((section) => section.rows),
 });
 
-const sec = (title: Key, hint: Key, rows: readonly string[]): SettingsSection => ({ title, hint, rows });
+const sec = (title: Key, hint: Key, rows: readonly string[], fold = false): SettingsSection => ({
+  title,
+  hint,
+  rows,
+  ...(fold ? { fold: true } : {}),
+});
 
 /** Areas follow setup order: plant, safety, tariff, PV charging, loads, automation, system. */
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
@@ -107,50 +114,57 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     [
       sec("secCorridor", "secCorridorHint", [
         "charge_target",
-        "advanced_corridor",
-        "lower_corridor",
-        "upper_corridor",
-        "winter_minimum_hour",
-        "summer_maximum_hour",
-        "summer_charge_end",
-        "lower_corridor_pause_enabled",
-      ]),
-      sec("secForecast", "secForecastHint", [
-        "pv_forecast_enabled",
-        "delay_min_soc",
-        "pv_forecast_threshold_kwh",
-        "pv_forecast_safety_factor",
-        "forward_looking_enabled",
-        "forward_looking_max_soc",
+        "two_tier_enabled",
+        "charge_target_late",
+        "late_charge_end_h",
       ]),
       sec("secWindows", "secWindowsHint", [
         "astro_enabled",
         "charge_start_sunrise_offset_h",
         "charge_end_sunset_offset_h",
+        "winter_minimum_hour",
+        "summer_charge_end",
         "morning_cap_enabled",
         "morning_cap_soc",
         "morning_cap_until_h",
       ]),
-      sec("secShape", "secShapeHint", [
-        "fast_charge_floor_enabled",
-        "fast_charge_floor_soc",
-        "spreading_enabled",
-        "spreading_target_soc",
-        "gentle_charge_enabled",
-        "gentle_charge_factor",
-        "two_tier_enabled",
-        "charge_target_late",
-        "late_charge_end_h",
-      ]),
-      sec("secYield", "secYieldHint", [
-        "low_yield_priority_enabled",
-        "low_yield_threshold",
-        "low_yield_reference_kwh",
-        "low_yield_reference_kwh_per_kwp",
-        "curtailment_guard_enabled",
-        "curtailment_activation_w",
-        "curtailment_release_w",
-      ]),
+      sec(
+        "secShape",
+        "secShapeHint",
+        [
+          "fast_charge_floor_enabled",
+          "fast_charge_floor_soc",
+          "spreading_enabled",
+          "spreading_target_soc",
+          "gentle_charge_enabled",
+          "gentle_charge_factor",
+          "advanced_corridor",
+          "lower_corridor",
+          "upper_corridor",
+          "lower_corridor_pause_enabled",
+        ],
+        true,
+      ),
+      sec(
+        "secYield",
+        "secYieldHint",
+        [
+          "pv_forecast_enabled",
+          "delay_min_soc",
+          "pv_forecast_threshold_kwh",
+          "pv_forecast_safety_factor",
+          "forward_looking_enabled",
+          "forward_looking_max_soc",
+          "low_yield_priority_enabled",
+          "low_yield_threshold",
+          "low_yield_reference_kwh",
+          "low_yield_reference_kwh_per_kwp",
+          "curtailment_guard_enabled",
+          "curtailment_activation_w",
+          "curtailment_release_w",
+        ],
+        true,
+      ),
     ],
   ),
   area("loads", "setLoads", "setLoadsHint", '<path d="M9 7v4M15 7v4"/><path d="M8 11h8v2a4 4 0 0 1-8 0z"/><path d="M12 17v3"/>', [
@@ -276,6 +290,9 @@ export interface SettingsCtx {
   options: OptionCtx;
   expert: boolean;
   onExpert: (on: boolean) => void;
+  /** Section titles the user has opened. Folded sections start closed. */
+  pvOpen: ReadonlySet<string>;
+  onTogglePv: (section: string) => void;
 }
 
 const focused = (el: HTMLInputElement): boolean => {
@@ -367,26 +384,27 @@ function selectField(c: ControlCtx, id: string, entity: HassEntity | undefined, 
   </select>`;
 }
 
-function settingRow(c: ControlCtx, key: string): TemplateResult | typeof nothing {
+function settingRow(c: ControlCtx, key: string, quiet = false, plain = false): TemplateResult | typeof nothing {
   const id = S[key];
   if (!id) return nothing;
   const entity = c.hass.states[id];
   const registryOff = isSettingDisabled(key);
   if (!entity && !registryOff) return nothing;
   const locked = registryOff || !entity || entity.state === "unavailable";
+  const held = locked || quiet;
   const label = labelOf(entity, key);
   const domain = id.split(".", 1)[0];
   const control =
     domain === "switch"
-      ? toggle(c, id, label, locked)
+      ? toggle(c, id, label, held)
       : domain === "number"
-        ? numberField(c, id, entity, label, locked)
+        ? numberField(c, id, entity, label, held)
         : domain === "select"
-          ? selectField(c, id, entity, locked)
+          ? selectField(c, id, entity, held)
           : domain === "button"
             ? html`<button
                 class="btn"
-                ?disabled=${locked || c.pending.has(id)}
+                ?disabled=${held || c.pending.has(id)}
                 @click=${() => {
                   const confirm = CONFIRM[key];
                   if (confirm && !window.confirm(c.i18n.t(confirm))) return;
@@ -395,7 +413,8 @@ function settingRow(c: ControlCtx, key: string): TemplateResult | typeof nothing
               >${label}</button>`
             : nothing;
   const tip = settingTip(c.hass.language, key);
-  return html`<div class="ctrl setting-row ${locked ? "locked" : ""}">
+  const dim = locked || (quiet && !plain);
+  return html`<div class="${plain ? "setting-line" : "ctrl setting-row"} ${plain && domain === "number" ? "stack" : ""} ${dim ? "locked" : ""}">
     <div class="txt">
       <span class="name"><b>${label}</b>${tip ? html`<maestro-setting-tip .text=${tip} .label=${c.i18n.t("settingHelp")}></maestro-setting-tip>` : nothing}</span>
       ${registryOff ? html`<span>${c.i18n.t("entityDisabled")}</span>` : nothing}
@@ -519,6 +538,142 @@ export function rowVisible(key: string, view: StrategyView): boolean {
   return !when || when({ strategy: view.strategy, expert: view.expert });
 }
 
+export interface PvView {
+  /** Undefined while the astro switch is not loaded: both time sets stay visible. */
+  astro?: boolean;
+  expert: boolean;
+}
+
+/** Astro replaces the fixed end hours. Tuning numbers stay in the expert view. */
+const PV_WHEN: Record<string, (v: PvView) => boolean> = {
+  charge_start_sunrise_offset_h: (v) => v.astro !== false,
+  charge_end_sunset_offset_h: (v) => v.astro !== false,
+  winter_minimum_hour: (v) => v.astro !== true,
+  summer_charge_end: (v) => v.astro !== true,
+  pv_forecast_threshold_kwh: (v) => v.expert,
+  pv_forecast_safety_factor: (v) => v.expert,
+  low_yield_threshold: (v) => v.expert,
+  low_yield_reference_kwh: (v) => v.expert,
+  low_yield_reference_kwh_per_kwp: (v) => v.expert,
+};
+
+export function pvRowVisible(key: string, view: PvView): boolean {
+  const when = PV_WHEN[key];
+  return !when || when(view);
+}
+
+/** Detail fields stay on screen and go quiet while every listed switch is off. */
+const QUIET_IF_ALL_OFF: Record<string, readonly string[]> = {
+  charge_target_late: ["two_tier_enabled"],
+  late_charge_end_h: ["two_tier_enabled"],
+  morning_cap_soc: ["morning_cap_enabled"],
+  morning_cap_until_h: ["morning_cap_enabled"],
+  fast_charge_floor_soc: ["fast_charge_floor_enabled"],
+  spreading_target_soc: ["spreading_enabled"],
+  gentle_charge_factor: ["gentle_charge_enabled"],
+  upper_corridor: ["advanced_corridor"],
+  lower_corridor: ["advanced_corridor", "lower_corridor_pause_enabled"],
+  delay_min_soc: ["pv_forecast_enabled", "astro_enabled"],
+  pv_forecast_threshold_kwh: ["pv_forecast_enabled"],
+  pv_forecast_safety_factor: ["pv_forecast_enabled"],
+  forward_looking_max_soc: ["forward_looking_enabled"],
+  low_yield_threshold: ["low_yield_priority_enabled"],
+  low_yield_reference_kwh: ["low_yield_priority_enabled"],
+  low_yield_reference_kwh_per_kwp: ["low_yield_priority_enabled"],
+  curtailment_activation_w: ["curtailment_guard_enabled"],
+  curtailment_release_w: ["curtailment_guard_enabled"],
+};
+
+export function rowQuiet(key: string, on: (parent: string) => boolean | undefined): boolean {
+  const parents = QUIET_IF_ALL_OFF[key];
+  if (!parents) return false;
+  const states = parents.map(on);
+  if (states.some((state) => state === undefined)) return false;
+  return states.every((state) => !state);
+}
+
+/** Values that exist only for this switch. They render inside its card. */
+export const SWITCH_FIELDS: Record<string, readonly string[]> = {
+  fixed_reserve_enabled: ["fixed_reserve_soc"],
+  seasonal_reserve_enabled: ["reserve_winter_percent", "reserve_equinox_percent"],
+  hard_soc_limit_enabled: ["hard_soc_limit"],
+  ht_enabled: ["ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"],
+  two_tier_enabled: ["charge_target_late", "late_charge_end_h"],
+  astro_enabled: ["charge_start_sunrise_offset_h", "charge_end_sunset_offset_h"],
+  morning_cap_enabled: ["morning_cap_soc", "morning_cap_until_h"],
+  fast_charge_floor_enabled: ["fast_charge_floor_soc"],
+  spreading_enabled: ["spreading_target_soc"],
+  gentle_charge_enabled: ["gentle_charge_factor"],
+  advanced_corridor: ["upper_corridor"],
+  pv_forecast_enabled: ["delay_min_soc", "pv_forecast_threshold_kwh", "pv_forecast_safety_factor"],
+  forward_looking_enabled: ["forward_looking_max_soc"],
+  low_yield_priority_enabled: ["low_yield_threshold", "low_yield_reference_kwh", "low_yield_reference_kwh_per_kwp"],
+  curtailment_guard_enabled: ["curtailment_activation_w", "curtailment_release_w"],
+  wallbox_enabled: ["wallbox_type", "wallbox_min_current", "wallbox_max_current", "wallbox_min_surplus"],
+  wallbox_discharge_guard_enabled: ["wallbox_discharge_guard_threshold_w"],
+  evcc_enabled: ["evcc_discharge_limit_w"],
+  hp_enabled: ["hp_min_surplus", "hp_max_price", "hp_min_run_minutes", "hp_min_pause_minutes"],
+  auto_mode_enabled: ["auto_mode_objective"],
+  force_discharge: ["force_discharge_power_w"],
+};
+
+/** Group a visible row list so a switch's own fields are not separate cards. */
+export function bundleRows(keys: readonly string[]): { key: string; children: string[] }[] {
+  const visible = new Set(keys);
+  const nested = new Set<string>();
+  for (const [parent, children] of Object.entries(SWITCH_FIELDS)) {
+    if (!visible.has(parent)) continue;
+    for (const child of children) if (visible.has(child)) nested.add(child);
+  }
+  return keys
+    .filter((key) => !nested.has(key))
+    .map((key) => ({
+      key,
+      children: (SWITCH_FIELDS[key] ?? []).filter((child) => visible.has(child)),
+    }));
+}
+
+const switchOn = (hass: Hass, key: string): boolean | undefined => {
+  const id = S[key];
+  const state = id ? hass.states[id]?.state : undefined;
+  if (state === "on") return true;
+  if (state === "off") return false;
+  return undefined;
+};
+
+function settingBlocks(
+  c: ControlCtx,
+  keys: readonly string[],
+  extraQuiet: (key: string) => boolean = () => false,
+): Array<TemplateResult | typeof nothing> {
+  return bundleRows(keys).map(({ key, children }) => {
+    if (!children.length) return settingRow(c, key, extraQuiet(key));
+    const off = switchOn(c.hass, key) === false;
+    const held = (child: string) => {
+      const parents = QUIET_IF_ALL_OFF[child];
+      const shared = !!parents && (parents.length > 1 || parents[0] !== key);
+      return shared ? extraQuiet(child) : off || extraQuiet(child);
+    };
+    const quietFields = children.every(held);
+    return html`<div class="ctrl setting-bundle">
+      ${settingRow(c, key, false, true)}
+      <div class="bundle-fields ${quietFields ? "quiet" : ""}">
+        ${children.map((child) => settingRow(c, child, held(child), true))}
+      </div>
+    </div>`;
+  });
+}
+
+const clock = (hass: Hass, key: string): string => {
+  const id = S[key];
+  const value = id ? num(hass.states[id]) : undefined;
+  if (value === undefined) return "–";
+  const total = Math.round(value * 60);
+  const hour = Math.floor(total / 60) % 24;
+  const minute = ((total % 60) + 60) % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
 /** The grid-charge part of the tariff area, also shown below the price plan. */
 export const PLAN_CONTROLS: readonly SettingsSection[] = (
   SETTINGS_GROUPS.find((group) => group.id === "tariff")?.sections ?? []
@@ -560,11 +715,108 @@ export function saveExpert(on: boolean): void {
   }
 }
 
+const PV_OPEN_KEY = "e3dc-maestro.pv-open";
+
+/** Folded PV sections the user has opened. Missing storage means all of them start closed. */
+export function loadPvOpen(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PV_OPEN_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((item): item is string => typeof item === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+export function savePvOpen(open: ReadonlySet<string>): void {
+  try {
+    localStorage.setItem(PV_OPEN_KEY, JSON.stringify([...open]));
+  } catch {
+    // storage blocked or full: the sections still toggle for this session
+  }
+}
+
 const fmt = (hass: Hass, key: string, digits = 0): string => {
   const id = S[key];
   const value = id ? num(hass.states[id]) : undefined;
   return value === undefined ? "–" : value.toLocaleString(hass.language, { maximumFractionDigits: digits });
 };
+
+/** One sentence for a PV section, from the switches the engine actually reads. */
+function pvSummary(hass: Hass, i18n: I18n, title: Key): string {
+  const { t } = i18n;
+  const on = (key: string) => switchOn(hass, key) === true;
+  if (title === "secCorridor") {
+    const soc = fmt(hass, "charge_target");
+    return on("two_tier_enabled")
+      ? t("sumTargetLate", { soc, late: fmt(hass, "charge_target_late"), hour: clock(hass, "late_charge_end_h") })
+      : t("sumTarget", { soc });
+  }
+  if (title === "secWindows") {
+    const line =
+      switchOn(hass, "astro_enabled") === true
+        ? t("sumWindowAstro", {
+            start: fmt(hass, "charge_start_sunrise_offset_h", 1),
+            end: fmt(hass, "charge_end_sunset_offset_h", 1),
+          })
+        : t("sumWindowHours", { winter: clock(hass, "winter_minimum_hour"), summer: clock(hass, "summer_charge_end") });
+    return on("morning_cap_enabled")
+      ? `${line} ${t("sumWindowCap", { soc: fmt(hass, "morning_cap_soc"), hour: clock(hass, "morning_cap_until_h") })}`
+      : line;
+  }
+  if (title === "secShape") {
+    const parts: string[] = [];
+    if (on("fast_charge_floor_enabled")) parts.push(t("sumPowerFloor", { soc: fmt(hass, "fast_charge_floor_soc") }));
+    if (on("spreading_enabled")) parts.push(t("sumPowerSpread", { soc: fmt(hass, "spreading_target_soc") }));
+    if (on("gentle_charge_enabled")) parts.push(t("sumPowerGentle", { factor: fmt(hass, "gentle_charge_factor", 2) }));
+    if (on("advanced_corridor")) {
+      parts.push(t("sumPowerCorridor", { low: fmt(hass, "lower_corridor"), high: fmt(hass, "upper_corridor") }));
+    } else if (on("lower_corridor_pause_enabled")) {
+      parts.push(t("sumPowerPause", { low: fmt(hass, "lower_corridor") }));
+    }
+    return parts.length ? parts.join(" ") : t("sumPowerAuto");
+  }
+  const parts: string[] = [];
+  if (on("pv_forecast_enabled")) parts.push(t("sumPvForecast"));
+  if (on("forward_looking_enabled")) parts.push(t("sumPvForward", { soc: fmt(hass, "forward_looking_max_soc") }));
+  if (on("low_yield_priority_enabled")) parts.push(t("sumPvLow"));
+  if (on("curtailment_guard_enabled")) parts.push(t("sumPvCurtail"));
+  return parts.length ? parts.join(" ") : t("sumPvNone");
+}
+
+const FOLD_CHEVRON = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>`;
+
+function pvSections(c: SettingsCtx, sections: readonly SettingsSection[]): TemplateResult {
+  const { t } = c.i18n;
+  const view: PvView = { astro: switchOn(c.hass, "astro_enabled"), expert: c.expert };
+  const quiet = (key: string) => rowQuiet(key, (parent) => switchOn(c.hass, parent));
+  return html`${expertToggle(c)}
+    ${sections.map((section) => {
+      const rows = section.rows.filter((key) => pvRowVisible(key, view));
+      const summary = html`<div class="strategy-summary"><p>${pvSummary(c.hass, c.i18n, section.title)}</p></div>`;
+      if (!section.fold) {
+        return html`<section class="settings-section">
+          <h3>${t(section.title)}</h3>
+          <p class="sub">${t(section.hint)}</p>
+          ${settingBlocks(c, rows, quiet)}
+          ${summary}
+        </section>`;
+      }
+      const open = c.pvOpen.has(section.title);
+      return html`<section class="settings-section settings-fold">
+        <button type="button" class="group-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onTogglePv(section.title)}>
+          ${FOLD_CHEVRON}
+          <span>${t(section.title)}</span>
+        </button>
+        ${summary}
+        ${open
+          ? html`<p class="sub">${t(section.hint)}</p>${settingBlocks(c, rows, quiet)}`
+          : nothing}
+      </section>`;
+    })}`;
+}
 
 /** One sentence that says what the chosen strategy does with the current values. */
 function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): TemplateResult {
@@ -589,7 +841,7 @@ function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): Template
   return html`<div class="strategy-summary">${lines.map((line) => html`<p>${line}</p>`)}</div>`;
 }
 
-function expertToggle(c: StrategyCtx): TemplateResult {
+function expertToggle(c: { i18n: I18n; expert: boolean; onExpert: (on: boolean) => void }): TemplateResult {
   const { t } = c.i18n;
   return html`<div class="ctrl setting-row">
     <div class="txt"><span class="name"><b>${t("expertView")}</b></span><span>${t("expertViewHint")}</span></div>
@@ -614,7 +866,7 @@ function strategySections(c: StrategyCtx, sections: readonly SettingsSection[], 
     return [
       html`<section class="settings-section">
         ${headings ? html`<h3>${t(section.title)}</h3><p class="sub">${t(section.hint)}</p>` : nothing}
-        ${rows.map((key) => settingRow(c, key))}
+        ${settingBlocks(c, rows)}
         ${lead && strategy ? strategySummary(c, strategy) : nothing}
         ${lead ? expertToggle(c) : nothing}
       </section>`,
@@ -680,6 +932,12 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     );
   }
   const current = SETTINGS_GROUPS.find((group) => group.id === c.groupId);
+  if (current?.id === "pv") {
+    return html`<div class="settings-detail">
+      ${pvSections(c, current.sections)}
+      ${optionSections(c.options, current.id)}
+    </div>`;
+  }
   if (current?.id === "tariff") {
     const strategyCtx: StrategyCtx = {
       ...c,
@@ -696,7 +954,7 @@ export function settingsView(c: SettingsCtx): TemplateResult {
       ${current.sections.map(
         (section) => html`<section class="settings-section">
           ${current.sections.length > 1 ? html`<h3>${t(section.title)}</h3><p class="sub">${t(section.hint)}</p>` : nothing}
-          ${section.rows.map((key) => settingRow(c, key))}
+          ${settingBlocks(c, section.rows)}
         </section>`,
       )}
       ${optionSections(c.options, current.id)}

@@ -30,6 +30,8 @@ export interface OptionBlock {
   title: "secSources" | "secAdaptive" | "secPriceSensor" | "secForecastSensors" | "secWallboxWire" | "secEvccWire" | "secHpWire" | "secSizingInputs";
   hint: "secSourcesHint" | "secAdaptiveHint" | "secPriceSensorHint" | "secForecastSensorsHint" | "secWallboxWireHint" | "secEvccWireHint" | "secHpWireHint" | "secSizingInputsHint";
   fields: readonly OptionField[];
+  /** One card for every field, instead of a card per field. */
+  bundle?: boolean;
 }
 
 const sensor = ["sensor"] as const;
@@ -88,6 +90,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       entity("tomorrow_pv_sensor", sensor),
       entity("pv_forecast_sensor_day2", sensor),
     ],
+    bundle: true,
   },
   {
     area: "loads",

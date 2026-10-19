@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SETTING_TIPS } from "./setting-tips";
-import { PLAN_CONTROLS, SETTINGS_GROUPS, resolveSettingsArea, rowVisible } from "./settings";
+import { PLAN_CONTROLS, SETTINGS_GROUPS, bundleRows, pvRowVisible, resolveSettingsArea, rowQuiet, rowVisible } from "./settings";
 
 describe("SETTINGS_GROUPS", () => {
   const rows = SETTINGS_GROUPS.flatMap((group) => group.rows);
@@ -75,6 +75,54 @@ describe("rowVisible", () => {
     expect(shown("dynamic_expert")).toContain("price_plan_efficiency");
     expect(shown("slots")).not.toContain("low_slot_hold_discharge");
     expect(shown("slots", true)).toContain("low_slot_hold_discharge");
+  });
+});
+
+describe("pv rows", () => {
+  const pv = SETTINGS_GROUPS.find((group) => group.id === "pv");
+  const rows = pv?.rows ?? [];
+
+  it("hides the unused summer maximum and folds power and special cases", () => {
+    expect(rows).not.toContain("summer_maximum_hour");
+    expect(pv?.sections.filter((section) => section.fold).map((section) => section.title)).toEqual(["secShape", "secYield"]);
+  });
+
+  it("shows the time set the engine reads", () => {
+    const shown = (astro: boolean | undefined, expert = false) => rows.filter((key) => pvRowVisible(key, { astro, expert }));
+    expect(shown(undefined)).toEqual(expect.arrayContaining(["winter_minimum_hour", "charge_start_sunrise_offset_h"]));
+    expect(shown(true)).toContain("charge_end_sunset_offset_h");
+    expect(shown(true)).not.toContain("summer_charge_end");
+    expect(shown(false)).toContain("summer_charge_end");
+    expect(shown(false)).not.toContain("charge_start_sunrise_offset_h");
+    expect(shown(false)).not.toContain("pv_forecast_safety_factor");
+    expect(shown(false, true)).toContain("low_yield_reference_kwh");
+  });
+
+  it("greys a detail only when every parent switch is off", () => {
+    const off = () => false as boolean | undefined;
+    const on = () => true as boolean | undefined;
+    expect(rowQuiet("charge_target", off)).toBe(false);
+    expect(rowQuiet("charge_target_late", off)).toBe(true);
+    expect(rowQuiet("charge_target_late", () => undefined)).toBe(false);
+    expect(rowQuiet("lower_corridor", off)).toBe(true);
+    expect(rowQuiet("lower_corridor", (key) => key === "lower_corridor_pause_enabled")).toBe(false);
+    expect(rowQuiet("delay_min_soc", (key) => (key === "astro_enabled" ? true : false))).toBe(false);
+    expect(rowQuiet("upper_corridor", on)).toBe(false);
+  });
+
+  it("puts a switch and its own fields in one block", () => {
+    const target = bundleRows(["charge_target", "two_tier_enabled", "charge_target_late", "late_charge_end_h"]);
+    expect(target).toEqual([
+      { key: "charge_target", children: [] },
+      { key: "two_tier_enabled", children: ["charge_target_late", "late_charge_end_h"] },
+    ]);
+    const corridor = bundleRows(["advanced_corridor", "lower_corridor", "upper_corridor", "lower_corridor_pause_enabled"]);
+    expect(corridor.find((row) => row.key === "advanced_corridor")?.children).toEqual(["upper_corridor"]);
+    expect(corridor.map((row) => row.key)).toContain("lower_corridor");
+    expect(bundleRows(["pv_forecast_enabled", "delay_min_soc"]).find((row) => row.key === "pv_forecast_enabled")?.children).toEqual([
+      "delay_min_soc",
+    ]);
+    expect(bundleRows(["charge_target_late"])).toEqual([{ key: "charge_target_late", children: [] }]);
   });
 });
 

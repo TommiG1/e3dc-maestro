@@ -48,8 +48,8 @@ const focused = (el: HTMLInputElement): boolean => {
 };
 
 /** `wide` stacks the control under the label so long entity ids get the full row. */
-const row = (label: string, control: TemplateResult, locked: boolean, wide = false): TemplateResult =>
-  html`<div class="ctrl setting-row ${locked ? "locked" : ""} ${wide ? "wide" : ""}">
+const row = (label: string, control: TemplateResult, locked: boolean, wide = false, plain = false): TemplateResult =>
+  html`<div class="${plain ? "setting-line stack" : "ctrl setting-row"} ${locked && !plain ? "locked" : ""} ${wide && !plain ? "wide" : ""}">
     <div class="txt"><span class="name"><b>${label}</b></span></div>
     ${control}
   </div>`;
@@ -225,7 +225,7 @@ function slotsEditor(c: OptionCtx): TemplateResult {
   </section>`;
 }
 
-function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
+function fieldRow(c: OptionCtx, field: OptionField, plain = false): TemplateResult {
   const label = fieldLabel(c.hass.language, field.key);
   const locked = !c.isAdmin;
   if (field.kind === "bool") {
@@ -234,9 +234,11 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
       label,
       html`<button class="switch ${on ? "on" : ""}" role="switch" aria-checked=${on} aria-label=${label} ?disabled=${locked || c.pending.has(field.key)} @click=${() => c.onChange(field.key, !on)}></button>`,
       locked,
+      false,
+      plain,
     );
   }
-  if (field.kind === "number") return row(label, numberField(c, field, label), locked, field.unit === "%");
+  if (field.kind === "number") return row(label, numberField(c, field, label), locked, field.unit === "%", plain);
   if (field.kind === "select") {
     const choices = field.choices ?? [];
     const value = selectValue(c.options[field.key], choices);
@@ -246,6 +248,8 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
         ${choices.map((choice) => html`<option value=${choice} ?selected=${choice === value}>${choice}</option>`)}
       </select>`,
       locked,
+      false,
+      plain,
     );
   }
   if (field.kind === "time") {
@@ -253,6 +257,8 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
       label,
       html`<input type="time" aria-label=${label} .value=${timeValue(c.options[field.key])} ?disabled=${locked} @change=${(e: Event) => c.onChange(field.key, (e.target as HTMLInputElement).value)} />`,
       locked,
+      false,
+      plain,
     );
   }
   if (field.kind === "text") {
@@ -261,10 +267,12 @@ function fieldRow(c: OptionCtx, field: OptionField): TemplateResult {
       label,
       html`<input aria-label=${label} .value=${value} maxlength="64" ?disabled=${locked} @change=${(e: Event) => c.onChange(field.key, (e.target as HTMLInputElement).value)} />`,
       locked,
+      false,
+      plain,
     );
   }
-  if (field.kind === "action") return row(label, actionField(c, field), locked, true);
-  return row(label, entityField(c, field, label, field.kind === "entities"), locked, true);
+  if (field.kind === "action") return row(label, actionField(c, field), locked, true, plain);
+  return row(label, entityField(c, field, label, field.kind === "entities"), locked, true, plain);
 }
 
 const shown = (entity: HassEntity | undefined): string =>
@@ -395,7 +403,9 @@ export function optionSections(c: OptionCtx, area: string): TemplateResult {
       (block) => html`<section class="settings-section">
         <h3>${t(block.title)}</h3>
         <p class="sub">${t(block.hint)}</p>
-        ${block.fields.map((field) => fieldRow(c, field))}
+        ${block.bundle
+          ? html`<div class="ctrl setting-bundle">${block.fields.map((field) => fieldRow(c, field, true))}</div>`
+          : block.fields.map((field) => fieldRow(c, field))}
       </section>`,
     )}
     ${area === "tariff" ? slotsEditor(c) : nothing}`;

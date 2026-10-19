@@ -317,9 +317,9 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Enter the usable (net) capacity. The auto-detected value above is the gross capacity from the RSCP diagnostics and should NOT be copied 1:1.",
-          "advanced_corridor": "Enables separate upper/lower limits for the charge corridor. Disabled: Maestro uses symmetric default values.",
-          "lower_corridor": "Minimum charge power in corridor mode (W). If the surplus falls below this value, Maestro does not charge.",
-          "upper_corridor": "Maximum charge power in corridor mode (W). Surplus above this is fed into the grid (unless the feed-in limit is reached).",
+          "advanced_corridor": "The gap to the target SoC is turned into a charge power between the lower and upper corridor (watts). Off: power follows the energy still needed and the time left.",
+          "lower_corridor": "Lower charge power in watts. With the advanced corridor this is the smallest requested power. With the pause, corridor charging stops below it.",
+          "upper_corridor": "Upper charge power in watts. Applies only with the advanced corridor.",
           "soc_hysteresis_percent": "Prevents constant on/off switching at SoC thresholds. Maestro only switches again once the SoC has moved above/below the threshold by this amount.",
           "charge_ramp_w_per_cycle": "Charge power is ramped up by this amount per cycle instead of jumping straight to maximum. Reduces inverter stress.",
           "update_interval": "Interval in seconds at which Maestro reads new data and makes a control decision. Default 30 s."
@@ -346,7 +346,7 @@
         "data_description": {
           "charge_threshold": "Below this SoC, Maestro recharges immediately, regardless of PV or tariff (emergency protection).",
           "charge_target": "Maximum charge SoC in normal operation. Values >95 % accelerate cell aging.",
-          "winter_minimum_hour": "Until this hour (e.g. 7 = 07:00), Maestro ensures in winter that the battery is fully charged for the morning.",
+          "winter_minimum_hour": "Time of day when charging ends on the shortest day. Maestro interpolates from here to the summer end of charging.",
           "summer_charge_end": "Target time for the end of charging in summer – after that, only PV surplus is used for recharging.",
           "reserve_winter_percent": "Fixed minimum reserve in winter (Dec–Feb) for power outages.",
           "reserve_equinox_percent": "Reserve at the equinox (Mar/Sep) – transitional value between winter and summer.",

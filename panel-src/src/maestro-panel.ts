@@ -43,7 +43,7 @@ import { checkClassic, classicErrorText, createClassic, type ClassicStatus } fro
 import { loadSetupAck, saveSetupAck } from "./onboarding";
 import { slotsFrom, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
-import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, settingsHeading, settingsView } from "./settings";
+import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 
@@ -118,6 +118,7 @@ class MaestroPanel extends LitElement {
   private _autoOpen = loadAutoOpen();
   private _expert = loadExpert();
   private _planTuneOpen = loadPlanTuneOpen();
+  private _pvOpen = loadPvOpen();
   private _setupAck = loadSetupAck();
   private _period: Period = "today";
   private _periodSums?: Partial<Record<PeriodKey, number>>;
@@ -782,6 +783,14 @@ class MaestroPanel extends LitElement {
       onTogglePlanTune: () => {
         this._planTuneOpen = !this._planTuneOpen;
         savePlanTuneOpen(this._planTuneOpen);
+        this.requestUpdate();
+      },
+      pvOpen: this._pvOpen,
+      onTogglePv: (section) => {
+        const next = new Set(this._pvOpen);
+        if (!next.delete(section)) next.add(section);
+        this._pvOpen = next;
+        savePvOpen(next);
         this.requestUpdate();
       },
     };
