@@ -9,7 +9,11 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
-> Entwurf, noch kein Release. Versionsnummer bleibt 0.5.1-beta.1. Ausführlich: [docs/release-notes/unreleased.md](docs/release-notes/unreleased.md).
+---
+
+## [0.5.1-beta.2] – Hilfe, Netzladung und Pause (2026-10-19)
+
+> **Beta.** Enthält 0.5.1-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.2.md](docs/release-notes/v0.5.1-beta.2.md).
 
 ### Neu
 - **Hilfe ausführlicher.** Jede Einstellung beschreibt, was sie tut und was sich am Akku, am Netz oder an der PV ändert. Fragen und Antworten sammeln die wiederkehrenden Fälle: keine Netzladung, Takten, Hochtarif mit Netzbezug, Überschuss trotz leerem Akku, Tibber, Neustart.
