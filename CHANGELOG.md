@@ -22,7 +22,7 @@ einen eigenen Versionsabschnitt verschieben.
 - **Live ohne Dauerlärm.** Entladung & Reserve zeigt Pillen nur, wenn etwas an ist. Heute und Tagesbilanz starten zugeklappt, der Zeitraum sitzt in der Heute-Zeile. Chips nur bei aktivem Zustand. Erreichbarkeit ist ein grüner oder roter Punkt hinter „Jetzt · aktualisiert live“. Vorausschau und Schattenmodus stehen als Satz unter dem Energiefluss.
 
 ### Geändert
-- **Hauptschalter bleibt nach dem Neustart.** War die Regelung aus, geht sie nicht von allein wieder an. Beim Ausschalten gibt es 1, 3, 6, 12 oder 24 Stunden oder dauerhaft. Die Ablaufzeit übersteht einen Neustart.
+- **Hauptschalter bleibt nach dem Neustart.** War die Regelung aus, geht sie nicht von allein wieder an. Beim Ausschalten gibt es 1, 3, 6, 12 oder 24 Stunden oder dauerhaft. Die Ablaufzeit übersteht einen Neustart. Die Pille **Regelung aktiv** / **Regelung aus** in der Kopfzeile öffnet dieselbe Auswahl, bei ausgeschalteter Regelung mit **Wieder einschalten**.
 - **Ladeschwelle startet bei 0 %.** Eine neue Einrichtung lädt den Akku nicht aus dem Netz, nur weil der Ladestand unter 15 % liegt. Die Notladung bleibt aus, bis die Schwelle selbst gesetzt wird. Bestehende Installationen behalten ihren gespeicherten Wert.
 - **Start.** Die Dashboard-Strategie nutzt wieder die vorhandene Cache-Adresse. Eine zweite Kopie ohne `hashlib` hat den Komponentenstart mit `NameError` abgebrochen.
 - **Autonomie am Akku** erscheint nach etwa einer Minute, nicht erst nach 60 Messungen. Der Wert wird danach mit dem laufenden Verbrauchsfenster nachgeführt.

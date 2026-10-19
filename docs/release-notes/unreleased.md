@@ -119,6 +119,8 @@ Die Stellung **an** oder **aus** liegt in den Optionen der Integration. Nach ein
 
 Beim Ausschalten im Cockpit erscheint die Auswahl **1 Stunde, 3 Stunden, 6 Stunden, 12 Stunden, 24 Stunden oder dauerhaft**. Maestro merkt sich die Ablaufzeit als Uhrzeit. Der Zähler in der Kopfzeile, in der Steuerung und unter System läuft nach einem Neustart weiter. Ist die Zeit um, geht die Regelung von allein wieder an, auch wenn Home Assistant in der Zwischenzeit aus war. Dauerhaft bleibt aus, bis jemand den Schalter wieder einschaltet.
 
+Dieselbe Auswahl öffnet ein Klick auf die Pille **Regelung aktiv** oder **Regelung aus** in der Kopfzeile. Ist die Regelung aus, heißt das Blatt **Regelung** und bietet **Wieder einschalten** zusätzlich zu den Zeiten. Ein Tippen auf eine Zeit lässt die Regelung für diese Dauer aus.
+
 ## Hinweise
 
 - Nach diesem Stand Home Assistant neu starten oder die Integration neu laden, damit die neue Auswahl und die neue Skript-Adresse ankommen.
