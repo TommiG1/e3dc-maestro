@@ -9,6 +9,24 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+> Entwurf, noch kein Release. Versionsnummer bleibt 0.5.1-beta.1. Ausführlich: [docs/release-notes/unreleased.md](docs/release-notes/unreleased.md).
+
+### Neu
+- **Netzladung-Strategie.** Eine Auswahl ersetzt die verstreuten Schalter: Aus, Zeitfenster (HT/NT), Dynamisch unter Preisschwelle, Dynamisch automatisch, Dynamisch Experte. Automatisch rechnet fest mit Wirkungsgrad 0,90, Mindestspanne 0,03 €/kWh und Sicherheitsfaktor 1,15, ohne Verschleiß. Experte behält die eigenen Werte. Bestehende Preisplan-Nutzer erscheinen als Experte. Der erste Wechsel in den Plan startet im Schattenmodus.
+- **Einstellungen folgen der Strategie.** Sichtbar sind nur Werte, die die Strategie liest, plus ein Satz mit den aktuellen Grenzen. Kosten & Auswertung steuern nicht, wann geladen wird. Die Expertenansicht gilt nur für diesen Browser.
+- **Dieselben Blöcke auf der Preisplan-Seite**, zugeklappt, mit dem Strategienamen. Die Kachel Plan nennt die aktive Strategie.
+- **Auto-Strategie auf Live.** Schalter, Ziel, prognostizierte Ersparnis und die Morgenkappe in Klartext. Die Zahl ist kein bereits gespartes Geld.
+- **Live ohne Dauerlärm.** Entladung & Reserve zeigt Pillen nur, wenn etwas an ist. Heute und Tagesbilanz starten zugeklappt, der Zeitraum sitzt in der Heute-Zeile. Chips nur bei aktivem Zustand. Erreichbarkeit ist ein grüner oder roter Punkt hinter „Jetzt · aktualisiert live“. Vorausschau und Schattenmodus stehen als Satz unter dem Energiefluss.
+
+### Geändert
+- **Aktualisierungsintervall.** `number/set_value` rief eine nicht vorhandene Methode auf. Der Takt wird jetzt über das vorhandene Intervall umgestellt.
+- **Tageszähler in Euro** haben keine Geräteklasse `monetary` mehr. Die passt nicht zu `total_increasing`. Einheit und Zähler bleiben.
+- **Panel- und Strategie-URL hängen am Dateiinhalt.** Nach Neustart oder Reload lädt Maestro das neue Skript ohne geleerten Browser- oder iPad-Cache.
+
+### Hinweise
+- NT-Fenster für „Zeitfenster (HT/NT)“ unter Tarif-Slots mit der Klasse „Niedrig“ anlegen. Die HT-Einstellungen erzeugen sie nicht.
+- Neustart oder Reload der Integration, damit die neue Auswahl und die neue Skript-Adresse ankommen.
+
 ---
 
 ## [0.5.1-beta.1] – Tibber-Kurve und Prozent-Regler (2026-10-18)
