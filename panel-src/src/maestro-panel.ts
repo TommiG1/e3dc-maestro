@@ -629,11 +629,20 @@ class MaestroPanel extends LitElement {
     }
   }
 
+  private _openPause(): void {
+    this._pauseOpen = true;
+    this.requestUpdate();
+  }
+
+  private _resumeRegulation(): void {
+    this._pauseOpen = false;
+    void this._call(E.ctrlActive, "switch", "turn_on", { entity_id: E.ctrlActive });
+  }
+
   private _toggle(id: string): void {
     const on = isOn(this._hass?.states[id]);
     if (id === E.ctrlActive && on) {
-      this._pauseOpen = true;
-      this.requestUpdate();
+      this._openPause();
       return;
     }
     void this._call(id, "switch", on ? "turn_off" : "turn_on", { entity_id: id });
@@ -978,7 +987,9 @@ class MaestroPanel extends LitElement {
               ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
             <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
-            <span class="pill hide-sm"><span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}</span>
+            <button type="button" class="pill hide-sm" @click=${() => this._openPause()}>
+              <span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}
+            </button>
           </header>
           ${this._entityNotice(hass, t)}
           ${this._alerts(hass, t)}
@@ -1076,10 +1087,16 @@ class MaestroPanel extends LitElement {
           })
         : nothing}
       ${this._pauseOpen
-        ? pauseMenu(t, (hours) => void this._pause(hours), () => {
-            this._pauseOpen = false;
-            this.requestUpdate();
-          })
+        ? pauseMenu(
+            t,
+            regulation,
+            (hours) => void this._pause(hours),
+            () => this._resumeRegulation(),
+            () => {
+              this._pauseOpen = false;
+              this.requestUpdate();
+            },
+          )
         : nothing}
       ${this._hist
         ? html`<div class="scrim open hist-scrim" @click=${() => this._closeHistory()}></div>

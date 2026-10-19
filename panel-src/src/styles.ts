@@ -313,6 +313,13 @@ export const styles = css`
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button.pill:hover,
+  button.pill:focus-visible {
+    border-color: var(--accent);
   }
   .dot {
     width: 8px;
@@ -1820,6 +1827,11 @@ export const styles = css`
   .pause-choice:hover,
   .pause-choice:focus-visible {
     border-color: var(--accent);
+  }
+  .pause-choice.resume {
+    margin-top: 14px;
+    border-color: var(--accent);
+    font-weight: 600;
   }
   .ctrl {
     display: flex;

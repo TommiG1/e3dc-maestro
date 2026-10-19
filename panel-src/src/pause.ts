@@ -1,4 +1,4 @@
-import { html, type TemplateResult } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 import type { Translate } from "./i18n";
 
 export const PAUSE_HOURS = [1, 3, 6, 12, 24] as const;
@@ -29,7 +29,13 @@ export function pauseStatus(t: Translate, entity: PauseEntity, nowMs = Date.now(
   return t("pauseLeftMin", { m: left.m });
 }
 
-export function pauseMenu(t: Translate, onPick: (hours: number | null) => void, onClose: () => void): TemplateResult {
+export function pauseMenu(
+  t: Translate,
+  active: boolean,
+  onPick: (hours: number | null) => void,
+  onResume: () => void,
+  onClose: () => void,
+): TemplateResult {
   const choice = (hours: number | null, label: string) => html`<button
     type="button"
     class="pause-choice"
@@ -37,10 +43,13 @@ export function pauseMenu(t: Translate, onPick: (hours: number | null) => void, 
     @click=${() => onPick(hours)}
   >${label}</button>`;
   return html`<div class="scrim open" @click=${onClose}></div>
-    <div class="pause-menu" role="dialog" aria-modal="true" aria-label=${t("pauseTitle")}>
-      <h2>${t("pauseTitle")}</h2>
-      <p class="sub">${t("pauseHint")}</p>
-      <div class="pause-options" role="listbox">
+    <div class="pause-menu" role="dialog" aria-modal="true" aria-label=${t(active ? "pauseTitle" : "pauseOffTitle")}>
+      <h2>${t(active ? "pauseTitle" : "pauseOffTitle")}</h2>
+      <p class="sub">${t(active ? "pauseHint" : "pauseOffHint")}</p>
+      ${active
+        ? nothing
+        : html`<button type="button" class="pause-choice resume" @click=${onResume}>${t("pauseResume")}</button>`}
+      <div class="pause-options" role="listbox" aria-label=${t("pauseTitle")}>
         ${PAUSE_HOURS.map((hours) => choice(hours, hours === 1 ? t("pauseOneHour") : t("pauseHours", { h: hours })))}
         ${choice(null, t("pausePermanent"))}
       </div>
