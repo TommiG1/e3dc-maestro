@@ -81,68 +81,76 @@ function electrons(
 interface HouseGeom {
   boxW: number;
   boxH: number;
-  /** Flat PV canopy. */
-  canopy: { x: number; y: number; w: number; h: number };
-  /** Glass facade under the canopy. */
+  /** Flat PV canopy with overhang. */
+  roof: { x: number; y: number; w: number; h: number };
+  /** Thin eaves / soffit under the canopy. */
+  soffit: { x: number; y: number; w: number; h: number };
+  /** Glass facade. */
   facade: { x: number; y: number; w: number; h: number };
-  /** Thin battery / SoC plinth. */
+  /** Foundation / battery SoC band. */
   plinth: { x: number; y: number; w: number; h: number };
   /** Utility pole: base centre and height to the cross-arm. */
   mast: { x: number; y: number; h: number };
   logo: { x: number; y: number; s: number };
+  /** Ground line under the house. */
+  groundY: number;
 }
 
 function layout(compact: boolean, consumerCount: number): HouseGeom {
   if (compact) {
     const boxW = 360;
-    const facadeW = 150;
-    // Leave the left strip for the mast; labels sit under the pavilion, not beside it.
-    const x = (boxW - facadeW) / 2 + 28;
-    const canopyH = 18;
-    const canopyY = 78;
-    const facadeH = 168;
-    const facadeY = canopyY + canopyH + 4;
-    const plinthH = 22;
+    const facadeW = 156;
+    const x = (boxW - facadeW) / 2 + 24;
+    const roofH = 26;
+    const roofY = 72;
+    const overhang = 18;
+    const soffitH = 5;
+    const facadeY = roofY + roofH + soffitH;
+    const facadeH = 148;
+    const plinthH = 18;
     const plinthY = facadeY + facadeH;
-    // Raised short pole: top at the gutter, base mid-facade (not below the plinth).
-    const mastH = Math.round(facadeH * 0.5);
-    const mastX = 36;
-    const mastY = facadeY + 6 + mastH;
-    // Room for house/bat captions under the plinth, then the consumer list.
+    const mastH = Math.round(facadeH * 0.48);
+    const mastX = 34;
+    const mastY = facadeY + 8 + mastH;
     const captionGap = 54;
     const listExtra = consumerCount ? captionGap + 12 + consumerCount * 46 : captionGap;
     return {
       boxW,
       boxH: Math.max(520, mastY + 40 + listExtra),
-      canopy: { x: x - 10, y: canopyY, w: facadeW + 20, h: canopyH },
+      roof: { x: x - overhang, y: roofY, w: facadeW + overhang * 2, h: roofH },
+      soffit: { x: x - overhang + 2, y: roofY + roofH, w: facadeW + overhang * 2 - 4, h: soffitH },
       facade: { x, y: facadeY, w: facadeW, h: facadeH },
-      plinth: { x, y: plinthY, w: facadeW, h: plinthH },
+      plinth: { x: x + 2, y: plinthY, w: facadeW - 4, h: plinthH },
       mast: { x: mastX, y: mastY, h: mastH },
-      // Keep the mark clear of the load value under the bars.
-      logo: { x: x + facadeW - 28, y: facadeY + 10, s: 20 },
+      logo: { x: x + 10, y: facadeY + facadeH - 30, s: 20 },
+      groundY: plinthY + plinthH + 3,
     };
   }
   const boxW = 600;
-  const facadeW = 188;
-  const x = 210;
-  const canopyH = 20;
-  const canopyY = 56;
-  const facadeH = 188;
-  const facadeY = canopyY + canopyH + 5;
-  const plinthH = 24;
+  const facadeW = 196;
+  const x = 206;
+  const roofH = 28;
+  const roofY = 52;
+  const overhang = 22;
+  const soffitH = 6;
+  const facadeY = roofY + roofH + soffitH;
+  const facadeH = 168;
+  const plinthH = 20;
   const plinthY = facadeY + facadeH;
-  const mastH = Math.round(facadeH * 0.5);
-  const mastX = 78;
-  const mastY = facadeY + 6 + mastH;
+  const mastH = Math.round(facadeH * 0.48);
+  const mastX = 76;
+  const mastY = facadeY + 8 + mastH;
   const side = consumerCount ? fanBoxPad(consumerCount) : 0;
   return {
     boxW: boxW + side,
     boxH: Math.max(440, mastY + 72),
-    canopy: { x: x - 14, y: canopyY, w: facadeW + 28, h: canopyH },
+    roof: { x: x - overhang, y: roofY, w: facadeW + overhang * 2, h: roofH },
+    soffit: { x: x - overhang + 2, y: roofY + roofH, w: facadeW + overhang * 2 - 4, h: soffitH },
     facade: { x, y: facadeY, w: facadeW, h: facadeH },
-    plinth: { x, y: plinthY, w: facadeW, h: plinthH },
+    plinth: { x: x + 3, y: plinthY, w: facadeW - 6, h: plinthH },
     mast: { x: mastX, y: mastY, h: mastH },
-    logo: { x: x + facadeW - 32, y: facadeY + 12, s: 22 },
+    logo: { x: x + 10, y: facadeY + facadeH - 32, s: 22 },
+    groundY: plinthY + plinthH + 3,
   };
 }
 
@@ -170,21 +178,22 @@ function mastGlyph(
   </g>`;
 }
 
-/** Six vertical tanks = house-load meter (fill sequentially up to inverter power). */
+/** Window panes = house-load meter (fill sequentially up to inverter power). */
 function lightBars(
   facade: { x: number; y: number; w: number; h: number },
 ): { x: number; y: number; w: number; h: number }[] {
-  const inset = facade.w * 0.14;
-  const top = facade.h * 0.1;
-  // Room under the bars for Last + Haus value (cable uses the left strip).
-  const bottom = facade.h * 0.42;
-  const gap = 8;
-  const barH = facade.h - top - bottom;
-  const inner = facade.w - inset * 2 - gap * (LOAD_BARS - 1);
-  const barW = Math.max(8, inner / LOAD_BARS);
+  const bayX = facade.x + facade.w * 0.1;
+  const bayW = facade.w * 0.8;
+  const bayY = facade.y + facade.h * 0.12;
+  const bayH = facade.h * 0.42;
+  const pad = 5;
+  const gap = 5;
+  const inner = bayW - pad * 2 - gap * (LOAD_BARS - 1);
+  const barW = Math.max(7, inner / LOAD_BARS);
+  const barH = bayH - pad * 2;
   return Array.from({ length: LOAD_BARS }, (_, i) => ({
-    x: facade.x + inset + i * (barW + gap),
-    y: facade.y + top,
+    x: bayX + pad + i * (barW + gap),
+    y: bayY + pad,
     w: barW,
     h: barH,
   }));
@@ -222,21 +231,27 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const gridLabel = grid < 0 ? t("nodeImport") : t("nodeFeed");
   const batLabel = battery < 0 ? t("nodeBatDischarge") : t("nodeBatCharge");
 
-  const midCanopy = { x: g.canopy.x + g.canopy.w / 2, y: g.canopy.y + g.canopy.h / 2 };
+  const midRoof = { x: g.roof.x + g.roof.w / 2, y: g.roof.y + g.roof.h / 2 };
   const midFacade = { x: g.facade.x + g.facade.w / 2, y: g.facade.y + g.facade.h * 0.45 };
   const midPlinth = { x: g.plinth.x + g.plinth.w / 2, y: g.plinth.y + g.plinth.h / 2 };
-  // Spine through the right half of the facade — load kW stays left, flow stays readable.
-  const spineX = g.facade.x + g.facade.w * 0.62;
-  const pvTie = { x: spineX, y: g.facade.y + 16 };
-  const batHub = { x: spineX, y: g.facade.y + g.facade.h * 0.38 };
+  // Riser along the right wall, outside the window bay and the centred load caption.
+  const spineX = g.facade.x + g.facade.w - 9;
+  const pvTie = { x: spineX, y: g.facade.y + 14 };
+  const batHub = { x: spineX, y: g.facade.y + g.facade.h * 0.36 };
   const batFoot = { x: spineX, y: midPlinth.y };
-  const loadLabelX = g.facade.x + g.facade.w * 0.28;
+  const loadLabelX = midFacade.x;
   const batActive = Math.abs(battery) > ACTIVE_W;
   const mastArm = { x: g.mast.x + 16, y: g.mast.y - g.mast.h + 14 };
-  // Gutter on the house facade (below the PV canopy, not on it).
-  const houseTie = { x: g.facade.x, y: g.facade.y + 4 };
+  // Service drop lands on the left eaves under the PV canopy.
+  const houseTie = { x: g.roof.x + 8, y: g.soffit.y + g.soffit.h / 2 };
   const midCableY = (mastArm.y + houseTie.y) / 2 - 8;
   const gridCable = `M${mastArm.x} ${mastArm.y} C${mastArm.x + 24} ${midCableY}, ${houseTie.x - 28} ${houseTie.y - 4}, ${houseTie.x} ${houseTie.y}`;
+  const bay = {
+    x: g.facade.x + g.facade.w * 0.1,
+    y: g.facade.y + g.facade.h * 0.12,
+    w: g.facade.w * 0.8,
+    h: g.facade.h * 0.42,
+  };
   const fanOrigin = { x: g.facade.x + g.facade.w, y: midFacade.y };
   const fan = houseFan(fanOrigin, consumers.length);
   const fanPlaces = i.compact
@@ -286,34 +301,44 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
     ...places.map(({ c }) => `${c.name} ${i.fmt.w(c.watts)}`),
   ].join(", ");
 
-  const facadeFill = outline ? "none" : "rgba(12,18,32,.78)";
-  const shellStroke = outline ? 1.8 : 1.35;
-  const panelLines = 5;
+  const facadeFill = outline ? "none" : "rgba(16,22,36,.9)";
+  const shellStroke = outline ? 1.8 : 1.4;
+  const cols = 5;
+  const rows = 2;
 
   return svg`<svg viewBox="0 0 ${g.boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
     <defs>
       <filter id="city-glow"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <filter id="city-soft"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/></feMerge></filter>
       <linearGradient id="city-sky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="var(--pv)" stop-opacity=${(roofGlow * 0.22).toFixed(2)}/>
+        <stop offset="0%" stop-color="var(--pv)" stop-opacity=${(roofGlow * 0.2).toFixed(2)}/>
         <stop offset="70%" stop-color="var(--fill, #0a101e)" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="city-roof" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--pv)" stop-opacity=${(roofGlow * 0.85).toFixed(2)}/>
+        <stop offset="100%" stop-color="var(--pv)" stop-opacity=${(roofGlow * 0.5).toFixed(2)}/>
       </linearGradient>
       <linearGradient id="city-glass" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="var(--house)" stop-opacity="0.14"/>
-        <stop offset="100%" stop-color="var(--house)" stop-opacity="0.04"/>
+        <stop offset="55%" stop-color="rgba(148,163,184,.06)"/>
+        <stop offset="100%" stop-color="var(--house)" stop-opacity="0.08"/>
       </linearGradient>
       <linearGradient id="city-plinth" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stop-color="var(--bat)" stop-opacity="0.9"/>
         <stop offset="100%" stop-color="var(--bat)" stop-opacity="0.35"/>
       </linearGradient>
-      <clipPath id="city-plinth-clip">
-        <rect x=${g.plinth.x + 3} y=${g.plinth.y + 3} width=${g.plinth.w - 6} height=${g.plinth.h - 6} rx="3"/>
+      <clipPath id="city-roof-clip">
+        <rect x=${g.roof.x + 2} y=${g.roof.y + 2} width=${g.roof.w - 4} height=${g.roof.h - 4} rx="3"/>
       </clipPath>
-      ${bars.map((bar, index) => svg`<clipPath id=${`city-bar-${index}`}><rect x=${bar.x} y=${bar.y} width=${bar.w} height=${bar.h} rx=${bar.w / 2}/></clipPath>`)}
+      <clipPath id="city-plinth-clip">
+        <rect x=${g.plinth.x + 2} y=${g.plinth.y + 2} width=${g.plinth.w - 4} height=${g.plinth.h - 4} rx="1.5"/>
+      </clipPath>
+      ${bars.map((bar, index) => svg`<clipPath id=${`city-bar-${index}`}><rect x=${bar.x} y=${bar.y} width=${bar.w} height=${bar.h} rx="2"/></clipPath>`)}
     </defs>
 
-    <rect x="0" y="0" width=${g.boxW} height=${g.canopy.y + 40} fill="url(#city-sky)"/>
-    <ellipse cx=${midCanopy.x} cy=${g.canopy.y + 8} rx=${g.canopy.w * 0.42} ry="28" fill="var(--pv)" opacity=${(roofGlow * 0.18).toFixed(2)} filter="url(#city-soft)"/>
+    <rect x="0" y="0" width=${g.boxW} height=${g.roof.y + 36} fill="url(#city-sky)"/>
+    <ellipse cx=${midRoof.x} cy=${g.roof.y + 6} rx=${g.roof.w * 0.34} ry="18" fill="var(--pv)" opacity=${(roofGlow * 0.14).toFixed(2)} filter="url(#city-soft)"/>
+    <line x1=${g.mast.x - 18} y1=${g.groundY} x2=${g.plinth.x + g.plinth.w + 28} y2=${g.groundY} stroke="rgba(148,163,184,.3)" stroke-width="1.6" stroke-linecap="round"/>
 
     <path
       class="flow-line"
@@ -326,50 +351,60 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
       "pv",
       t("nodePv"),
       i.onSelect,
-      svg`<rect class="flow-city-roof" x=${g.canopy.x} y=${g.canopy.y} width=${g.canopy.w} height=${g.canopy.h} rx="4" fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf("var(--pv)")} stroke-width=${shellStroke} filter=${pv > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
-        <rect x=${g.canopy.x + 3} y=${g.canopy.y + 3} width=${g.canopy.w - 6} height=${g.canopy.h - 6} rx="2.5" fill="var(--pv)" opacity=${roofGlow * 0.55}/>
-        ${Array.from({ length: panelLines }, (_, n) => {
-          const x = g.canopy.x + 8 + ((g.canopy.w - 16) * n) / (panelLines - 1);
-          return svg`<line x1=${x} y1=${g.canopy.y + 4} x2=${x} y2=${g.canopy.y + g.canopy.h - 4} stroke="rgba(255,255,255,.22)" stroke-width="1"/>`;
-        })}
-        <text class="node-val" x=${midCanopy.x} y=${g.canopy.y - 22} text-anchor="middle">${i.fmt.w(pv)}</text>
-        <text class="node-lbl" x=${midCanopy.x} y=${g.canopy.y - 6} text-anchor="middle">${t("nodePv")}</text>`,
+      svg`<rect class="flow-city-roof" x=${g.roof.x} y=${g.roof.y} width=${g.roof.w} height=${g.roof.h} rx="4" fill=${outline ? "none" : "rgba(10,16,28,.92)"} stroke=${strokeOf("var(--pv)")} stroke-width=${shellStroke} stroke-opacity=${pv > ACTIVE_W || outline ? 1 : 0.45} filter=${pv > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
+        <rect x=${g.roof.x + 2} y=${g.roof.y + 2} width=${g.roof.w - 4} height=${g.roof.h - 4} rx="3" fill="url(#city-roof)"/>
+        <g clip-path="url(#city-roof-clip)">
+          ${Array.from({ length: cols + 1 }, (_, n) => {
+            const x = g.roof.x + 6 + ((g.roof.w - 12) * n) / cols;
+            return svg`<line x1=${x} y1=${g.roof.y + 4} x2=${x} y2=${g.roof.y + g.roof.h - 4} stroke="rgba(255,255,255,.18)" stroke-width="1"/>`;
+          })}
+          ${Array.from({ length: rows + 1 }, (_, n) => {
+            const y = g.roof.y + 5 + ((g.roof.h - 10) * n) / rows;
+            return svg`<line x1=${g.roof.x + 5} y1=${y} x2=${g.roof.x + g.roof.w - 5} y2=${y} stroke="rgba(255,255,255,.14)" stroke-width="1"/>`;
+          })}
+        </g>
+        <rect x=${g.soffit.x} y=${g.soffit.y} width=${g.soffit.w} height=${g.soffit.h} fill=${outline ? "none" : "rgba(8,12,22,.85)"} stroke=${strokeOf("var(--pv)")} stroke-width="1" opacity="0.85"/>
+        <text class="node-val" x=${midRoof.x} y=${g.roof.y - 18} text-anchor="middle">${i.fmt.w(pv)}</text>
+        <text class="node-lbl" x=${midRoof.x} y=${g.roof.y - 2} text-anchor="middle">${t("nodePv")}</text>`,
     )}
-    <circle cx=${houseTie.x} cy=${houseTie.y} r="3.2" fill=${strokeOf(gridColor)} opacity=${Math.abs(grid) > ACTIVE_W ? 0.9 : 0.45}/>
+    <circle cx=${houseTie.x} cy=${houseTie.y} r="3" fill=${strokeOf(gridColor)} opacity=${Math.abs(grid) > ACTIVE_W ? 0.9 : 0.45}/>
 
     ${hit(
       "house",
       t("nodeHouse"),
       i.onSelect,
-      svg`<rect class="flow-city-body" x=${g.facade.x} y=${g.facade.y} width=${g.facade.w} height=${g.facade.h} rx="10" fill=${facadeFill} stroke=${strokeOf("var(--house)")} stroke-width=${shellStroke}/>
-        <rect x=${g.facade.x + 1} y=${g.facade.y + 1} width=${g.facade.w - 2} height=${g.facade.h - 2} rx="9" fill="url(#city-glass)"/>
-        <rect x=${g.facade.x + g.facade.w * 0.1} y=${bars[0].y - 6} width=${g.facade.w * 0.8} height=${bars[0].h + 12} rx="8" fill="rgba(148,163,184,.06)"/>
+      svg`<rect class="flow-city-body" x=${g.facade.x} y=${g.facade.y} width=${g.facade.w} height=${g.facade.h} rx="2" fill=${facadeFill} stroke=${strokeOf("var(--house)")} stroke-width=${shellStroke}/>
+        <rect x=${g.facade.x + 1} y=${g.facade.y + 1} width=${g.facade.w - 2} height=${g.facade.h - 2} rx="1.5" fill="url(#city-glass)"/>
+        <rect x=${bay.x} y=${bay.y} width=${bay.w} height=${bay.h} rx="2" fill="rgba(8,12,22,.55)" stroke="rgba(148,163,184,.28)" stroke-width="1.2"/>
         ${bars.map((bar, index) => {
           const fill = fills[index] ?? 0;
           const fillH = bar.h * fill;
           const fillY = bar.y + bar.h - fillH;
           return svg`<g>
-            <rect x=${bar.x} y=${bar.y} width=${bar.w} height=${bar.h} rx=${bar.w / 2} fill="rgba(148,163,184,.35)" opacity="0.16"/>
+            <rect x=${bar.x} y=${bar.y} width=${bar.w} height=${bar.h} rx="2" fill="rgba(148,163,184,.2)" opacity="0.35"/>
             ${fill > 0.005
               ? svg`<rect clip-path=${`url(#city-bar-${index})`} x=${bar.x} y=${fillY} width=${bar.w} height=${fillH} fill="var(--house)" opacity=${(0.55 + 0.4 * fill).toFixed(2)} filter=${!outline ? "url(#city-glow)" : "none"}/>`
+              : svg``}
+            ${index < LOAD_BARS - 1
+              ? svg`<line x1=${bar.x + bar.w + 2.5} y1=${bay.y + 3} x2=${bar.x + bar.w + 2.5} y2=${bay.y + bay.h - 3} stroke="rgba(148,163,184,.22)" stroke-width="1"/>`
               : svg``}
           </g>`;
         })}`,
     )}
 
-    <image href=${maestroLogo} x=${g.logo.x} y=${g.logo.y} width=${g.logo.s} height=${g.logo.s} opacity="0.72" style="pointer-events:none" aria-label="Maestro"/>
+    <image href=${maestroLogo} x=${g.logo.x} y=${g.logo.y} width=${g.logo.s} height=${g.logo.s} opacity="0.65" style="pointer-events:none" aria-label="Maestro"/>
 
     ${hit(
       "bat",
       batLabel,
       i.onSelect,
-      svg`<rect class="flow-city-cellar" x=${g.plinth.x} y=${g.plinth.y} width=${g.plinth.w} height=${g.plinth.h} rx="5" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf("var(--bat)")} stroke-width=${shellStroke} filter=${Math.abs(battery) > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
-        <rect clip-path="url(#city-plinth-clip)" x=${g.plinth.x + 3} y=${g.plinth.y + 3} width=${fillW} height=${g.plinth.h - 6} fill="url(#city-plinth)"/>
+      svg`<rect class="flow-city-cellar" x=${g.plinth.x} y=${g.plinth.y} width=${g.plinth.w} height=${g.plinth.h} rx="1.5" fill=${outline ? "none" : "rgba(8,12,20,.94)"} stroke=${strokeOf("var(--bat)")} stroke-width=${shellStroke} filter=${Math.abs(battery) > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
+        <rect clip-path="url(#city-plinth-clip)" x=${g.plinth.x + 2} y=${g.plinth.y + 2} width=${fillW} height=${g.plinth.h - 4} fill="url(#city-plinth)"/>
         ${i.compact
           ? svg`<text class="node-val-sm" x=${midPlinth.x} y=${compactCaptionY} text-anchor="middle">${i.fmt.w(battery)}</text>
             <text class="node-lbl-sm" x=${midPlinth.x} y=${compactCaptionY + 14} text-anchor="middle">${batLabel}</text>`
-          : svg`<text class="node-val-sm" x=${g.plinth.x - 14} y=${midPlinth.y - 2} text-anchor="end">${i.fmt.w(battery)}</text>
-            <text class="node-lbl-sm" x=${g.plinth.x - 14} y=${midPlinth.y + 14} text-anchor="end">${batLabel}</text>`}`,
+          : svg`<text class="node-val-sm" x=${g.plinth.x - 14} y=${midPlinth.y - 12} text-anchor="end">${i.fmt.w(battery)}</text>
+            <text class="node-lbl-sm" x=${g.plinth.x - 14} y=${midPlinth.y + 3} text-anchor="end">${batLabel}</text>`}`,
     )}
 
     ${hit(
@@ -389,8 +424,8 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
       opacity=${batActive ? 0.5 : 0.18}
     />
     ${pv > ACTIVE_W
-      ? svg`<path class="flow-line" d=${`M${midCanopy.x} ${midCanopy.y} L${pvTie.x} ${pvTie.y}`} stroke=${strokeOf("var(--pv)")} opacity="0.45"/>
-          ${electrons(midCanopy, pvTie, 2, 2, pv, strokeOf("var(--pv)"), motion)}`
+      ? svg`<path class="flow-line" d=${`M${midRoof.x} ${midRoof.y} L${pvTie.x} ${pvTie.y}`} stroke=${strokeOf("var(--pv)")} opacity="0.45"/>
+          ${electrons(midRoof, pvTie, 2, 2, pv, strokeOf("var(--pv)"), motion)}`
       : svg``}
     ${house > ACTIVE_W && battery > ACTIVE_W ? electrons(batHub, batFoot, 2, 2, Math.min(house, battery), strokeOf("var(--bat)"), motion) : svg``}
     ${battery < -ACTIVE_W ? electrons(batFoot, batHub, 2, 2, Math.abs(battery), strokeOf("var(--bat)"), motion) : svg``}

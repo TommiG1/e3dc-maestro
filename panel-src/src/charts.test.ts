@@ -22,6 +22,8 @@ describe("socArc", () => {
     const painted = socRingGradient(41, 30);
     expect(painted.startsWith("conic-gradient(from 225deg, var(--warn) 0deg")).toBe(true);
     expect(painted.indexOf("var(--warn)")).toBeLessThan(painted.indexOf("var(--bat)"));
+    expect(painted).toContain("color-mix(in srgb, var(--bat) 55%, white)");
+    expect(painted).not.toContain("var(--accent-2)");
     expect(painted).toContain("transparent 270deg");
     expect(socRingGradient(41)).not.toContain("var(--warn)");
   });

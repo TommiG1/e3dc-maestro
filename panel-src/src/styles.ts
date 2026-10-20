@@ -481,10 +481,12 @@ export const styles = css`
   }
   .flow-wrap {
     height: 380px;
+    overflow: visible;
   }
   .flow-wrap svg {
     width: 100%;
     height: 100%;
+    overflow: visible;
   }
   .flow-day {
     display: flex;
@@ -738,8 +740,46 @@ export const styles = css`
   .soc-card {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+  }
+  .soc-head {
+    width: 100%;
+    flex: none;
+  }
+  .soc-head h3 {
+    margin: 0;
+  }
+  .soc-visual {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 12px;
+    min-height: 0;
+  }
+  .soc-pack {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 18px;
+  }
+  .soc-pack-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .soc-pack-readout b {
+    color: var(--text);
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .soc-pack-readout span {
+    color: var(--muted);
+    font-size: 13px;
   }
   .ring {
     width: 100%;
@@ -804,12 +844,82 @@ export const styles = css`
     background: var(--warn);
     box-shadow: 0 0 8px var(--warn);
   }
-  .soc-meta {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+  .soc-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     width: 100%;
-    margin-top: 8px;
+    margin-top: auto;
+    padding-top: 10px;
+  }
+  .soc-metric-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .soc-metric-head span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .soc-metric-head b {
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 750;
+    letter-spacing: -0.3px;
+    line-height: 1;
+  }
+  .soc-track {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--switch-track, var(--fill));
+    border: 1px solid var(--stroke);
+  }
+  .soc-track-fill,
+  .soc-track-reserve {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    max-width: 100%;
+    border-radius: inherit;
+  }
+  .soc-track-fill {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--bat) 70%, black), var(--bat));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--bat) 40%, transparent);
+  }
+  .soc-track-reserve {
+    background: color-mix(in srgb, var(--warn) 40%, transparent);
+  }
+  .soc-track-mark {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--text);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 55%, transparent);
+    transform: translateX(-50%);
+    z-index: 1;
+  }
+  .soc-metric-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 5px;
+    row-gap: 2px;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .soc-metric-sep {
+    opacity: 0.6;
   }
   .meta {
     text-align: center;
@@ -1184,23 +1294,55 @@ export const styles = css`
     box-shadow: inset 0 0 0 1px var(--stroke);
   }
   .batt-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
+    /* Same --bat as the energy-flow battery, charge and discharge. */
     background: linear-gradient(180deg, color-mix(in srgb, var(--bat) 55%, white), var(--bat) 42%, color-mix(in srgb, var(--bat) 70%, black));
     box-shadow: 0 0 18px color-mix(in srgb, var(--bat) 45%, transparent);
   }
-  .batt.discharge .batt-fill {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 60%, white), var(--warn) 46%, color-mix(in srgb, var(--warn) 72%, black));
-    box-shadow: 0 0 18px color-mix(in srgb, var(--warn) 40%, transparent);
-  }
-  .batt.idle .batt-fill {
+  .batt.idle .batt-fill:not(.batt-fill-reserve) {
     background: linear-gradient(180deg, color-mix(in srgb, var(--bat) 35%, var(--muted)), var(--bat));
     box-shadow: none;
+  }
+  .batt-fill-reserve {
+    /* Same Notstrom-Sockel as the ring: filled warn, zone is translucent warn. */
+    background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 55%, white), var(--warn) 46%, color-mix(in srgb, var(--warn) 72%, black));
+    box-shadow: 0 0 18px color-mix(in srgb, var(--warn) 40%, transparent);
+    z-index: 1;
+  }
+  .batt-reserve-zone {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: color-mix(in srgb, var(--warn) 40%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--warn) 55%, transparent);
+    pointer-events: none;
   }
   .batt-cells {
     position: absolute;
     inset: 0;
     background: repeating-linear-gradient(to top, transparent 0 26px, color-mix(in srgb, var(--bg) 55%, transparent) 26px 28px);
     pointer-events: none;
+    z-index: 2;
+  }
+  .batt.live {
+    width: 112px;
+  }
+  .batt.live .batt-nub {
+    width: 38px;
+    height: 10px;
+  }
+  .batt.live .batt-body {
+    width: 112px;
+    height: 168px;
+    border-radius: 18px;
+  }
+  .batt.live .batt-cells {
+    background: repeating-linear-gradient(to top, transparent 0 36px, color-mix(in srgb, var(--bg) 55%, transparent) 36px 39px);
   }
   .pack-energy {
     font-size: 26px;
@@ -2916,6 +3058,11 @@ export const styles = css`
       height: auto;
       max-width: 420px;
       margin: 0 auto;
+      overflow: visible;
+    }
+    .flow-wrap.blob {
+      /* Keep PV watts / Haus captions inside the phone card. */
+      padding: 6px 2px 2px;
     }
     .topbar {
       flex-wrap: wrap;

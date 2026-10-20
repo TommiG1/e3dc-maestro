@@ -6,6 +6,8 @@ export interface Trajectory {
   pv_points: Point[];
   house_points: Point[];
   grid_points: Point[];
+  /** Battery power, positive = charging, negative = discharging. */
+  battery_points?: Point[];
   trajectory_phases: string[];
   min_soc?: number;
   max_soc?: number;
@@ -34,6 +36,221 @@ export function parseTrajectory(a: Record<string, unknown> | undefined): Traject
 }
 
 export const toKw = (pts: Point[]): Point[] => pts.map(([x, v]) => [x, v / 1000]);
+
+/**
+ * Milliseconds until the SoC trajectory first reaches `target` at or after `now`.
+ * `0` = already at/above target; `undefined` = never reaches in the forecast.
+ */
+export function etaToTargetMs(points: Point[], target: number, now = Date.now()): number | undefined {
+  if (!(target > 0) || !Number.isFinite(target) || points.length < 2) return undefined;
+  const goal = target - 0.5;
+  let prev = points[0];
+  for (const p of points) {
+    if (p[0] <= now) prev = p;
+    else break;
+  }
+  if (prev[1] >= goal) return 0;
+  for (let i = 1; i < points.length; i++) {
+    const [t0, s0] = points[i - 1];
+    const [t1, s1] = points[i];
+    if (t1 < now || s1 < goal) continue;
+    if (s0 >= goal) return Math.max(0, t0 - now);
+    if (s1 === s0) return Math.max(0, t1 - now);
+    const frac = (target - s0) / (s1 - s0);
+    const cross = t0 + Math.max(0, Math.min(1, frac)) * (t1 - t0);
+    return Math.max(0, cross - now);
+  }
+  return undefined;
+}
+
+/** Parse Maestro autonomy strings like "2h 54min" / "54min" into hours. */
+export function parseAutonomyHours(raw: string | undefined): number | undefined {
+  if (!raw || raw === "unknown" || raw === "unavailable" || raw === "–") return undefined;
+  const h = raw.match(/(\d+)\s*h/i);
+  const m = raw.match(/(\d+)\s*min/i);
+  if (!h && !m) return undefined;
+  return (h ? Number(h[1]) : 0) + (m ? Number(m[1]) : 0) / 60;
+}
+
+/** Soft scale for the autonomy track (full bar ≈ this many hours). */
+export const AUTONOMY_BAR_HOURS = 12;
+
+/** Compact remaining-time label from milliseconds (e.g. "3 h", "45 min"). */
+export function formatEtaLabel(ms: number): string {
+  if (!(ms > 0) || !Number.isFinite(ms)) return "";
+  const mins = Math.max(1, Math.round(ms / 60_000));
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+/** UTC-ms offset of a time zone at a given instant (e.g. +7_200_000 for UTC+2). */
+function zoneOffsetMs(utcMs: number, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const get = (type: string, parts: Intl.DateTimeFormatPart[]) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const parts = dtf.formatToParts(new Date(utcMs));
+  const hour = get("hour", parts) % 24; // Intl may report "24" for midnight
+  const asUtc = Date.UTC(get("year", parts), get("month", parts) - 1, get("day", parts), hour, get("minute", parts), get("second", parts));
+  return asUtc - utcMs;
+}
+
+/** UTC-ms timestamp of the next local midnight after `now`. Without `timeZone`, uses the browser's local clock. */
+function nextMidnightMs(now: number, timeZone?: string): number {
+  if (!timeZone) {
+    const d = new Date(now);
+    d.setHours(24, 0, 0, 0);
+    return d.getTime();
+  }
+  const dtf = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const parts = dtf.formatToParts(new Date(now));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const guessUtc = Date.UTC(get("year"), get("month") - 1, get("day") + 1, 0, 0, 0);
+  return guessUtc - zoneOffsetMs(guessUtc, timeZone);
+}
+
+export type FloorKind = "down" | "up";
+export type GridImportKind = "starts" | "until" | "ongoing";
+
+export interface BatteryForecast {
+  /**
+   * Highest SoC reached after the next rise. Undefined when the SoC only falls (or stays flat)
+   * for the whole window — then there is no upcoming peak.
+   */
+  peakSoc?: number;
+  peakAt?: number;
+  peakDay?: "today" | "tomorrow";
+  /**
+   * Reserve / empty event. `down` = discharge reaches the floor from above;
+   * `up` = charge recovers to the floor from below. Omitted when already on the floor.
+   */
+  floorAt?: number;
+  floorKind?: FloorKind;
+  /**
+   * Grid import outlook. `starts` = next begin; `until` = current import ends then;
+   * `ongoing` = import for the whole remaining window.
+   */
+  gridImportAt?: number;
+  gridImportKind?: GridImportKind;
+}
+
+const GRID_IMPORT_W = -30;
+const isImport = (w: number) => w < GRID_IMPORT_W;
+
+/**
+ * Battery outlook from the live SoC/grid trajectory: the next reachable peak, when the
+ * reserve floor/empty is hit or recovered, and when grid import starts/ends.
+ *
+ * A peak is a real rise, never the current level. The discharge run at the start of the window
+ * (e.g. all night) is skipped; from the first rise on, the peak is the highest SoC in the rest of
+ * the window, labelled today/tomorrow by its timestamp.
+ *
+ * Floor and grid events respect the current state: "Sockel 22:15" is never shown when SoC is
+ * already below the reserve (then it's "Sockel erreicht …"); "Netz ab …" is never shown while
+ * import is already running (then "Netz bis …" or "Netz durchgehend").
+ *
+ * Grid import only counts while the grid supplies more than the battery: the simulation blends the
+ * measured residual load into its first steps, producing a decaying "import" next to a battery
+ * that is clearly covering the house. Whether import is running *now* is decided by the live
+ * `currentGrid` (negative = import) when available.
+ *
+ * `now`/`timeZone`/`currentSoc` are injectable for deterministic tests.
+ */
+export function batteryForecast(
+  soc: Point[],
+  grid: Point[],
+  opts: {
+    now?: number;
+    reserve?: number;
+    timeZone?: string;
+    currentSoc?: number;
+    currentGrid?: number;
+    battery?: Point[];
+  } = {},
+): BatteryForecast | undefined {
+  const now = opts.now ?? Date.now();
+  const future = soc.filter(([t]) => t > now);
+  if (!future.length) return undefined;
+
+  const midnight = nextMidnightMs(now, opts.timeZone);
+  let riseAt = 0;
+  while (riseAt < future.length - 1 && future[riseAt + 1][1] <= future[riseAt][1] + 0.2) riseAt++;
+  const peak =
+    riseAt < future.length - 1 ? future.slice(riseAt).reduce((a, b) => (b[1] > a[1] ? b : a)) : undefined;
+  const peakDay: "today" | "tomorrow" | undefined = peak
+    ? peak[0] <= midnight
+      ? "today"
+      : "tomorrow"
+    : undefined;
+
+  const floorThreshold = opts.reserve !== undefined && opts.reserve > 0 ? opts.reserve : 0.5;
+  const level =
+    opts.currentSoc !== undefined && Number.isFinite(opts.currentSoc) ? opts.currentSoc : future[0][1];
+  let floorAt: number | undefined;
+  let floorKind: FloorKind | undefined;
+  if (level > floorThreshold + 0.5) {
+    floorAt = future.find(([, s]) => s <= floorThreshold)?.[0];
+    if (floorAt !== undefined) floorKind = "down";
+  } else if (level < floorThreshold - 0.5) {
+    floorAt = future.find(([, s]) => s >= floorThreshold)?.[0];
+    if (floorAt !== undefined) floorKind = "up";
+  }
+
+  const batteryAt = new Map(isPoints(opts.battery) ? opts.battery : []);
+  const futureGrid: [number, boolean][] = grid
+    .filter(([t]) => t > now)
+    .map(([t, w]) => [t, isImport(w) && -w > Math.max(0, -(batteryAt.get(t) ?? 0))]);
+  const importingNow =
+    opts.currentGrid !== undefined && Number.isFinite(opts.currentGrid)
+      ? isImport(opts.currentGrid)
+      : futureGrid[0]?.[1];
+  let gridImportAt: number | undefined;
+  let gridImportKind: GridImportKind | undefined;
+  if (futureGrid.length) {
+    if (importingNow && futureGrid[0][1]) {
+      let i = 0;
+      while (i < futureGrid.length && futureGrid[i][1]) i++;
+      if (i >= futureGrid.length) {
+        gridImportKind = "ongoing";
+      } else {
+        gridImportAt = futureGrid[i][0];
+        gridImportKind = "until";
+      }
+    } else {
+      for (let i = 0; i < futureGrid.length; i++) {
+        if (!futureGrid[i][1]) continue;
+        const next = futureGrid[i + 1];
+        if (!next || next[1]) {
+          gridImportAt = futureGrid[i][0];
+          gridImportKind = "starts";
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    peakSoc: peak?.[1],
+    peakAt: peak?.[0],
+    peakDay,
+    floorAt,
+    floorKind,
+    gridImportAt,
+    gridImportKind,
+  };
+}
+
+
 
 /** Grid power: negative = import, positive = feed-in (E3DC convention used by the trajectory). */
 export function splitGrid(pts: Point[]): { imp: Point[]; exp: Point[] } {

@@ -15,7 +15,9 @@ import {
 import type { ClassicStatus } from "./classic";
 import { separateDayEnergy, type FlowConsumer } from "./consumers";
 import type { ConsumerPlace } from "./consumer-layout";
-import { blobEnergyFlow } from "./flow-blob";
+import { batteryFlowFromWatts, batteryGlyph } from "./battery-glyph";
+import { BATTERY_STYLES, type BatteryStyleId } from "./battery-style";
+import { blobEnergyFlow, blobFlowBoxHeight } from "./flow-blob";
 import { cityEnergyFlow, cityFlowBoxHeight } from "./flow-city";
 import { energyFlow, flowBoxHeight } from "./flow";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
@@ -30,6 +32,9 @@ import { setupBanner } from "./onboarding-view";
 import type { OptionCtx } from "./options-view";
 import { planControls, strategyOf } from "./settings";
 import {
+  AUTONOMY_BAR_HOURS,
+  batteryForecast,
+  parseAutonomyHours,
   parseSlots,
   parseTrajectory,
   planEmptyKind,
@@ -111,6 +116,8 @@ export interface Ctx {
   onTheme: (theme: ThemeId) => void;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
+  batteryStyle: BatteryStyleId;
+  onBatteryStyle: (style: BatteryStyleId) => void;
   phasePoints?: Readonly<Record<string, Point[]>>;
   phaseHistory?: "idle" | "loading" | "ready" | "error";
   options: OptionCtx;
@@ -172,6 +179,117 @@ function socRing(soc: number, label: string, reserve?: number): TemplateResult {
   </div>`;
 }
 
+function socPack(
+  soc: number,
+  label: string,
+  watts: number | undefined,
+  reserve?: number,
+): TemplateResult {
+  const flow = batteryFlowFromWatts(watts);
+  return html`<div class="soc-pack">
+    ${batteryGlyph(`${Math.round(soc)}% ${label}`, soc, flow, { live: true, reserve })}
+    <div class="soc-pack-readout">
+      <b>${Math.round(soc)}%</b>
+      <span>${label}</span>
+    </div>
+  </div>`;
+}
+
+function socMetrics(
+  c: Ctx,
+  soc: number | undefined,
+  target: number | undefined,
+  reserve?: number,
+): TemplateResult {
+  const { t } = c.i18n;
+  const autonomyRaw = shown(st(c, E.autonomy));
+  const autonomyH = parseAutonomyHours(autonomyRaw === "–" ? undefined : autonomyRaw);
+  const autonomyPct =
+    autonomyH === undefined ? (soc ?? 0) : Math.min(100, (autonomyH / AUTONOMY_BAR_HOURS) * 100);
+
+  const traj = parseTrajectory(attrs(c, E.trajectory));
+  const forecast = traj
+    ? batteryForecast(traj.trajectory_points, traj.grid_points, {
+        reserve,
+        currentSoc: soc,
+        currentGrid: num(st(c, E.grid)),
+        battery: traj.battery_points,
+      })
+    : undefined;
+
+  const peakSoc = forecast?.peakSoc;
+  const peakPct = Math.max(0, Math.min(100, peakSoc ?? soc ?? 0));
+  const socPct = Math.max(0, Math.min(100, soc ?? 0));
+  const reservePct =
+    reserve !== undefined && Number.isFinite(reserve) ? Math.max(0, Math.min(100, reserve)) : undefined;
+
+  const peakLabel = forecast
+    ? forecast.peakAt !== undefined
+      ? t(forecast.peakDay === "today" ? "forecastPeakToday" : "forecastPeakTomorrow", { v: c.fmt.time(forecast.peakAt) })
+      : t("forecastNoPeak")
+    : undefined;
+  const floorLabel =
+    forecast?.floorAt !== undefined
+      ? t(
+          forecast.floorKind === "up"
+            ? "forecastFloorReach"
+            : reservePct
+              ? "forecastFloor"
+              : "forecastEmpty",
+          { v: c.fmt.time(forecast.floorAt) },
+        )
+      : undefined;
+  const gridLabel = forecast
+    ? forecast.gridImportKind === "ongoing"
+      ? t("forecastGridOngoing")
+      : forecast.gridImportKind === "until" && forecast.gridImportAt !== undefined
+        ? t("forecastGridUntil", { v: c.fmt.time(forecast.gridImportAt) })
+        : forecast.gridImportKind === "starts" && forecast.gridImportAt !== undefined
+          ? t("forecastGrid", { v: c.fmt.time(forecast.gridImportAt) })
+          : t("forecastNoGrid")
+    : undefined;
+  const targetLabel =
+    target !== undefined && (peakSoc === undefined || Math.round(target) !== Math.round(peakSoc))
+      ? t("tagTargetSoc", { v: Math.round(target) })
+      : undefined;
+  const forecastBits = [peakLabel, floorLabel, gridLabel, targetLabel].filter(Boolean) as string[];
+
+  return html`<div class="soc-metrics">
+    <div class="soc-metric">
+      <div class="soc-metric-head">
+        <span>${t("forecastPeak")}</span>
+        <b>${peakSoc !== undefined ? `${Math.round(peakSoc)}%` : "–"}</b>
+      </div>
+      <div class="soc-track" role="img" aria-label=${`${t("forecastPeak")} ${peakSoc !== undefined ? `${Math.round(peakSoc)}%` : "–"}`}>
+        ${reservePct !== undefined
+          ? html`<i class="soc-track-reserve" style="width:${reservePct}%"></i>`
+          : nothing}
+        <i class="soc-track-fill" style="width:${socPct}%"></i>
+        ${peakSoc !== undefined
+          ? html`<i class="soc-track-mark" style="left:${peakPct}%"></i>`
+          : nothing}
+      </div>
+      ${forecastBits.length
+        ? html`<div class="soc-metric-sub">
+            ${forecastBits.map(
+              (bit, index) => html`${index ? html`<span class="soc-metric-sep" aria-hidden="true">·</span>` : nothing}<span>${bit}</span>`,
+            )}
+          </div>`
+        : nothing}
+    </div>
+    <div class="soc-metric">
+      <div class="soc-metric-head">
+        <span>${t("autonomy")}</span>
+        <b>${autonomyRaw}</b>
+      </div>
+      <div class="soc-track" role="img" aria-label=${`${t("autonomy")} ${autonomyRaw}`}>
+        <i class="soc-track-fill" style="width:${autonomyPct}%"></i>
+      </div>
+      <div class="soc-metric-sub">${t("autonomyHint")}</div>
+    </div>
+  </div>`;
+}
+
 export function liveView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const soc = num(st(c, E.soc));
@@ -198,7 +316,9 @@ export function liveView(c: Ctx): TemplateResult {
   const flowH =
     c.flowStyle === "city"
       ? cityFlowBoxHeight(c.mobile, c.consumers.length)
-      : flowBoxHeight(c.mobile, c.consumers.length);
+      : c.flowStyle === "blob"
+        ? blobFlowBoxHeight(c.mobile, c.consumers.length)
+        : flowBoxHeight(c.mobile, c.consumers.length);
   const renderFlow = c.flowStyle === "blob" ? blobEnergyFlow : c.flowStyle === "city" ? cityEnergyFlow : energyFlow;
   const amount = (key: PeriodKey): number | undefined => (c.period === "today" ? num(st(c, E[key])) : c.periodSums?.[key]);
   const balanceParts = [amount("feedRevenue"), amount("saving"), amount("costToday"), amount("wear")];
@@ -329,17 +449,31 @@ export function liveView(c: Ctx): TemplateResult {
         ${c.consumerOverflow ? html`<p class="err">${t("consumersOverflow")}</p>` : nothing}
       </div>
       <div class="card soc-card">
-        <h3 class="self-start">${t("battery")}</h3>
-        ${soc !== undefined
-          ? socRing(soc, t("stateOfCharge"), on(E.fixedReserve) ? reserveValue : undefined)
-          : html`<p class="empty">${t("unavailable")}</p>`}
-        ${on(E.fixedReserve)
-          ? html`<p class="reserve-hint"><i></i>${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</p>`
-          : nothing}
-        <div class="soc-meta">
-          <div class="meta"><b>${target !== undefined ? `${Math.round(target)}%` : "–"}</b><span>${t("targetSoc")}</span></div>
-          <div class="meta"><b>${shown(st(c, E.autonomy))}</b><span>${t("autonomy")}</span></div>
+        <div class="card-head soc-head">
+          <h3>${t("battery")}</h3>
+          <div class="flow-style" role="radiogroup" aria-label=${t("batteryStyleLabel")}>
+            ${BATTERY_STYLES.map(
+              (id) => html`<button
+                type="button"
+                class="flow-style-btn ${c.batteryStyle === id ? "on" : ""}"
+                role="radio"
+                aria-checked=${c.batteryStyle === id}
+                @click=${() => c.onBatteryStyle(id)}
+              >${t(id === "pack" ? "batteryStylePack" : "batteryStyleRing")}</button>`,
+            )}
+          </div>
         </div>
+        <div class="soc-visual">
+          ${soc !== undefined
+            ? c.batteryStyle === "pack"
+              ? socPack(soc, t("stateOfCharge"), bat, on(E.fixedReserve) ? reserveValue : undefined)
+              : socRing(soc, t("stateOfCharge"), on(E.fixedReserve) ? reserveValue : undefined)
+            : html`<p class="empty">${t("unavailable")}</p>`}
+          ${on(E.fixedReserve)
+            ? html`<p class="reserve-hint"><i></i>${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</p>`
+            : nothing}
+        </div>
+        ${socMetrics(c, soc, target, on(E.fixedReserve) ? reserveValue : undefined)}
       </div>
     </div>
     ${chips.length

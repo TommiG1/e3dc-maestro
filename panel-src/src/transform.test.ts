@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  batteryForecast,
   bucket,
   chartSlots,
   buildTimeline,
+  etaToTargetMs,
+  formatEtaLabel,
   normalizeHistory,
   numericPoints,
+  parseAutonomyHours,
   parseSlots,
   parseTrajectory,
   phaseBands,
@@ -46,6 +50,222 @@ describe("trajectory", () => {
       imp: [[0, 2], [1, 0]],
       exp: [[0, 0], [1, 0.5]],
     });
+  });
+
+  it("finds when the trajectory reaches the target SoC", () => {
+    const now = 1_000_000;
+    const points: [number, number][] = [
+      [now - 600_000, 30],
+      [now, 34],
+      [now + 3_600_000, 70],
+      [now + 7_200_000, 100],
+    ];
+    expect(etaToTargetMs(points, 34, now)).toBe(0);
+    expect(etaToTargetMs(points, 100, now)).toBe(7_200_000);
+    expect(etaToTargetMs(points, 85, now)).toBeCloseTo(5_400_000, -2);
+    expect(etaToTargetMs(points, 100, now + 8_000_000)).toBe(0);
+    expect(etaToTargetMs([[now, 40]], 80, now)).toBeUndefined();
+  });
+});
+
+describe("batteryForecast", () => {
+  const now = Date.UTC(2026, 9, 16, 20, 0, 0); // 2026-10-16 20:00 UTC
+  const midnight = Date.UTC(2026, 9, 17, 0, 0, 0);
+  const h = (n: number) => now + n * 3_600_000;
+
+  it("finds today's peak while the trajectory is still climbing before midnight", () => {
+    const soc: [number, number][] = [
+      [h(1), 40],
+      [h(3), 50], // peak before midnight (00:00)
+      [h(5), 20], // declines after midnight
+    ];
+    const result = batteryForecast(soc, [], { now, timeZone: "UTC" });
+    expect(result).toMatchObject({ peakSoc: 50, peakAt: h(3), peakDay: "today" });
+  });
+
+  it("falls back to tomorrow once today's high is already behind us", () => {
+    const soc: [number, number][] = [
+      [h(1), 58], // already declining from today's high
+      [h(3), 30],
+      [h(4), 25], // last point before midnight
+      [h(6), 80], // tomorrow's peak
+      [h(8), 60],
+    ];
+    const result = batteryForecast(soc, [], { now, timeZone: "UTC" });
+    expect(result).toMatchObject({ peakSoc: 80, peakAt: h(6), peakDay: "tomorrow" });
+    expect(h(4)).toBeLessThanOrEqual(midnight);
+    expect(h(6)).toBeGreaterThan(midnight);
+  });
+
+  it("keeps today's higher max instead of jumping to a lower tomorrow blip", () => {
+    const soc: [number, number][] = [
+      [h(1), 50], // current level
+      [h(2), 50.3], // trivial uptick today — still the best value in the whole window
+      [h(3.5), 10], // declines hard before midnight
+      [h(6), 8], // tomorrow never recovers above today's trivial high
+    ];
+    const result = batteryForecast(soc, [], { now, timeZone: "UTC" });
+    expect(result).toMatchObject({ peakSoc: 50.3, peakAt: h(2), peakDay: "today" });
+  });
+
+  it("skips the night discharge and puts the peak at tomorrow's PV rise", () => {
+    const nightNow = Date.UTC(2026, 9, 16, 20, 0, 0);
+    const n = (x: number) => nightNow + x * 3_600_000;
+    const soc: [number, number][] = [
+      [n(0.25), 34], // current level, only falling from here
+      [n(2), 30],
+      [n(8), 10], // trough before sunrise
+      [n(14), 60], // tomorrow midday peak
+      [n(18), 45],
+    ];
+    const result = batteryForecast(soc, [], { now: nightNow, timeZone: "UTC" });
+    expect(result).toMatchObject({ peakSoc: 60, peakAt: n(14), peakDay: "tomorrow" });
+  });
+
+  it("reports no peak when the SoC only falls", () => {
+    const soc: [number, number][] = [
+      [h(1), 34],
+      [h(5), 20],
+      [h(10), 8],
+    ];
+    const result = batteryForecast(soc, [], { now, timeZone: "UTC" });
+    expect(result?.peakSoc).toBeUndefined();
+    expect(result?.peakDay).toBeUndefined();
+  });
+
+  it("reports the reserve floor when discharging from above, or empty without a reserve", () => {
+    const soc: [number, number][] = [
+      [h(1), 40],
+      [h(2), 22],
+      [h(3), 18],
+      [h(4), 0.2],
+    ];
+    expect(batteryForecast(soc, [], { now, timeZone: "UTC" })).toMatchObject({
+      floorAt: h(4),
+      floorKind: "down",
+    });
+    expect(batteryForecast(soc, [], { now, timeZone: "UTC", reserve: 20 })).toMatchObject({
+      floorAt: h(3),
+      floorKind: "down",
+    });
+  });
+
+  it("reports Sockel erreicht when recovering from below the reserve (live emergency charge)", () => {
+    // Mirrors live HA: SoC 29 %, reserve 50 %, trajectory climbs to 50 % and stays there.
+    const soc: [number, number][] = [
+      [h(0.25), 39.5],
+      [h(0.5), 50],
+      [h(1), 50],
+      [h(8), 50],
+    ];
+    const result = batteryForecast(soc, [], { now, timeZone: "UTC", reserve: 50, currentSoc: 29 });
+    expect(result).toMatchObject({
+      peakSoc: 50,
+      peakAt: h(0.5),
+      floorAt: h(0.5),
+      floorKind: "up",
+    });
+  });
+
+  it("finds sustained grid import start and ignores a single-point spike", () => {
+    const spike: [number, number][] = [
+      [h(1), 0],
+      [h(2), -200], // spike, recovers immediately
+      [h(3), 0],
+    ];
+    expect(batteryForecast([[h(1), 40]], spike, { now, timeZone: "UTC" })?.gridImportKind).toBeUndefined();
+
+    const sustained: [number, number][] = [
+      [h(1), 0],
+      [h(2), -200],
+      [h(3), -150],
+    ];
+    expect(batteryForecast([[h(1), 40]], sustained, { now, timeZone: "UTC" })).toMatchObject({
+      gridImportAt: h(2),
+      gridImportKind: "starts",
+    });
+  });
+
+  it("reports Netz bis / durchgehend when import is already running", () => {
+    const until: [number, number][] = [
+      [h(1), -800],
+      [h(2), -700],
+      [h(3), 0],
+      [h(4), 100],
+    ];
+    expect(batteryForecast([[h(1), 40]], until, { now, timeZone: "UTC" })).toMatchObject({
+      gridImportAt: h(3),
+      gridImportKind: "until",
+    });
+
+    const ongoing: [number, number][] = [
+      [h(1), -800],
+      [h(2), -700],
+      [h(8), -500],
+    ];
+    expect(batteryForecast([[h(1), 40]], ongoing, { now, timeZone: "UTC" })).toMatchObject({
+      gridImportKind: "ongoing",
+    });
+  });
+
+  it("ignores simulated import while the battery covers the house (live 2026-10-20 22:06)", () => {
+    const grid: [number, number][] = [
+      [h(1), -577],
+      [h(2), -212],
+      [h(3), -29],
+      [h(4), -1],
+      [h(5), -547],
+      [h(6), -726],
+      [h(7), -841],
+    ];
+    const battery: [number, number][] = [
+      [h(1), -777],
+      [h(2), -837],
+      [h(3), -647],
+      [h(4), -692],
+      [h(5), -162],
+      [h(6), 0],
+      [h(7), 0],
+    ];
+    const result = batteryForecast([[h(1), 29]], grid, {
+      now,
+      timeZone: "UTC",
+      currentGrid: -6,
+      battery,
+    });
+    expect(result).toMatchObject({ gridImportAt: h(5), gridImportKind: "starts" });
+  });
+
+  it("keeps grid charging as running import", () => {
+    const grid: [number, number][] = [
+      [h(1), -9800],
+      [h(2), -9500],
+      [h(3), 0],
+    ];
+    const battery: [number, number][] = [
+      [h(1), 7300],
+      [h(2), 7000],
+      [h(3), 0],
+    ];
+    expect(
+      batteryForecast([[h(1), 40]], grid, { now, timeZone: "UTC", currentGrid: -9858, battery }),
+    ).toMatchObject({ gridImportAt: h(3), gridImportKind: "until" });
+  });
+
+  it("returns undefined when the trajectory has no future points", () => {
+    expect(batteryForecast([[now - 1000, 40]], [], { now, timeZone: "UTC" })).toBeUndefined();
+    expect(batteryForecast([], [], { now, timeZone: "UTC" })).toBeUndefined();
+  });
+});
+
+describe("autonomy helpers", () => {
+  it("parses Maestro autonomy strings and formats ETA labels", () => {
+    expect(parseAutonomyHours("2h 54min")).toBeCloseTo(2.9, 5);
+    expect(parseAutonomyHours("54min")).toBeCloseTo(0.9, 5);
+    expect(parseAutonomyHours("unavailable")).toBeUndefined();
+    expect(formatEtaLabel(45 * 60_000)).toBe("45 min");
+    expect(formatEtaLabel(3 * 3_600_000)).toBe("3 h");
+    expect(formatEtaLabel(3.5 * 3_600_000)).toBe("3 h 30 min");
   });
 });
 

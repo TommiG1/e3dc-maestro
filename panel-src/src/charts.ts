@@ -398,13 +398,17 @@ export function socRingGradient(soc: number, reserve?: number): string {
     stops.push(`${color} ${deg(from)}`, `${color} ${deg(to)}`);
   };
   const split = reservePct === undefined ? 0 : Math.min(socPct, reservePct);
+  // Same palette as the flow: SoC = --bat, Notstrom-Sockel = --warn (filled + empty zone).
   if (reservePct !== undefined && reservePct > 0) {
     band("var(--warn)", 0, split);
-    band("#fbbf2466", split, reservePct);
+    band("color-mix(in srgb, var(--warn) 40%, transparent)", split, reservePct);
   }
   const chargeFrom = reservePct === undefined ? 0 : split;
   if (socPct > chargeFrom) {
-    stops.push(`var(--bat) ${deg(chargeFrom)}`, `var(--accent-2) ${deg(socPct)}`);
+    stops.push(
+      `var(--bat) ${deg(chargeFrom)}`,
+      `color-mix(in srgb, var(--bat) 55%, white) ${deg(socPct)}`,
+    );
   }
   band("var(--switch-track)", Math.max(socPct, reservePct ?? 0), 1);
   stops.push(`transparent ${deg(1)}`, "transparent 360deg");

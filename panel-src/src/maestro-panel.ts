@@ -37,6 +37,7 @@ import {
   saveConsumerPlaces,
   type ConsumerPlace,
 } from "./consumer-layout";
+import { loadBatteryStyle, saveBatteryStyle, type BatteryStyleId } from "./battery-style";
 import { loadFlowStyle, saveFlowStyle, type FlowStyleId } from "./flow-style";
 import { loadTheme, saveTheme, type ThemeId } from "./theme";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
@@ -100,6 +101,7 @@ class MaestroPanel extends LitElement {
   private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
   private _flowStyle: FlowStyleId = loadFlowStyle();
+  private _batteryStyle: BatteryStyleId = loadBatteryStyle();
   private _consumerPlaces: Record<string, ConsumerPlace> = loadConsumerPlaces();
   private _arrangeConsumers = false;
   private _sheet = false;
@@ -546,6 +548,12 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private _setBatteryStyle(style: BatteryStyleId): void {
+    this._batteryStyle = style;
+    saveBatteryStyle(style);
+    this.requestUpdate();
+  }
+
   private _placeConsumer(id: string, place: ConsumerPlace): void {
     this._consumerPlaces = { ...this._consumerPlaces, [id]: place };
     saveConsumerPlaces(this._consumerPlaces);
@@ -952,6 +960,8 @@ class MaestroPanel extends LitElement {
       onTheme: (theme) => this._setTheme(theme),
       flowStyle: this._flowStyle,
       onFlowStyle: (style) => this._setFlowStyle(style),
+      batteryStyle: this._batteryStyle,
+      onBatteryStyle: (style) => this._setBatteryStyle(style),
       phasePoints: this._phasePoints,
       phaseHistory: this._phaseHistory,
       options,

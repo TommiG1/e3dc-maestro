@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
+import { batteryFlowFromAmps, batteryGlyph } from "./battery-glyph";
 import "./maestro-chart";
 import { phaseHistoryOptions } from "./charts";
 import { isOn, num, plant, type HassEntity } from "./entities";
@@ -193,22 +194,10 @@ const gauge = (label: string, value: string, pct: number | undefined, kind: stri
   </div>`;
 };
 
-const flowOf = (amps: number | undefined): string => {
-  if (amps === undefined || Math.abs(amps) < 0.25) return "idle";
-  return amps < 0 ? "discharge" : "charge";
-};
+const flowOf = batteryFlowFromAmps;
 
-const battery = (label: string, level: number | undefined, flow: string, mini = false): TemplateResult => html`<div
-  class="batt ${flow} ${mini ? "mini" : ""}"
-  role="img"
-  aria-label="${label}"
->
-  <div class="batt-nub"></div>
-  <div class="batt-body">
-    ${level === undefined ? nothing : html`<div class="batt-fill" style="height:${Math.max(0, Math.min(100, level))}%"></div>`}
-    <div class="batt-cells" aria-hidden="true"></div>
-  </div>
-</div>`;
+const battery = (label: string, level: number | undefined, flow: string, mini = false): TemplateResult =>
+  batteryGlyph(label, level, flow, { mini });
 
 const bars = (
   rows: { label: string; value: string; pct: number; cls: string }[],

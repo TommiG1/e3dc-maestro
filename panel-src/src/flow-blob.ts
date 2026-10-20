@@ -10,8 +10,6 @@ import { CONSUMER_ICON_PATH } from "./consumers";
 import {
   batteryFill,
   compactBuses,
-  compactConsumerPositions,
-  compactFlowHeight,
   electrons,
   flowSegment,
   iconFit,
@@ -35,8 +33,8 @@ const CONSUMER_R = 26;
 const COMPACT_LIST_R = 16;
 const PULL_W = 5500;
 const BASE_R_WIDE = 72;
-const BASE_R_COMPACT = 58;
-const MAX_LOBE = 54;
+const BASE_R_COMPACT = 52;
+const MAX_LOBE = 48;
 const POINTS = 72;
 
 type NodeKey = "pv" | "grid" | "house" | "bat";
@@ -57,13 +55,14 @@ const LAYOUTS = {
     bat: { x: 300, y: 342, labelDy: 58 },
   },
   compact: {
-    box: [360, 560] as const,
-    hub: { x: 180, y: 230 },
-    pv: { x: 180, y: 64, labelDy: -52 },
-    // Captions sit outside the blob (left / right), not on the lobes.
-    grid: { x: 62, y: 230, labelDy: 0 },
-    house: { x: 298, y: 230, labelDy: 0 },
-    bat: { x: 180, y: 400, labelDy: 52 },
+    // Extra headroom so PV watts and side captions stay inside the phone card.
+    box: [360, 600] as const,
+    hub: { x: 180, y: 255 },
+    pv: { x: 180, y: 100, labelDy: -56 },
+    // Below the nodes — side captions clipped the iPhone edges.
+    grid: { x: 72, y: 255, labelDy: 58 },
+    house: { x: 288, y: 255, labelDy: 58 },
+    bat: { x: 180, y: 430, labelDy: 52 },
   },
 } satisfies Record<string, { box: readonly [number, number]; hub: { x: number; y: number } } & Record<NodeKey, Pos>>;
 
@@ -159,15 +158,43 @@ function angleOf(from: { x: number; y: number }, to: { x: number; y: number }): 
   return Math.atan2(to.y - from.y, to.x - from.x);
 }
 
+const COMPACT_ROW = 46;
+
+/** Consumer list under the blob battery caption (own geometry, not the nodes layout). */
+function blobCompactConsumerPlaces(count: number, width: number): { x: number; y: number; labelDy: number }[] {
+  const bat = LAYOUTS.compact.bat;
+  const firstY = bat.y + bat.labelDy + 44;
+  return Array.from({ length: count }, (_, index) => ({
+    x: width - 40,
+    y: firstY + index * COMPACT_ROW,
+    labelDy: 5,
+  }));
+}
+
+export function blobFlowBoxHeight(compact: boolean, count: number): number | undefined {
+  if (!compact) {
+    if (!count) return undefined;
+    const L = LAYOUTS.wide;
+    const fan = houseFan(L.house, count);
+    return Math.round(fanBoxHeight(L.house.y, fan, L.box[1]) * 0.95);
+  }
+  const L = LAYOUTS.compact;
+  if (!count) return Math.round(L.box[1] * 0.94);
+  const last = blobCompactConsumerPlaces(count, L.box[0]).at(-1)!;
+  return Math.round((last.y + 36) * 0.94);
+}
+
 export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
   const fan = houseFan(L.house, consumers.length);
   const boxW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
   const boxH = i.compact
-    ? compactFlowHeight(consumers.length)
+    ? consumers.length
+      ? blobCompactConsumerPlaces(consumers.length, boxW).at(-1)!.y + 36
+      : L.box[1]
     : fanBoxHeight(L.house.y, fan, L.box[1]);
-  const compactPlaces = i.compact ? compactConsumerPositions(consumers.length, boxW) : [];
+  const compactPlaces = i.compact ? blobCompactConsumerPlaces(consumers.length, boxW) : [];
   const fanPlaces = i.compact
     ? []
     : resolveConsumerPositions(
@@ -267,17 +294,14 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       const p = L[k];
       const idle = Math.abs(n.value) < ACTIVE_W;
       const above = p.labelDy < 0;
-      const side = i.compact && (k === "grid" || k === "house");
-      const anchor = k === "grid" && side ? "end" : k === "house" && side ? "start" : "middle";
-      const lx = k === "grid" && side ? p.x - 40 : k === "house" && side ? p.x + 40 : p.x;
-      const ly = side ? p.y - 4 : p.y + p.labelDy;
+      const ly = p.y + p.labelDy;
       return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${n.label} @click=${() => i.onSelect?.(k)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(k); } }}>
         <circle cx=${p.x} cy=${p.y} r=${nodeR} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf(n.color)} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#blob-glow)"}/>
         <g transform=${iconTransform(p.x, p.y, nodeIconFit(nodeR))} fill="none" stroke=${strokeOf(n.color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
           ${k === "bat" ? batteryGlyph(i.soc, strokeOf(n.color)) : svg`<path d=${n.icon} vector-effect="non-scaling-stroke"/>`}
         </g>
-        <text class="node-val" x=${lx} y=${ly} text-anchor=${anchor}>${i.fmt.w(n.value)}</text>
-        <text class="node-lbl" x=${lx} y=${ly + (above ? 19 : 18)} text-anchor=${anchor}>${n.label}</text>
+        <text class="node-val" x=${p.x} y=${ly} text-anchor="middle">${i.fmt.w(n.value)}</text>
+        <text class="node-lbl" x=${p.x} y=${ly + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
       </g>`;
     })}
     ${i.compact
