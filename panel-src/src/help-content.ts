@@ -173,6 +173,9 @@ export const HELP: readonly HelpChapter[] = [
       section("faq-restart", "helpFaqRestart", "helpFaqRestartBody"),
       section("faq-tibber", "helpFaqTibber", "helpFaqTibberBody"),
       section("faq-plan", "helpFaqPlan", "helpFaqPlanBody"),
+      section("faq-plan-hold", "helpFaqPlanHold", "helpFaqPlanHoldBody", {
+        links: [{ id: "faq-plan", label: "helpFaqPlan" }],
+      }),
       section("faq-old", "helpFaqOld", "helpFaqOldBody"),
     ],
   },

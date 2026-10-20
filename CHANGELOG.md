@@ -11,6 +11,7 @@ einen eigenen Versionsabschnitt verschieben.
 
 ### Geändert
 - **Prognose zeigt Plan-SoC, wenn der Preisplan steuert.** Steuert der Preisplan den Akku, ersetzt die Kurve „SoC geplant“ die generische Trajektorie – dieselbe Rechnung wie auf der Preisplan-Seite.
+- **Hilfe-FAQ zum Preisplan ergänzt.** Automatik-Defaults (Wirkungsgrad, Mindestspanne, kein Verschleiß), Halten ohne Netzladung und der Hinweis zur Prognose-Kurve stehen in der Hilfe.
 
 ---
 
