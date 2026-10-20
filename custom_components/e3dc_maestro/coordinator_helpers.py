@@ -114,6 +114,8 @@ def _ewma_update(
     tau_s: float,
     dt_s: float,
     jump_threshold_w: float,
+    *,
+    zero_glitch: bool = True,
 ) -> float:
     """Exponential weighted moving average with jump-reset and zero-glitch guard.
 
@@ -124,11 +126,18 @@ def _ewma_update(
     Zero-Glitch-Guard: Liefert der Sensor exakt 0 W, obwohl der bisherige
     EWMA deutlich über _EWMA_GLITCH_ZERO_FLOOR_W liegt, wird der Wert als
     E3DC-RSCP-Glitch verworfen und der vorherige EWMA-Wert beibehalten.
+    Für den Forecast-Batterie-Anker ``zero_glitch=False``: Idle nach Ladestopp
+    ist echt 0 W (Reserve, Phasenwechsel), kein Sensor-Aussetzer – sonst hält
+    die Prognose eine Phantom-Ladung über Stunden.
     """
     if prev is None:
         return new_val
     # Zero-Glitch-Guard: exakter 0-Wert bei laufendem Verbrauch = Sensor-Aussetzer
-    if new_val == 0.0 and prev > _EWMA_GLITCH_ZERO_FLOOR_W:
+    if (
+        zero_glitch
+        and new_val == 0.0
+        and prev > _EWMA_GLITCH_ZERO_FLOOR_W
+    ):
         return prev
     if abs(new_val - prev) > jump_threshold_w:
         return new_val

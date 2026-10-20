@@ -340,6 +340,39 @@ def test_forecast_anchor_ewma_damps_noise_but_snaps_on_real_jump():
     assert forecast_power_bucket(jumped) != base_bucket
 
 
+def test_forecast_battery_ewma_accepts_idle_zero_after_charge():
+    """Battery idle after a charge spike is real 0 W, not an RSCP glitch.
+
+    With the house zero-glitch guard, a stuck +8610 W anchor would keep
+    projecting overnight grid charge into the SoC trajectory.
+    """
+    from custom_components.e3dc_maestro.const import (
+        EWMA_JUMP_THRESHOLD_W,
+        FORECAST_ANCHOR_TAU_S,
+    )
+    from custom_components.e3dc_maestro.coordinator_helpers import _ewma_update
+
+    dt_s = 10.0
+    charged = _ewma_update(
+        None, 8610.0, FORECAST_ANCHOR_TAU_S, dt_s, EWMA_JUMP_THRESHOLD_W,
+        zero_glitch=False,
+    )
+    assert charged == 8610.0
+
+    # House/PV guard would keep 8610 here; battery must snap via jump-reset.
+    idle = _ewma_update(
+        charged, 0.0, FORECAST_ANCHOR_TAU_S, dt_s, EWMA_JUMP_THRESHOLD_W,
+        zero_glitch=False,
+    )
+    assert idle == 0.0
+
+    still_guarded = _ewma_update(
+        charged, 0.0, FORECAST_ANCHOR_TAU_S, dt_s, EWMA_JUMP_THRESHOLD_W,
+        zero_glitch=True,
+    )
+    assert still_guarded == 8610.0
+
+
 def test_forecast_target_date_zero_is_today():
     from datetime import datetime, timezone
     from custom_components.e3dc_maestro.coordinator_helpers import forecast_target_date

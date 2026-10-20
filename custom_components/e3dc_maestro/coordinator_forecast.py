@@ -95,9 +95,13 @@ class CoordinatorForecastMixin:
                 self._forecast_house_ewma, state.house_power,
                 FORECAST_ANCHOR_TAU_S, _dt_s, EWMA_JUMP_THRESHOLD_W,
             )
+            # Battery idle is often exact 0 W (reserve lock, end of charge).
+            # The house/PV zero-glitch guard must not keep a stale charge here,
+            # or the SoC trajectory climbs for hours with no real charging.
             self._forecast_battery_ewma = _ewma_update(
                 self._forecast_battery_ewma, state.battery_power,
                 FORECAST_ANCHOR_TAU_S, _dt_s, EWMA_JUMP_THRESHOLD_W,
+                zero_glitch=False,
             )
 
             active = self._active_params
