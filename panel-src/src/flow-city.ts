@@ -2,7 +2,6 @@ import { svg, type TemplateResult } from "lit";
 import {
   fanBoxHeight,
   fanBoxPad,
-  fanPoint,
   houseFan,
   onConsumerDrag,
   resolveConsumerPositions,
@@ -481,18 +480,3 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   </svg>`;
 }
 
-/** CSS height hint for the city flow card (compact / phone). Desktop uses viewBox aspect ratio. */
-export function cityFlowBoxHeight(compact: boolean, count: number): number | undefined {
-  const g = layout(compact, count);
-  if (compact) {
-    const captionY = g.plinth.y + g.plinth.h + 18;
-    if (!count) return Math.round((captionY + 40) * 0.94);
-    const lastY = captionY + 52 + (count - 1) * 46;
-    return Math.round((lastY + 40) * 0.94);
-  }
-  if (!count) return Math.round(g.boxH * 0.95);
-  const origin = { x: g.facade.x + g.facade.w, y: g.facade.y + g.facade.h * 0.45 };
-  const fan = houseFan(origin, count);
-  const bottom = fanPoint(1, 1, fan).y + 44;
-  return Math.round(Math.max(g.boxH, bottom) * 0.95);
-}

@@ -19,7 +19,7 @@ import type { ConsumerPlace } from "./consumer-layout";
 import { batteryFlowFromWatts, batteryGlyph } from "./battery-glyph";
 import { BATTERY_STYLES, type BatteryStyleId } from "./battery-style";
 import { blobEnergyFlow, blobFlowBoxHeight } from "./flow-blob";
-import { cityEnergyFlow, cityFlowBoxHeight } from "./flow-city";
+import { cityEnergyFlow } from "./flow-city";
 import { energyFlow, flowBoxHeight } from "./flow";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
@@ -393,13 +393,12 @@ export function liveView(c: Ctx): TemplateResult {
   };
   const balanceSpark = (key: SparkKey, color: string) =>
     sp(key, color, dayLive ? true : br.grain === "day" ? "day" : false);
-  // City sizes itself via viewBox aspect ratio (see .flow-wrap.city); a fixed height
-  // letterboxed empty space under the foundation on wide cards.
+  // City: never pin a pixel height. The SVG uses height:auto (viewBox aspect ratio);
+  // a fixed wrap height (treated as 1 unit = 1px) undershoots on wider phones and the
+  // consumer list paints over the day totals.
   const flowH =
     c.flowStyle === "city"
-      ? c.mobile
-        ? cityFlowBoxHeight(true, c.consumers.length)
-        : undefined
+      ? undefined
       : c.flowStyle === "blob"
         ? blobFlowBoxHeight(c.mobile, c.consumers.length)
         : flowBoxHeight(c.mobile, c.consumers.length);
