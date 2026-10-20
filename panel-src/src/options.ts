@@ -44,6 +44,11 @@ const entity = (key: string, domains: readonly string[], required = false): Opti
   domains,
   required,
 });
+const entities = (key: string, domains: readonly string[]): OptionField => ({
+  key,
+  kind: "entities",
+  domains,
+});
 
 export const OPTION_BLOCKS: readonly OptionBlock[] = [
   {
@@ -54,13 +59,16 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       num("battery_capacity_kwh", 1, 100, 0.1),
       entity("soc_sensor", sensor, true),
       entity("pv_power_sensor", sensor, true),
-      entity("additional_generation_sensor", sensor),
+      entities("additional_generation_sensor", sensor),
+      entities("additional_energy_total_sensor", energy),
       entity("house_power_sensor", sensor, true),
       entity("grid_power_sensor", sensor, true),
       { key: "grid_power_invert", kind: "bool" },
       entity("battery_power_sensor", sensor, true),
       entity("battery_charged_today_sensor", energy),
       entity("battery_discharged_today_sensor", energy),
+      entity("pv_production_today_sensor", energy),
+      entity("house_consumption_today_sensor", energy),
     ],
   },
   {
@@ -159,13 +167,16 @@ const labels: Record<string, { de: string; en: string }> = {
   battery_capacity_kwh: { de: "Nutzbare Akkukapazität", en: "Usable battery capacity" },
   soc_sensor: { de: "SoC-Sensor", en: "State-of-charge sensor" },
   pv_power_sensor: { de: "PV-Leistung", en: "PV power" },
-  additional_generation_sensor: { de: "Zusätzliche Erzeugung", en: "Additional generation" },
+  additional_generation_sensor: { de: "Zusätzliche Erzeuger (Leistung)", en: "Additional producers (power)" },
+  additional_energy_total_sensor: { de: "Zusatz-Energiezähler (gesamt)", en: "Additional energy totals" },
   house_power_sensor: { de: "Hausverbrauch", en: "House power" },
   grid_power_sensor: { de: "Netzleistung", en: "Grid power" },
   grid_power_invert: { de: "Netzleistung invertieren", en: "Invert grid power" },
   battery_power_sensor: { de: "Akkuleistung", en: "Battery power" },
   battery_charged_today_sensor: { de: "Heute geladen", en: "Charged today" },
   battery_discharged_today_sensor: { de: "Heute entladen", en: "Discharged today" },
+  pv_production_today_sensor: { de: "PV-Ertrag heute", en: "PV yield today" },
+  house_consumption_today_sensor: { de: "Hausverbrauch heute", en: "House consumption today" },
   adaptive_reserve_lookback_days: { de: "Rückblick in Tagen", en: "Lookback in days" },
   adaptive_reserve_min_days: { de: "Mindestens Tage mit Daten", en: "Minimum days of data" },
   adaptive_reserve_safety_factor: { de: "Sicherheitsfaktor", en: "Safety factor" },

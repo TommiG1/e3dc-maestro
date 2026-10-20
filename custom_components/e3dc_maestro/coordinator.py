@@ -56,6 +56,10 @@ from .const import (
     STAT_GRID_DRAW_TODAY,
     STAT_GRID_FEED_IN_TODAY,
     STAT_GRID_TO_BATTERY_TODAY,
+    STAT_HOUSE_CONSUMPTION_TODAY,
+    STAT_PV_ADDITIONAL_INTEGRATED,
+    STAT_PV_ADDITIONAL_TODAY,
+    STAT_PV_PRODUCTION_TODAY,
     STAT_PV_SAVED,
     STAT_PV_SAVINGS_TODAY_EUR,
     STAT_PV_SELF_CONSUMPTION_TODAY,
@@ -186,6 +190,10 @@ class E3DCMaestroCoordinator(
             STAT_PV_SAVED: 0.0,
             STAT_GRID_DRAW_TODAY: 0.0,
             STAT_GRID_FEED_IN_TODAY: 0.0,
+            STAT_PV_PRODUCTION_TODAY: 0.0,
+            STAT_PV_ADDITIONAL_TODAY: 0.0,
+            STAT_PV_ADDITIONAL_INTEGRATED: 0.0,
+            STAT_HOUSE_CONSUMPTION_TODAY: 0.0,
             STAT_GRID_TO_BATTERY_TODAY: 0.0,
             STAT_BATTERY_THROUGHPUT_TODAY: 0.0,
             STAT_COST_TODAY_EUR: 0.0,
@@ -196,6 +204,8 @@ class E3DCMaestroCoordinator(
             STAT_WALLBOX_ENERGY_TODAY: 0.0,
         }
         self._last_stats_date: str | None = None
+        # Per-entity midnight bases for additional lifetime energy totals.
+        self._additional_bases: dict[str, float] = {}
         # Persistence: store stats in HA's .storage so a restart preserves
         # daily counters until the next midnight reset.
         self._stats_store: Store = Store(
@@ -556,6 +566,7 @@ class E3DCMaestroCoordinator(
         today_str = now.strftime("%Y-%m-%d")
         if self._last_stats_date != today_str:
             self.stats = {k: 0.0 for k in self.stats}
+            self._additional_bases = {}
             self._last_stats_date = today_str
             self._watchdog_notified = False
             self._stats_dirty = True
@@ -793,6 +804,30 @@ class E3DCMaestroCoordinator(
         elif interval_h is not None and state_data.battery_power < 0:
             self.stats[STAT_DISCHARGED_TODAY] += abs(state_data.battery_power) / 1000 * interval_h
 
+        # PV heute = Haupt (RSCP) + Zusatz (externer Zähler). Wie Live: pv + additional.
+        # Haus: RSCP-Tageszähler, sonst Integration der Instant-Leistung (nicht EWMA).
+        main_pv_native = self._read_pv_production_today_kwh(opts)
+        house_native = self._read_house_consumption_today_kwh(opts)
+        if house_native is not None:
+            self.stats[STAT_HOUSE_CONSUMPTION_TODAY] = house_native
+        additional_w = self._read_additional_power_w(opts)
+        pv_w = (
+            state_data.pv_power_instant
+            if state_data.pv_power_instant is not None
+            else state_data.pv_power
+        )
+        house_w = (
+            state_data.house_power_instant
+            if state_data.house_power_instant is not None
+            else state_data.house_power
+        )
+        if main_pv_native is not None:
+            add_today = await self._async_additional_today_kwh(opts, interval_h, additional_w)
+            self.stats[STAT_PV_PRODUCTION_TODAY] = main_pv_native + add_today
+        elif interval_h is not None and pv_w > 0:
+            # Kein Haupt-Tageszähler: Gesamt-PV (inkl. Zusatz) aus Leistung integrieren.
+            self.stats[STAT_PV_PRODUCTION_TODAY] += pv_w / 1000 * interval_h
+
         # v0.2.0 / v0.3.0: Grid energy bookkeeping for cost sensors + sanity check.
         # grid_power: positiv = Einspeisung (über HA-Konvention im Setup), negativ = Bezug.
         # Current buy price: use price_sensor if dynamic, else fixed_buy_price.
@@ -815,6 +850,9 @@ class E3DCMaestroCoordinator(
                 if state_data.battery_power > 0:
                     gtb_w = min(grid_draw_w, state_data.battery_power)
                     self.stats[STAT_GRID_TO_BATTERY_TODAY] += gtb_w / 1000 * interval_h
+
+            if house_native is None and house_w > 0:
+                self.stats[STAT_HOUSE_CONSUMPTION_TODAY] += house_w / 1000 * interval_h
 
             # Throughput = |Akku-Leistung| für Wear-Cost-Berechnung.
             throughput_kwh = abs(state_data.battery_power) / 1000 * interval_h
@@ -885,6 +923,91 @@ class E3DCMaestroCoordinator(
         }
 
 
+    async def _async_today_stat_change(self, statistic_id: str) -> float | None:
+        """Sum of recorder ``change`` for ``statistic_id`` since local midnight."""
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.statistics import (
+                statistics_during_period,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        start_local = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            raw = await get_instance(self.hass).async_add_executor_job(
+                statistics_during_period,
+                self.hass,
+                start_local,
+                dt_util.utcnow(),
+                {statistic_id},
+                "hour",
+                None,
+                {"change"},
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Recorder-Tagesänderung für %s fehlgeschlagen: %s", statistic_id, err)
+            return None
+        rows = raw.get(statistic_id) if isinstance(raw, dict) else None
+        if not rows:
+            return None
+        total = 0.0
+        saw = False
+        for row in rows:
+            change = row.get("change")
+            if change is None:
+                continue
+            total += float(change)
+            saw = True
+        return total if saw else 0.0
+
+    async def _async_additional_today_kwh(
+        self,
+        opts: dict,
+        interval_h: float | None,
+        additional_w: float,
+    ) -> float:
+        """Zusatz-PV heute: Summe der Lebensdauerzähler-Deltas + Integration.
+
+        Mehrere Erzeuger: Energiezähler und Leistungssensoren (Listen). Index i der
+        Leistung gehört zu Index i des Energiezählers; überschüssige Leistungen
+        ohne Zähler werden integriert. Passt zum Live-Fluss (``pv + additional``).
+        """
+        total_ids = self._additional_total_entity_ids(opts)
+        power_ids = self._additional_power_entity_ids(opts)
+
+        deltas = 0.0
+        totals_ok = 0
+        for entity_id in total_ids:
+            total_now = self._read_energy_total_kwh(entity_id)
+            if total_now is None:
+                continue
+            if entity_id not in self._additional_bases:
+                change = await self._async_today_stat_change(entity_id)
+                if change is not None:
+                    self._additional_bases[entity_id] = max(0.0, total_now - change)
+                else:
+                    # Kein Recorder: ab jetzt zählen (Vormittag geht verloren).
+                    self._additional_bases[entity_id] = total_now
+            deltas += max(0.0, total_now - self._additional_bases[entity_id])
+            totals_ok += 1
+
+        # Leistung ohne passenden Energiezähler (Index ≥ Anzahl Totals) integrieren.
+        if totals_ok > 0:
+            unpaired_w = 0.0
+            for index, entity_id in enumerate(power_ids):
+                if index < len(total_ids):
+                    continue
+                unpaired_w += max(0.0, self._read_power_w(entity_id, required=False) or 0.0)
+        else:
+            unpaired_w = additional_w
+
+        if interval_h is not None and unpaired_w > 0:
+            self.stats[STAT_PV_ADDITIONAL_INTEGRATED] += unpaired_w / 1000 * interval_h
+
+        add_today = deltas + self.stats.get(STAT_PV_ADDITIONAL_INTEGRATED, 0.0)
+        self.stats[STAT_PV_ADDITIONAL_TODAY] = add_today
+        return add_today
+
     async def _async_load_stats(self) -> None:
         """Load persisted stats from disk (called once during first refresh)."""
         try:
@@ -906,6 +1029,17 @@ class E3DCMaestroCoordinator(
                 if key in stored_stats:
                     self.stats[key] = stored_stats[key]
             self._last_stats_date = stored_date
+        bases = data.get("additional_bases")
+        if isinstance(bases, dict):
+            cleaned: dict[str, float] = {}
+            for key, value in bases.items():
+                if not isinstance(key, str) or not key:
+                    continue
+                try:
+                    cleaned[key] = float(value)
+                except (TypeError, ValueError):
+                    continue
+            self._additional_bases = cleaned
 
 
     async def _async_save_stats(self) -> None:
@@ -915,6 +1049,7 @@ class E3DCMaestroCoordinator(
                 {
                     "date": self._last_stats_date,
                     "stats": dict(self.stats),
+                    "additional_bases": dict(self._additional_bases),
                 }
             )
             self._stats_dirty = False

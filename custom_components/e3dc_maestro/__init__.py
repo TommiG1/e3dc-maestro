@@ -249,6 +249,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_entity_ids(hass, entry)
     await _async_enable_rscp_plant_entities(hass)
 
+    # Persist RSCP day/additional sensors when options left them blank (runtime
+    # fallback works, but the cockpit then looks unfinished).
+    from .config_flow import seed_missing_rscp_source_options
+
+    seeded = seed_missing_rscp_source_options(hass, dict(entry.options))
+    if seeded is not None:
+        hass.config_entries.async_update_entry(entry, options=seeded)
+        _LOGGER.info("E3DC Maestro: fehlende Quell-Sensoren aus RSCP ergänzt")
+
     coordinator = E3DCMaestroCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { consumerUnavailable, consumersFromOptions, includedOverflow, newConsumerId, overflowHeld, parseConsumers, wattsOf, type Consumer, type FlowConsumer } from "./consumers";
+import {
+  consumerUnavailable,
+  consumersFromOptions,
+  includedOverflow,
+  newConsumerId,
+  overflowHeld,
+  parseConsumers,
+  separateDayEnergy,
+  WALLBOX_ENTITY,
+  wattsOf,
+  type Consumer,
+  type FlowConsumer,
+} from "./consumers";
 import type { HassEntity } from "./entities";
 
 const entity = (state: string, unit: string): HassEntity => ({
@@ -9,9 +21,10 @@ const entity = (state: string, unit: string): HassEntity => ({
   last_changed: "",
 });
 
-const flow = (watts: number, mode: FlowConsumer["mode"]): FlowConsumer => ({
+const flow = (watts: number, mode: FlowConsumer["mode"], entityId = "sensor.x"): FlowConsumer => ({
   id: String(watts),
   name: "x",
+  entityId,
   watts,
   mode,
   missing: false,
@@ -100,5 +113,17 @@ describe("overflowHeld", () => {
     expect(overflowHeld(true, 1_000, 10_999)).toEqual({ show: false, since: 1_000 });
     expect(overflowHeld(true, 1_000, 11_000)).toEqual({ show: true, since: 1_000 });
     expect(overflowHeld(false, 1_000, 12_000)).toEqual({ show: false, since: undefined });
+  });
+});
+
+describe("separateDayEnergy", () => {
+  it("lists only separately measured wallbox energy above zero", () => {
+    const wb = flow(1000, "separate", WALLBOX_ENTITY);
+    wb.name = "Wallbox";
+    expect(separateDayEnergy([wb], 8.2)).toEqual([{ name: "Wallbox", kwh: 8.2 }]);
+    expect(separateDayEnergy([flow(1000, "included", WALLBOX_ENTITY)], 8.2)).toEqual([]);
+    expect(separateDayEnergy([flow(1000, "separate", "sensor.other")], 8.2)).toEqual([]);
+    expect(separateDayEnergy([wb], 0)).toEqual([]);
+    expect(separateDayEnergy([wb], undefined)).toEqual([]);
   });
 });

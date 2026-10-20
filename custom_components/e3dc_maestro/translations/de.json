@@ -7,24 +7,30 @@
         "data": {
           "soc_sensor": "Ladezustand (SoC)",
           "pv_power_sensor": "PV-Leistung",
-          "additional_generation_sensor": "Zusätzliche Erzeugung (optional)",
+          "additional_generation_sensor": "Zusätzliche Erzeuger – Leistung (optional, Mehrfachauswahl)",
+          "additional_energy_total_sensor": "Zusatz-Energiezähler gesamt (optional, Mehrfachauswahl)",
           "house_power_sensor": "Hausverbrauch",
           "grid_power_sensor": "Netzleistung",
           "grid_power_invert": "Vorzeichen invertieren",
           "battery_power_sensor": "Batterieleistung",
           "battery_charged_today_sensor": "Geladen heute (optional)",
-          "battery_discharged_today_sensor": "Entladen heute (optional)"
+          "battery_discharged_today_sensor": "Entladen heute (optional)",
+          "pv_production_today_sensor": "PV-Ertrag heute (optional)",
+          "house_consumption_today_sensor": "Hausverbrauch heute (optional)"
         },
         "data_description": {
           "soc_sensor": "RSCP-Suffix: _state_of_charge (%)",
           "pv_power_sensor": "RSCP-Suffix: _solar_production (kW/W)",
-          "additional_generation_sensor": "RSCP-Suffix: _additional_production (z. B. zweiter Wechselrichter, kW/W)",
+          "additional_generation_sensor": "Mehrere Sensoren möglich (RSCP _additional_production und/oder externe WR). Live-PV = Haupt + Summe.",
+          "additional_energy_total_sensor": "Lebensdauer-kWh je Erzeuger (Reihenfolge wie bei Leistung). PV heute = Solar heute + Summe der Tagesdeltas.",
           "house_power_sensor": "RSCP-Suffix: _house_consumption (kW/W)",
           "grid_power_sensor": "Empfohlen: _transfer_to_from_grid (signiert, dann unten 'Invertieren' aktivieren). Alternativ _export_to_grid (nur Einspeisung, Bezug fehlt dann!).",
           "grid_power_invert": "Aktivieren wenn der Sensor positiv = Bezug liefert (gilt für _transfer_to_from_grid). Maestro-Konvention: positiv = Einspeisung.",
           "battery_power_sensor": "RSCP-Suffix: _battery_net_change (signiert, positiv = Laden).",
           "battery_charged_today_sensor": "RSCP-Suffix: _battery_charge_today (kWh-Tageszähler, präziser als interne Schätzung)",
-          "battery_discharged_today_sensor": "RSCP-Suffix: _battery_discharge_today (kWh-Tageszähler)"
+          "battery_discharged_today_sensor": "RSCP-Suffix: _battery_discharge_today (kWh-Tageszähler)",
+          "pv_production_today_sensor": "RSCP-Suffix: _solar_production_today (kWh-Tageszähler)",
+          "house_consumption_today_sensor": "RSCP-Suffix: _house_consumption_today (kWh-Tageszähler)"
         }
       },
       "system": {
@@ -278,24 +284,30 @@
         "data": {
           "soc_sensor": "Ladezustand (SoC)",
           "pv_power_sensor": "PV-Leistung",
-          "additional_generation_sensor": "Zusätzliche Erzeugung (optional)",
+          "additional_generation_sensor": "Zusätzliche Erzeuger – Leistung (optional, Mehrfachauswahl)",
+          "additional_energy_total_sensor": "Zusatz-Energiezähler gesamt (optional, Mehrfachauswahl)",
           "house_power_sensor": "Hausverbrauch",
           "grid_power_sensor": "Netzleistung",
           "grid_power_invert": "Vorzeichen invertieren",
           "battery_power_sensor": "Batterieleistung",
           "battery_charged_today_sensor": "Geladen heute (optional)",
-          "battery_discharged_today_sensor": "Entladen heute (optional)"
+          "battery_discharged_today_sensor": "Entladen heute (optional)",
+          "pv_production_today_sensor": "PV-Ertrag heute (optional)",
+          "house_consumption_today_sensor": "Hausverbrauch heute (optional)"
         },
         "data_description": {
           "soc_sensor": "RSCP-Suffix: _state_of_charge (%)",
           "pv_power_sensor": "RSCP-Suffix: _solar_production (kW/W)",
-          "additional_generation_sensor": "RSCP-Suffix: _additional_production (z. B. zweiter Wechselrichter)",
+          "additional_generation_sensor": "Mehrere Sensoren möglich (RSCP _additional_production und/oder externe WR). Live-PV = Haupt + Summe.",
+          "additional_energy_total_sensor": "Lebensdauer-kWh je Erzeuger (Reihenfolge wie bei Leistung). PV heute = Solar heute + Summe der Tagesdeltas.",
           "house_power_sensor": "RSCP-Suffix: _house_consumption (kW/W)",
           "grid_power_sensor": "Empfohlen: _transfer_to_from_grid (signiert, dann unten 'Invertieren' aktivieren). Alternativ _export_to_grid (nur Einspeisung, Bezug fehlt dann!).",
           "grid_power_invert": "Aktivieren wenn der Sensor positiv = Bezug liefert (gilt für _transfer_to_from_grid). Maestro-Konvention: positiv = Einspeisung.",
           "battery_power_sensor": "RSCP-Suffix: _battery_net_change (signiert, positiv = Laden)",
           "battery_charged_today_sensor": "RSCP-Suffix: _battery_charge_today (kWh-Tageszähler)",
-          "battery_discharged_today_sensor": "RSCP-Suffix: _battery_discharge_today (kWh-Tageszähler)"
+          "battery_discharged_today_sensor": "RSCP-Suffix: _battery_discharge_today (kWh-Tageszähler)",
+          "pv_production_today_sensor": "RSCP-Suffix: _solar_production_today (kWh-Tageszähler)",
+          "house_consumption_today_sensor": "RSCP-Suffix: _house_consumption_today (kWh-Tageszähler)"
         }
       },
       "system": {

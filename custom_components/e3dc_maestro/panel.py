@@ -104,6 +104,8 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "selfUse": ("sensor", "eigenverbrauch_heute"),
     "importToday": ("sensor", "grid_draw_today"),
     "feedToday": ("sensor", "grid_feed_in_today"),
+    "pvToday": ("sensor", "pv_production_today"),
+    "houseToday": ("sensor", "house_consumption_today"),
     "chargedToday": ("sensor", "charged_today"),
     "dischargedToday": ("sensor", "discharged_today"),
     "pvTomorrow": ("sensor", "tomorrow_pv_kwh"),

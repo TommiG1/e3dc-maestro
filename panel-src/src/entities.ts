@@ -60,6 +60,8 @@ export const DEFAULT_IDS = {
   selfUse: sensor("pv_eigenverbrauch_heute"),
   importToday: sensor("netzbezug_heute"),
   feedToday: sensor("netzeinspeisung_heute"),
+  pvToday: sensor("pv_ertrag_heute"),
+  houseToday: sensor("hausverbrauch_heute"),
   chargedToday: sensor("geladen_heute"),
   dischargedToday: sensor("entladen_heute"),
   pvTomorrow: sensor("morgen_pv_prognose"),

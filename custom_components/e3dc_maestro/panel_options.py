@@ -17,9 +17,11 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     AUTO_MODE_OBJECTIVES,
     DOMAIN,
+    MAX_ADDITIONAL_PRODUCERS,
     TARIFF_MODES,
     WALLBOX_TYPE_E3DC,
     WALLBOX_TYPE_GENERIC,
+    as_entity_list,
 )
 
 WS_PANEL_OPTIONS = f"{DOMAIN}/panel_options"
@@ -40,17 +42,24 @@ def _entity(required: bool = False) -> _Spec:
     return ("entity", required)
 
 
+def _entities(max_n: int | None = None) -> _Spec:
+    return ("entities", max_n)
+
+
 _SPECS: dict[str, _Spec] = {
     # Sources
     "soc_sensor": _entity(True),
     "pv_power_sensor": _entity(True),
-    "additional_generation_sensor": _entity(),
+    "additional_generation_sensor": _entities(MAX_ADDITIONAL_PRODUCERS),
+    "additional_energy_total_sensor": _entities(MAX_ADDITIONAL_PRODUCERS),
     "house_power_sensor": _entity(True),
     "grid_power_sensor": _entity(True),
     "grid_power_invert": ("bool",),
     "battery_power_sensor": _entity(True),
     "battery_charged_today_sensor": _entity(),
     "battery_discharged_today_sensor": _entity(),
+    "pv_production_today_sensor": _entity(),
+    "house_consumption_today_sensor": _entity(),
     # Plant
     "inverter_power": _n(1000, 30000),
     "max_charge_power": _n(500, 15000),
@@ -159,7 +168,7 @@ _SPECS: dict[str, _Spec] = {
     "auto_mode_enabled": ("bool",),
     "auto_mode_objective": ("select", tuple(AUTO_MODE_OBJECTIVES)),
     # Sizing advisor
-    "sizing_pv_energy_sensor": ("entities",),
+    "sizing_pv_energy_sensor": _entities(),
     "sizing_house_energy_sensor": _entity(),
     "sizing_house_from_balance": ("bool",),
     "sizing_grid_import_energy_sensor": _entity(),
@@ -288,6 +297,9 @@ def _check(spec: _Spec, value: Any, known) -> str | None:
     if kind == "entities":
         if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
             return "entities"
+        max_n = spec[1] if len(spec) > 1 else None
+        if max_n is not None and len(value) > max_n:
+            return "entities"
         missing = [item for item in value if not known(item)]
         return "unknown_entity" if missing else None
     if kind == "time":
@@ -333,6 +345,21 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             else:
                 cleaned[key] = parsed
             continue
+        if spec[0] == "entities":
+            if isinstance(value, str):
+                value = as_entity_list(value)
+            elif isinstance(value, list):
+                value = as_entity_list(value)
+            else:
+                errors[key] = "entities"
+                continue
+            # Empty producer lists clear the option (RSCP fallback can apply).
+            if not value and key in {
+                "additional_generation_sensor",
+                "additional_energy_total_sensor",
+            }:
+                cleaned[key] = None
+                continue
         reason = _check(spec, value, known)
         if reason:
             errors[key] = reason

@@ -12,13 +12,21 @@ from homeassistant.const import PERCENTAGE, UnitOfPower
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er, selector
 
+from .config_flow_selectors import entities_selector as _entities_selector
 from .config_flow_selectors import entity_selector as _entity_selector
 from .config_flow_selectors import number_selector as _number_selector
 from .const import (
+    CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR,
     CONF_ADDITIONAL_GENERATION_SENSOR,
+    MAX_ADDITIONAL_PRODUCERS,
+    RSCP_SUFFIX_ADDITIONAL_PRODUCTION,
+    RSCP_SUFFIX_ADDITIONAL_TOTAL,
+    as_entity_list,
     CONF_ADVANCED_CORRIDOR,
     CONF_BATTERY_CHARGED_TODAY_SENSOR,
     CONF_BATTERY_DISCHARGED_TODAY_SENSOR,
+    CONF_HOUSE_CONSUMPTION_TODAY_SENSOR,
+    CONF_PV_PRODUCTION_TODAY_SENSOR,
     CONF_BATTERY_POWER_SENSOR,
     CONF_CHARGE_TARGET,
     CONF_CHARGE_THRESHOLD,
@@ -340,15 +348,88 @@ STEP_SIZING_ADVISOR_SCHEMA = vol.Schema(
 _RSCP_SUFFIX_MAP: dict[str, str] = {
     CONF_SOC_SENSOR:                     "_state_of_charge",
     CONF_PV_POWER_SENSOR:                "_solar_production",
-    CONF_ADDITIONAL_GENERATION_SENSOR:   "_additional_production",
     CONF_HOUSE_POWER_SENSOR:             "_house_consumption",
     CONF_GRID_POWER_SENSOR:              "_transfer_to_from_grid",
     CONF_BATTERY_POWER_SENSOR:           "_battery_net_change",
     CONF_BATTERY_CHARGED_TODAY_SENSOR:   "_battery_charge_today",
     CONF_BATTERY_DISCHARGED_TODAY_SENSOR:"_battery_discharge_today",
+    CONF_PV_PRODUCTION_TODAY_SENSOR:     "_solar_production_today",
+    CONF_HOUSE_CONSUMPTION_TODAY_SENSOR: "_house_consumption_today",
     # Wallbox-Verbrauchszähler (E3DC RSCP, sumiert über alle Wallboxen)
     CONF_WALLBOX_POWER_SENSOR:           "_wallbox_consumption",
 }
+
+# Multi-select producers: collect every RSCP match (manual add of non-RSCP still possible).
+_RSCP_MULTI_SUFFIX_MAP: dict[str, str] = {
+    CONF_ADDITIONAL_GENERATION_SENSOR: RSCP_SUFFIX_ADDITIONAL_PRODUCTION,
+    CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR: RSCP_SUFFIX_ADDITIONAL_TOTAL,
+}
+
+
+def _normalize_list_source_options(opts: dict[str, Any]) -> dict[str, Any]:
+    """Coerce legacy string producer options to lists for EntitySelector(multiple).
+
+    Empty selections drop the key so runtime RSCP fallback stays available.
+    """
+    out = dict(opts)
+    for key in _RSCP_MULTI_SUFFIX_MAP:
+        if key not in out:
+            continue
+        items = as_entity_list(out[key], max_items=MAX_ADDITIONAL_PRODUCERS)
+        if items:
+            out[key] = items
+        else:
+            out.pop(key, None)
+    return out
+
+
+def _merge_list_source_options(target: dict[str, Any], user_input: dict[str, Any]) -> None:
+    """Update target with user_input; clear producer keys when the multi-select is empty."""
+    normalized = _normalize_list_source_options(user_input)
+    target.update(normalized)
+    for key in _RSCP_MULTI_SUFFIX_MAP:
+        if key in user_input and key not in normalized:
+            target.pop(key, None)
+
+
+def _suggested_list_source_options(opts: dict[str, Any]) -> dict[str, Any]:
+    """Like normalize, but keep empty lists so EntitySelector(multiple) has a value."""
+    out = _normalize_list_source_options(opts)
+    for key in _RSCP_MULTI_SUFFIX_MAP:
+        out.setdefault(key, [])
+    return out
+
+
+# Optional day/additional sensors: fill gaps from RSCP so the cockpit is not blank.
+_SEEDABLE_SOURCE_KEYS: tuple[str, ...] = (
+    CONF_ADDITIONAL_GENERATION_SENSOR,
+    CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR,
+    CONF_PV_PRODUCTION_TODAY_SENSOR,
+    CONF_HOUSE_CONSUMPTION_TODAY_SENSOR,
+    CONF_BATTERY_CHARGED_TODAY_SENSOR,
+    CONF_BATTERY_DISCHARGED_TODAY_SENSOR,
+)
+
+
+def seed_missing_rscp_source_options(hass, options: dict[str, Any]) -> dict[str, Any] | None:
+    """Fill missing optional source sensors from RSCP autodetection.
+
+    Never overwrites an existing non-empty value. Returns updated options or None.
+    """
+    detected = _autodetect_rscp_sources(hass)
+    new_options = dict(options)
+    changed = False
+    for key in _SEEDABLE_SOURCE_KEYS:
+        current = new_options.get(key)
+        if current not in (None, "", []):
+            continue
+        if key not in detected:
+            continue
+        new_options[key] = detected[key]
+        changed = True
+    if not changed:
+        return None
+    return _normalize_list_source_options(new_options)
 
 
 _OPENWB_CP_RE = re.compile(r"openwb_chargepoint_?(\d+)_")
@@ -442,6 +523,10 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
             match = next((eid for eid in rscp_sensor_ids if eid.endswith(suffix)), None)
             if match:
                 out[key] = match
+        for key, suffix in _RSCP_MULTI_SUFFIX_MAP.items():
+            matches = sorted(eid for eid in rscp_sensor_ids if eid.endswith(suffix))
+            if matches:
+                out[key] = matches[:MAX_ADDITIONAL_PRODUCERS]
     # _transfer_to_from_grid liefert positiv = Bezug → Vorzeichen automatisch invertieren.
     grid = out.get(CONF_GRID_POWER_SENSOR, "")
     if isinstance(grid, str) and grid.endswith("_transfer_to_from_grid"):
@@ -571,11 +656,14 @@ def _format_sources_detection(detected: dict[str, Any]) -> str:
         CONF_EVCC_ENABLED,
         CONF_EVCC_NOW_VALUE,
     }
-    sensor_lines = [
-        f"- `{eid}`"
-        for k, eid in detected.items()
-        if k not in skip_keys
-    ]
+    sensor_lines: list[str] = []
+    for key, value in detected.items():
+        if key in skip_keys:
+            continue
+        if isinstance(value, list):
+            sensor_lines.extend(f"- `{eid}`" for eid in value if isinstance(eid, str))
+        elif isinstance(value, str):
+            sensor_lines.append(f"- `{value}`")
     if detected.get(CONF_GRID_POWER_INVERT):
         sensor_lines.append("- _Vorzeichen Netzleistung invertiert (positiv = Bezug)_")
     if detected.get(CONF_WALLBOX_PROVIDER):
@@ -597,13 +685,16 @@ STEP_SOURCES_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_SOC_SENSOR): _entity_selector(),
         vol.Required(CONF_PV_POWER_SENSOR): _entity_selector(),
-        vol.Optional(CONF_ADDITIONAL_GENERATION_SENSOR): _entity_selector(),
+        vol.Optional(CONF_ADDITIONAL_GENERATION_SENSOR, default=[]): _entities_selector(),
+        vol.Optional(CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR, default=[]): _entities_selector(),
         vol.Required(CONF_HOUSE_POWER_SENSOR): _entity_selector(),
         vol.Required(CONF_GRID_POWER_SENSOR): _entity_selector(),
         vol.Optional(CONF_GRID_POWER_INVERT, default=False): selector.BooleanSelector(),
         vol.Required(CONF_BATTERY_POWER_SENSOR): _entity_selector(),
         vol.Optional(CONF_BATTERY_CHARGED_TODAY_SENSOR): _entity_selector(),
         vol.Optional(CONF_BATTERY_DISCHARGED_TODAY_SENSOR): _entity_selector(),
+        vol.Optional(CONF_PV_PRODUCTION_TODAY_SENSOR): _entity_selector(),
+        vol.Optional(CONF_HOUSE_CONSUMPTION_TODAY_SENSOR): _entity_selector(),
     }
 )
 
@@ -1107,10 +1198,10 @@ class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
     ) -> dict[str, Any]:
         """Step 1: Select source entities."""
         if user_input is not None:
-            self._data.update(user_input)
+            _merge_list_source_options(self._data, user_input)
             return await self.async_step_system()
         detected = _autodetect_rscp_sources(self.hass)
-        suggested = {**detected, **self._data}
+        suggested = _suggested_list_source_options({**detected, **self._data})
         schema = self.add_suggested_values_to_schema(STEP_SOURCES_SCHEMA, suggested)
         return self.async_show_form(
             step_id="sources",
@@ -1387,7 +1478,7 @@ class E3DCMaestroOptionsFlow(_TariffSlotsMixin, OptionsFlow):
 
     async def async_step_sources(self, user_input: dict[str, Any] | None = None) -> dict[str, Any]:
         if user_input is not None:
-            self._options.update(user_input)
+            _merge_list_source_options(self._options, user_input)
             return await self.async_step_init()
         auto = _autodetect_rscp_sources(self.hass)
         # Für die Anzeige IMMER alle erkannten Werte zeigen, auch wenn nicht übernommen.
@@ -1397,7 +1488,7 @@ class E3DCMaestroOptionsFlow(_TariffSlotsMixin, OptionsFlow):
         # export_to_grid fälschlicherweise invert=True bekommen.
         if CONF_GRID_POWER_SENSOR in self._options:
             auto.pop(CONF_GRID_POWER_INVERT, None)
-        suggested = {**auto, **self._options}
+        suggested = _suggested_list_source_options({**auto, **self._options})
         schema = self.add_suggested_values_to_schema(STEP_SOURCES_SCHEMA, suggested)
         return self.async_show_form(
             step_id="sources",

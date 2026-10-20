@@ -33,10 +33,16 @@ export interface Consumer {
 export interface FlowConsumer {
   id: string;
   name: string;
+  entityId: string;
   watts: number;
   mode: ConsumerMode;
   missing: boolean;
   icon: ConsumerIcon;
+}
+
+export interface SeparateDayItem {
+  name: string;
+  kwh: number;
 }
 
 const isIcon = (value: unknown): value is ConsumerIcon =>
@@ -128,8 +134,27 @@ export function toFlow(list: Consumer[], hass: Hass): FlowConsumer[] {
   return list.map((c) => {
     const entity = hass.states[c.entityId];
     const watts = wattsOf(entity);
-    return { id: c.id, name: c.name, mode: c.mode, icon: c.icon, watts: watts ?? 0, missing: consumerUnavailable(entity) };
+    return {
+      id: c.id,
+      name: c.name,
+      entityId: c.entityId,
+      mode: c.mode,
+      icon: c.icon,
+      watts: watts ?? 0,
+      missing: consumerUnavailable(entity),
+    };
   });
+}
+
+/** Separate loads with a day counter. Only the Maestro wallbox sensor has one today. */
+export function separateDayEnergy(
+  items: Pick<FlowConsumer, "name" | "mode" | "entityId">[],
+  wallboxKwh: number | undefined,
+): SeparateDayItem[] {
+  if (wallboxKwh === undefined || !Number.isFinite(wallboxKwh) || wallboxKwh <= 0) return [];
+  return items
+    .filter((item) => item.mode === "separate" && item.entityId === WALLBOX_ENTITY)
+    .map((item) => ({ name: item.name, kwh: wallboxKwh }));
 }
 
 /** Included consumers are a slice of house power. Above the house reading the assignment is wrong. */

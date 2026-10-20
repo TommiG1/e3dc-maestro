@@ -5,7 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.e3dc_maestro.const import CONF_BATTERY_CAPACITY_KWH, CONF_SOC_SENSOR, DOMAIN
+from custom_components.e3dc_maestro.const import (
+    CONF_ADDITIONAL_GENERATION_SENSOR,
+    CONF_BATTERY_CAPACITY_KWH,
+    CONF_SOC_SENSOR,
+    DOMAIN,
+)
 from custom_components.e3dc_maestro.panel_options import (
     PanelOptionsError,
     apply_panel_options,
@@ -68,6 +73,22 @@ def test_sensor_change_reloads():
     assert reloaded and reloaded[0][CONF_SOC_SENSOR] == "sensor.soc"
     assert entry.options[CONF_SOC_SENSOR] == "sensor.soc"
     assert result["reloaded"] is True
+
+
+def test_additional_producers_accept_list_and_legacy_string():
+    params = SimpleNamespace()
+    states = {"sensor.a", "sensor.b"}
+    hass, entry, _, reloaded = _hass({}, states, params)
+    result = apply_panel_options(
+        hass, {CONF_ADDITIONAL_GENERATION_SENSOR: ["sensor.a", "sensor.b"]}
+    )
+    assert result["reloaded"] is True
+    assert reloaded[-1][CONF_ADDITIONAL_GENERATION_SENSOR] == ["sensor.a", "sensor.b"]
+    assert entry.options[CONF_ADDITIONAL_GENERATION_SENSOR] == ["sensor.a", "sensor.b"]
+
+    hass2, entry2, _, _ = _hass({}, {"sensor.a"}, params)
+    apply_panel_options(hass2, {CONF_ADDITIONAL_GENERATION_SENSOR: "sensor.a"})
+    assert entry2.options[CONF_ADDITIONAL_GENERATION_SENSOR] == ["sensor.a"]
 
 
 def test_rejects_unknown_missing_and_range():

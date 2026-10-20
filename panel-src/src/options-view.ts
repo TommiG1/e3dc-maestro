@@ -93,7 +93,13 @@ function entityField(c: OptionCtx, field: OptionField, label: string, multiple: 
   const query = c.query[field.key] ?? "";
   const choices = query.trim() ? entityChoices(idsOf(c.hass), field.domains, query) : [];
   const current = c.options[field.key];
-  const selected = multiple && Array.isArray(current) ? current.filter((item): item is string => typeof item === "string") : [];
+  const selected = multiple
+    ? Array.isArray(current)
+      ? current.filter((item): item is string => typeof item === "string")
+      : typeof current === "string" && current
+        ? [current]
+        : []
+    : [];
   const single = !multiple && typeof current === "string" ? current : "";
   return html`<div class="opt-entity">
     ${multiple

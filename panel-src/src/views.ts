@@ -13,7 +13,7 @@ import {
   sparkOptions,
 } from "./charts";
 import type { ClassicStatus } from "./classic";
-import type { FlowConsumer } from "./consumers";
+import { separateDayEnergy, type FlowConsumer } from "./consumers";
 import { energyFlow, flowBoxHeight } from "./flow";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
@@ -208,6 +208,11 @@ export function liveView(c: Ctx): TemplateResult {
   const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
     .filter(Boolean)
     .join(" · ");
+  const dayKwh = (key: "pvToday" | "houseToday" | "importToday" | "feedToday") => c.fmt.n(num(st(c, E[key])));
+  const separateDay = separateDayEnergy(c.consumers, num(st(c, E.wallboxEnergy)));
+  const openToday = () => {
+    if (c.collapsed.has("today")) c.onToggleGroup("today");
+  };
   const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult, extra?: TemplateResult) => {
     const open = !c.collapsed.has(id);
     return html`<section class="group">
@@ -253,6 +258,27 @@ export function liveView(c: Ctx): TemplateResult {
             i18n: c.i18n,
           })}
         </div>
+        <button type="button" class="flow-day" @click=${openToday} aria-label=${t("flowDayOpen")}>
+          <span class="flow-day-label">${t("flowDay")}</span>
+          <span>${t("nodePv")} ${dayKwh("pvToday")}</span>
+          <span class="flow-day-sep" aria-hidden="true">·</span>
+          <span>${t("nodeHouse")} ${dayKwh("houseToday")}</span>
+          <span class="flow-day-sep" aria-hidden="true">·</span>
+          <span>${t("flowDayImport")} ${dayKwh("importToday")}</span>
+          <span class="flow-day-sep" aria-hidden="true">·</span>
+          <span>${t("flowDayFeed")} ${dayKwh("feedToday")}</span>
+          <span class="flow-day-unit">kWh</span>
+        </button>
+        ${separateDay.length
+          ? html`<div class="flow-day flow-day-extra">
+              <span class="flow-day-label">${t("flowDaySeparate")}</span>
+              ${separateDay.map(
+                (item, index) => html`${index ? html`<span class="flow-day-sep" aria-hidden="true">·</span>` : nothing}
+                  <span>${item.name} ${c.fmt.n(item.kwh)}</span>`,
+              )}
+              <span class="flow-day-unit">kWh</span>
+            </div>`
+          : nothing}
         ${c.consumerOverflow ? html`<p class="err">${t("consumersOverflow")}</p>` : nothing}
       </div>
       <div class="card soc-card">

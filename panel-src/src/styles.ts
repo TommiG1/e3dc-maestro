@@ -486,6 +486,47 @@ export const styles = css`
     width: 100%;
     height: 100%;
   }
+  .flow-day {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 6px;
+    margin: 10px 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--faint);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+  }
+  .flow-day:hover,
+  .flow-day:focus-visible {
+    color: var(--muted);
+  }
+  .flow-day:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .flow-day-extra {
+    margin-top: 4px;
+    cursor: default;
+  }
+  .flow-day-label {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-right: 2px;
+  }
+  .flow-day-sep {
+    opacity: 0.55;
+  }
+  .flow-day-unit {
+    margin-left: 2px;
+    opacity: 0.8;
+  }
   .node-val {
     font: 700 22px Inter, system-ui, sans-serif;
     fill: var(--text);

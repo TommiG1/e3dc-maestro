@@ -7,24 +7,30 @@
         "data": {
           "soc_sensor": "State of charge (SoC)",
           "pv_power_sensor": "PV power",
-          "additional_generation_sensor": "Additional generation (optional)",
+          "additional_generation_sensor": "Additional producers – power (optional, multi-select)",
+          "additional_energy_total_sensor": "Additional energy totals (optional, multi-select)",
           "house_power_sensor": "House consumption",
           "grid_power_sensor": "Grid power",
           "grid_power_invert": "Invert sign",
           "battery_power_sensor": "Battery power",
           "battery_charged_today_sensor": "Charged today (optional)",
-          "battery_discharged_today_sensor": "Discharged today (optional)"
+          "battery_discharged_today_sensor": "Discharged today (optional)",
+          "pv_production_today_sensor": "PV yield today (optional)",
+          "house_consumption_today_sensor": "House consumption today (optional)"
         },
         "data_description": {
           "soc_sensor": "RSCP suffix: _state_of_charge (%)",
           "pv_power_sensor": "RSCP suffix: _solar_production (kW/W)",
-          "additional_generation_sensor": "RSCP suffix: _additional_production (e.g. second inverter, kW/W)",
+          "additional_generation_sensor": "Multiple sensors allowed (RSCP _additional_production and/or external inverters). Live PV = main + sum.",
+          "additional_energy_total_sensor": "Lifetime kWh per producer (same order as power). PV today = solar today + sum of day deltas.",
           "house_power_sensor": "RSCP suffix: _house_consumption (kW/W)",
           "grid_power_sensor": "Recommended: _transfer_to_from_grid (signed, then enable 'Invert' below). Alternatively _export_to_grid (feed-in only, grid import will be missing!).",
           "grid_power_invert": "Enable if the sensor reports positive = grid import (applies to _transfer_to_from_grid). Maestro convention: positive = feed-in.",
           "battery_power_sensor": "RSCP suffix: _battery_net_change (signed, positive = charging).",
           "battery_charged_today_sensor": "RSCP suffix: _battery_charge_today (daily kWh counter, more precise than the internal estimate)",
-          "battery_discharged_today_sensor": "RSCP suffix: _battery_discharge_today (daily kWh counter)"
+          "battery_discharged_today_sensor": "RSCP suffix: _battery_discharge_today (daily kWh counter)",
+          "pv_production_today_sensor": "RSCP suffix: _solar_production_today (daily kWh counter)",
+          "house_consumption_today_sensor": "RSCP suffix: _house_consumption_today (daily kWh counter)"
         }
       },
       "system": {
@@ -278,24 +284,30 @@
         "data": {
           "soc_sensor": "State of charge (SoC)",
           "pv_power_sensor": "PV power",
-          "additional_generation_sensor": "Additional generation (optional)",
+          "additional_generation_sensor": "Additional producers – power (optional, multi-select)",
+          "additional_energy_total_sensor": "Additional energy totals (optional, multi-select)",
           "house_power_sensor": "House consumption",
           "grid_power_sensor": "Grid power",
           "grid_power_invert": "Invert sign",
           "battery_power_sensor": "Battery power",
           "battery_charged_today_sensor": "Charged today (optional)",
-          "battery_discharged_today_sensor": "Discharged today (optional)"
+          "battery_discharged_today_sensor": "Discharged today (optional)",
+          "pv_production_today_sensor": "PV yield today (optional)",
+          "house_consumption_today_sensor": "House consumption today (optional)"
         },
         "data_description": {
           "soc_sensor": "RSCP suffix: _state_of_charge (%)",
           "pv_power_sensor": "RSCP suffix: _solar_production (kW/W)",
-          "additional_generation_sensor": "RSCP suffix: _additional_production (e.g. second inverter)",
+          "additional_generation_sensor": "Multiple sensors allowed (RSCP _additional_production and/or external inverters). Live PV = main + sum.",
+          "additional_energy_total_sensor": "Lifetime kWh per producer (same order as power). PV today = solar today + sum of day deltas.",
           "house_power_sensor": "RSCP suffix: _house_consumption (kW/W)",
           "grid_power_sensor": "Recommended: _transfer_to_from_grid (signed, then enable 'Invert' below). Alternatively _export_to_grid (feed-in only, grid import will be missing!).",
           "grid_power_invert": "Enable if the sensor reports positive = grid import (applies to _transfer_to_from_grid). Maestro convention: positive = feed-in.",
           "battery_power_sensor": "RSCP suffix: _battery_net_change (signed, positive = charging)",
           "battery_charged_today_sensor": "RSCP suffix: _battery_charge_today (daily kWh counter)",
-          "battery_discharged_today_sensor": "RSCP suffix: _battery_discharge_today (daily kWh counter)"
+          "battery_discharged_today_sensor": "RSCP suffix: _battery_discharge_today (daily kWh counter)",
+          "pv_production_today_sensor": "RSCP suffix: _solar_production_today (daily kWh counter)",
+          "house_consumption_today_sensor": "RSCP suffix: _house_consumption_today (daily kWh counter)"
         }
       },
       "system": {

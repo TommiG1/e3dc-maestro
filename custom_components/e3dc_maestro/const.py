@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 DOMAIN = "e3dc_maestro"
 NAME = "E3DC Maestro"
@@ -47,6 +48,34 @@ CONF_GRID_POWER_INVERT = "grid_power_invert"          # bool: True = invert sign
 CONF_BATTERY_POWER_SENSOR = "battery_power_sensor"    # positive = charging
 CONF_BATTERY_CHARGED_TODAY_SENSOR = "battery_charged_today_sensor"        # kWh, optional native daily counter
 CONF_BATTERY_DISCHARGED_TODAY_SENSOR = "battery_discharged_today_sensor"  # kWh, optional native daily counter
+CONF_PV_PRODUCTION_TODAY_SENSOR = "pv_production_today_sensor"            # kWh, optional RSCP _solar_production_today
+CONF_HOUSE_CONSUMPTION_TODAY_SENSOR = "house_consumption_today_sensor"    # kWh, optional RSCP _house_consumption_today
+CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR = "additional_energy_total_sensor"    # kWh lifetime, optional RSCP _additional_total
+# Additional producers: list of entity_ids (legacy single string still accepted).
+MAX_ADDITIONAL_PRODUCERS = 8
+# RSCP entity-id suffixes for native day counters (prefix is device-specific).
+RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY = "_solar_production_today"
+RSCP_SUFFIX_HOUSE_CONSUMPTION_TODAY = "_house_consumption_today"
+RSCP_SUFFIX_ADDITIONAL_TOTAL = "_additional_total"
+RSCP_SUFFIX_ADDITIONAL_PRODUCTION = "_additional_production"
+
+
+def as_entity_list(value: Any, *, max_items: int | None = None) -> list[str]:
+    """Normalize a config value to a deduplicated list of entity_ids."""
+    if isinstance(value, str):
+        items = [value] if value else []
+    elif isinstance(value, (list, tuple)):
+        items = []
+        seen: set[str] = set()
+        for item in value:
+            if isinstance(item, str) and item and item not in seen:
+                items.append(item)
+                seen.add(item)
+    else:
+        items = []
+    if max_items is not None:
+        return items[:max_items]
+    return items
 
 # Config entry keys – system (Step 2)
 CONF_INVERTER_POWER = "inverter_power"                # W, e.g. 12000
@@ -514,6 +543,10 @@ STAT_PV_SAVED = "pv_saved_today_kwh"
 # v0.2.0: cost tracking + sanity check
 STAT_GRID_DRAW_TODAY = "grid_draw_today_kwh"          # kWh aus dem Netz bezogen
 STAT_GRID_FEED_IN_TODAY = "grid_feed_in_today_kwh"    # kWh ins Netz eingespeist
+STAT_PV_PRODUCTION_TODAY = "pv_production_today_kwh"  # kWh PV-Ertrag heute (Haupt + Zusatz)
+STAT_PV_ADDITIONAL_TODAY = "pv_additional_today_kwh"  # kWh Zusatz-PV heute (externer Zähler)
+STAT_PV_ADDITIONAL_INTEGRATED = "pv_additional_integrated_kwh"  # Leistung ohne Energiezähler
+STAT_HOUSE_CONSUMPTION_TODAY = "house_consumption_today_kwh"  # kWh Hausverbrauch (Zähler)
 STAT_GRID_TO_BATTERY_TODAY = "grid_to_battery_today_kwh"  # kWh Netz → Akku (Sanity)
 STAT_BATTERY_THROUGHPUT_TODAY = "battery_throughput_today_kwh"  # für Wear-Cost
 # v0.3.0: zeitvariable €-Akkumulation + Eigenverbrauch + Verschleiß

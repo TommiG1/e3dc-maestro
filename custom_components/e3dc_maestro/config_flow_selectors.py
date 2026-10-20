@@ -10,6 +10,12 @@ def entity_selector(domain: str = "sensor") -> selector.EntitySelector:
     )
 
 
+def entities_selector(domain: str = "sensor") -> selector.EntitySelector:
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(domain=domain, multiple=True)
+    )
+
+
 def number_selector(
     min_val: float, max_val: float, step: float = 1.0, unit: str | None = None
 ) -> selector.NumberSelector:
