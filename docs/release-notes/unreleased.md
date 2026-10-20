@@ -1,3 +1,5 @@
 # Entwurf – noch kein Release
 
-> Noch keine Änderungen seit 0.5.1-beta.3.
+## Prognose
+
+Wenn der Preisplan den Akku steuert, zeigt die Prognose-Seite denselben geplanten SoC wie die Preisplan-Seite – nicht mehr die abweichende generische Trajektorie.

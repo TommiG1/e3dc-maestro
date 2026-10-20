@@ -9,6 +9,7 @@ import {
   parseTrajectory,
   phaseBands,
   planEmptyKind,
+  planSocPoints,
   priceExtremes,
   slotAction,
   splitGrid,
@@ -87,6 +88,19 @@ describe("price plan", () => {
     expect(priceExtremes(slots)).toMatchObject({ min: { price: 0.3 }, max: { price: 0.5 } });
     expect(priceExtremes([])).toBeUndefined();
     expect(parseSlots("nope")).toEqual([]);
+  });
+
+  it("maps plan slots to SoC points for the forecast chart", () => {
+    const slots = parseSlots([
+      slot(0.3, { start: "2026-10-16T12:00:00+02:00", start_local: "12:00", soc_pct: 40 }),
+      slot(0.5, { start: "2026-10-16T13:00:00+02:00", start_local: "13:00", soc_pct: 55 }),
+      { start: "2026-10-16T14:00:00+02:00", start_local: "14:00", price: 0.4 },
+    ]);
+    expect(planSocPoints(slots)).toEqual([
+      [Date.parse("2026-10-16T12:00:00+02:00"), 40],
+      [Date.parse("2026-10-16T13:00:00+02:00"), 55],
+    ]);
+    expect(planSocPoints([])).toEqual([]);
   });
 });
 

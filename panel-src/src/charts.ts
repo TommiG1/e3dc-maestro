@@ -156,14 +156,19 @@ const xaxis = (extra: Obj = {}) => ({
 export interface ForecastInput {
   traj: Trajectory;
   targetSoc: number | undefined;
+  /** When set (price plan controls the battery), replaces the generic SoC trajectory. */
+  planSoc: Point[] | undefined;
   ist: IstSeries | undefined;
   showIst: boolean;
   fmt: Fmt;
   i18n: I18n;
 }
 
-export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: ForecastInput): Opts {
+export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
+  const usePlanSoc = !!planSoc && planSoc.length >= 2;
+  const socSeries = usePlanSoc ? planSoc : traj.trajectory_points;
+  const socName = usePlanSoc ? i18n.t("legendPlanSoc") : i18n.t("legendSoc");
   const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
     const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: 0.05 };
     // Vertical text (bottom to top) keeps the name off the 100 % line at the top edge and fits
@@ -187,7 +192,7 @@ export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: Fo
     { name: i18n.t("legendHouse"), type: "line", data: toKw(traj.house_points) },
     { name: i18n.t("legendImport"), type: "area", data: imp },
     { name: i18n.t("legendFeed"), type: "area", data: exp },
-    { name: i18n.t("legendSoc"), type: "line", data: traj.trajectory_points },
+    { name: socName, type: "line", data: socSeries },
   ];
   const colors: string[] = [COLORS.pv, COLORS.house, COLORS.gridIn, COLORS.gridOut, COLORS.bat];
   const widths = [2, 2, 1.5, 1.5, 3.5];
@@ -199,7 +204,7 @@ export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: Fo
     { seriesName: i18n.t("legendPv"), show: false },
     { seriesName: i18n.t("legendPv"), show: false },
     {
-      seriesName: i18n.t("legendSoc"),
+      seriesName: socName,
       opposite: true,
       min: 0,
       max: 100,
@@ -225,7 +230,7 @@ export function forecastOptions({ traj, targetSoc, ist, showIst, fmt, i18n }: Fo
     yaxis.push(
       { seriesName: i18n.t("legendPv"), show: false },
       { seriesName: i18n.t("legendPv"), show: false },
-      { seriesName: i18n.t("legendSoc"), opposite: true, min: 0, max: 100, show: false },
+      { seriesName: socName, opposite: true, min: 0, max: 100, show: false },
     );
   }
 

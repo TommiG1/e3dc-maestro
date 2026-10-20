@@ -85,6 +85,13 @@ export function parseSlots(v: unknown): Slot[] {
   );
 }
 
+/** Planned end-of-slot SoC from the price plan, for the forecast chart when the plan controls. */
+export function planSocPoints(slots: Slot[]): Point[] {
+  return slots
+    .filter((s) => Number.isFinite(s.soc_pct))
+    .map((s) => [Date.parse(s.start), s.soc_pct]);
+}
+
 /**
  * Drop transitional slots (e.g. the partial slot "now until the next price boundary"):
  * a datetime bar chart sizes every bar by the smallest x distance, so a 5-minute stub

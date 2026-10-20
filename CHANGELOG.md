@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Geändert
+- **Prognose zeigt Plan-SoC, wenn der Preisplan steuert.** Steuert der Preisplan den Akku, ersetzt die Kurve „SoC geplant“ die generische Trajektorie – dieselbe Rechnung wie auf der Preisplan-Seite.
+
 ---
 
 ## [0.5.1-beta.3] – Debug-Log und Preisplan-Diagnose (2026-10-20)

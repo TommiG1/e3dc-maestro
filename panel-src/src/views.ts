@@ -29,6 +29,7 @@ import {
   parseSlots,
   parseTrajectory,
   planEmptyKind,
+  planSocPoints,
   priceExtremes,
   slotAction,
   type PlanEmptyKind,
@@ -431,13 +432,19 @@ export function forecastView(c: Ctx): TemplateResult {
   const a = attrs(c, E.trajectory);
   const traj = parseTrajectory(a);
   if (!traj) return html`<div class="card"><p class="empty">${t("noForecast")}</p></div>`;
+  const planAttrs = attrs(c, E.plan);
+  const planSoc =
+    planAttrs.controlling === true ? planSocPoints(parseSlots(planAttrs.plan_slots)) : undefined;
+  const usePlanSoc = !!planSoc && planSoc.length >= 2;
   const legend: [string, string][] = [
-    [COLORS.bat, t("legendSoc")],
+    [COLORS.bat, usePlanSoc ? t("legendPlanSoc") : t("legendSoc")],
     [COLORS.pv, t("legendPv")],
     [COLORS.house, t("legendHouse")],
     [COLORS.gridIn, t("legendImport")],
     [COLORS.gridOut, t("legendFeed")],
   ];
+  const socMin = usePlanSoc ? Math.min(...planSoc!.map((p) => p[1])) : n(a.min_soc);
+  const socMax = usePlanSoc ? Math.max(...planSoc!.map((p) => p[1])) : n(a.max_soc);
   const stat = (label: string, value: TemplateResult | string) =>
     html`<div class="card stat"><h3>${label}</h3><div class="v">${value}</div></div>`;
 
@@ -445,7 +452,7 @@ export function forecastView(c: Ctx): TemplateResult {
     <div class="card">
       <div class="chart-head">
         <div class="grow">
-          <h3>${t("chartTitle")}</h3>
+          <h3>${t(usePlanSoc ? "chartTitlePlan" : "chartTitle")}</h3>
           <div class="legend">${legend.map(([color, label]) => html`<span><i style="background:${color}"></i>${label}</span>`)}</div>
         </div>
         <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
@@ -458,10 +465,11 @@ export function forecastView(c: Ctx): TemplateResult {
       </div>
       <maestro-chart
         id="fc-main"
-        .options=${memo("forecast", [c.theme, st(c, E.trajectory), st(c, E.targetSoc)?.state, c.ist, c.showIst, c.fmt.loc], () =>
+        .options=${memo("forecast", [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, c.fmt.loc], () =>
           forecastOptions({
             traj,
             targetSoc: num(st(c, E.targetSoc)),
+            planSoc: usePlanSoc ? planSoc : undefined,
             ist: c.ist,
             showIst: c.showIst,
             fmt: c.fmt,
@@ -472,7 +480,7 @@ export function forecastView(c: Ctx): TemplateResult {
       <maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>
     </div>
     <div class="grid stat-row">
-      ${stat(t("statMinMax"), html`${Math.round(n(a.min_soc) ?? 0)}<small>%</small> / ${Math.round(n(a.max_soc) ?? 0)}<small>%</small>`)}
+      ${stat(t("statMinMax"), html`${Math.round(socMin ?? 0)}<small>%</small> / ${Math.round(socMax ?? 0)}<small>%</small>`)}
       ${stat(t("statImport"), unit(c.fmt.n(n(a.grid_draw_kwh)), "kWh"))}
       ${stat(t("statFeed"), unit(c.fmt.n(n(a.grid_feed_in_kwh)), "kWh"))}
       ${stat(t("statAutarky"), unit(c.fmt.n(n(a.self_sufficiency_pct)), "%"))}
