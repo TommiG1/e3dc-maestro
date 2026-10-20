@@ -16,11 +16,12 @@ function fetchRaw(
   ids: string[],
   startMs: number,
   extra: { minimal_response: boolean; no_attributes: boolean; significant_changes_only: boolean },
+  endMs = Date.now(),
 ): Promise<Raw> {
   return hass.callWS<Raw>({
     type: "history/history_during_period",
     start_time: new Date(startMs).toISOString(),
-    end_time: new Date().toISOString(),
+    end_time: new Date(endMs).toISOString(),
     entity_ids: ids,
     include_start_time_state: true,
     ...extra,
@@ -74,6 +75,22 @@ export function sumChanges(rows: { change?: number | null }[] | undefined): numb
 }
 
 export type Period = "today" | "week" | "month";
+export type BalanceGrain = "day" | "week" | "month" | "year";
+
+export interface BalanceRange {
+  grain: BalanceGrain;
+  /** Day inside the range (`YYYY-MM-DD`), clamped to today at most. */
+  anchor: string;
+  /** Inclusive range start day. */
+  start: string;
+  /** Exclusive range end day. */
+  end: string;
+  startMs: number;
+  /** Query end: now while the range is live, else exclusive midnight. */
+  endMs: number;
+  live: boolean;
+  cacheKey: string;
+}
 
 /** Daily counters the live tiles can show for the current week or month. */
 export const PERIOD_KEYS = [
@@ -124,6 +141,29 @@ export const shiftCalendarDay = (day: string, delta: number): string => {
   return calendarDay(d);
 };
 
+/** Cap for past-day spark/sum caches in the live panel (~tens of KB per day). */
+export const DAY_CACHE_LIMIT = 14;
+
+/** LRU set: re-inserts `key` and drops the oldest entries when over `limit`. */
+export function touchLruCache<V>(map: Map<string, V>, key: string, value: V, limit = DAY_CACHE_LIMIT): void {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > limit) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
+/** LRU get: returns the value and marks it recently used. */
+export function peekLruCache<V>(map: Map<string, V>, key: string): V | undefined {
+  const value = map.get(key);
+  if (value === undefined) return undefined;
+  map.delete(key);
+  map.set(key, value);
+  return value;
+}
+
 export const periodStart = (period: Exclude<Period, "today">, now = Date.now()): number => {
   const start = new Date(now);
   if (period === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
@@ -131,6 +171,93 @@ export const periodStart = (period: Exclude<Period, "today">, now = Date.now()):
   start.setHours(0, 0, 0, 0);
   return start.getTime();
 };
+
+/** Monday 00:00 local of the week that contains `day`. */
+export function weekStartOf(day: string): Date {
+  const d = parseCalendarDay(day);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+export function clampAnchor(day: string, now = Date.now()): string {
+  const today = calendarDay(new Date(now));
+  return day > today ? today : day;
+}
+
+/** Resolve the local range for a grain + anchor. Live ranges end at `now`. */
+export function resolveBalanceRange(grain: BalanceGrain, anchor: string, now = Date.now()): BalanceRange {
+  const today = calendarDay(new Date(now));
+  const a = clampAnchor(anchor, now);
+  let startDate: Date;
+  let endExclusive: Date;
+  if (grain === "day") {
+    startDate = parseCalendarDay(a);
+    endExclusive = new Date(startDate);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+  } else if (grain === "week") {
+    startDate = weekStartOf(a);
+    endExclusive = new Date(startDate);
+    endExclusive.setDate(endExclusive.getDate() + 7);
+  } else if (grain === "month") {
+    const d = parseCalendarDay(a);
+    startDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    endExclusive = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  } else {
+    const d = parseCalendarDay(a);
+    startDate = new Date(d.getFullYear(), 0, 1);
+    endExclusive = new Date(d.getFullYear() + 1, 0, 1);
+  }
+  const start = calendarDay(startDate);
+  const end = calendarDay(endExclusive);
+  const live = start <= today && today < end;
+  return {
+    grain,
+    anchor: a,
+    start,
+    end,
+    startMs: startDate.getTime(),
+    endMs: live ? now : endExclusive.getTime(),
+    live,
+    cacheKey: `${grain}:${start}`,
+  };
+}
+
+/** Step the anchor by one grain unit; never past today. */
+export function shiftBalanceAnchor(grain: BalanceGrain, anchor: string, delta: number, now = Date.now()): string {
+  const d = parseCalendarDay(clampAnchor(anchor, now));
+  if (grain === "day") d.setDate(d.getDate() + delta);
+  else if (grain === "week") d.setDate(d.getDate() + 7 * delta);
+  else if (grain === "month") d.setMonth(d.getMonth() + delta);
+  else d.setFullYear(d.getFullYear() + delta);
+  return clampAnchor(calendarDay(d), now);
+}
+
+/** Whether › can move forward from this range. */
+export function canShiftBalanceForward(range: BalanceRange, now = Date.now()): boolean {
+  if (range.live) return false;
+  const next = resolveBalanceRange(range.grain, shiftBalanceAnchor(range.grain, range.anchor, 1, now), now);
+  return next.cacheKey !== range.cacheKey || next.live;
+}
+
+/** Human label for the range nav. */
+export function formatBalanceRange(range: BalanceRange, loc: string, todayLabel: string): string {
+  if (range.grain === "day" && range.live) return todayLabel;
+  const start = parseCalendarDay(range.start);
+  if (range.grain === "day") {
+    return start.toLocaleDateString(loc, { weekday: "short", day: "numeric", month: "short" });
+  }
+  if (range.grain === "week") {
+    const endInc = parseCalendarDay(range.end);
+    endInc.setDate(endInc.getDate() - 1);
+    const a = start.toLocaleDateString(loc, { weekday: "short", day: "numeric", month: "short" });
+    const b = endInc.toLocaleDateString(loc, { weekday: "short", day: "numeric", month: "short" });
+    return `${a} – ${b}`;
+  }
+  if (range.grain === "month") {
+    return start.toLocaleDateString(loc, { month: "long", year: "numeric" });
+  }
+  return String(start.getFullYear());
+}
 
 type StatRow = { start?: unknown; change?: number | null };
 type StatRaw = Record<string, StatRow[]>;
@@ -237,21 +364,34 @@ export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today"
   return loadStatSums(hass, periodStart(period), Date.now());
 }
 
-/** Sum of daily statistic changes for one local calendar day (`YYYY-MM-DD`). */
-export async function loadDaySums(hass: Hass, day: string): Promise<Partial<Record<PeriodKey, number>>> {
-  const start = parseCalendarDay(day);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return loadStatSums(hass, start.getTime(), end.getTime());
+/** Sum of daily statistic changes for an arbitrary balance range. */
+export async function loadRangeSums(hass: Hass, range: BalanceRange): Promise<Partial<Record<PeriodKey, number>>> {
+  return loadStatSums(hass, range.startMs, range.endMs);
 }
 
-/** Cumulative daily counters since midnight, 30-minute grid. */
-export async function loadSparks(hass: Hass): Promise<Record<SparkKey, Point[]>> {
-  const raw = await fetchRaw(hass, SPARK_KEYS.map((k) => E[k]), startOfToday(), {
-    minimal_response: true,
-    no_attributes: true,
-    significant_changes_only: false,
-  });
+/** Sum of daily statistic changes for one local calendar day (`YYYY-MM-DD`). */
+export async function loadDaySums(hass: Hass, day: string): Promise<Partial<Record<PeriodKey, number>>> {
+  return loadRangeSums(hass, resolveBalanceRange("day", day));
+}
+
+/** Cumulative daily counters on a 30-minute grid. Omit `day` (or pass today) for live midnight→now. */
+export async function loadSparks(hass: Hass, day?: string): Promise<Record<SparkKey, Point[]>> {
+  const past = !!day && !isCalendarToday(day);
+  const start = past ? parseCalendarDay(day).getTime() : startOfToday();
+  const end = past
+    ? (() => {
+        const e = parseCalendarDay(day);
+        e.setDate(e.getDate() + 1);
+        return e.getTime();
+      })()
+    : Date.now();
+  const raw = await fetchRaw(
+    hass,
+    SPARK_KEYS.map((k) => E[k]),
+    start,
+    { minimal_response: true, no_attributes: true, significant_changes_only: false },
+    end,
+  );
   const out = {} as Record<SparkKey, Point[]>;
   for (const key of SPARK_KEYS) {
     out[key] = bucket(numericPoints(normalizeHistory(raw[E[key]])), 30 * 60e3, "last");

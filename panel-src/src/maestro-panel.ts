@@ -28,18 +28,20 @@ import { makeFmt, type Fmt } from "./format";
 import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollapsed, saveControlsOpen } from "./groups";
 import {
   calendarDay,
-  isCalendarToday,
   loadBalanceDays,
-  loadDaySums,
   loadIst,
-  loadPeriodSums,
   loadPowerSeries,
   loadPowerSeriesMany,
+  loadRangeSums,
   loadSparks,
   loadTimeline,
+  peekLruCache,
+  resolveBalanceRange,
+  shiftBalanceAnchor,
+  touchLruCache,
   type BalanceDay,
+  type BalanceGrain,
   type IstSeries,
-  type Period,
   type PeriodKey,
   type PulseRange,
   type SparkKey,
@@ -173,11 +175,17 @@ class MaestroPanel extends LitElement {
   private _planTuneOpen = loadPlanTuneOpen();
   private _pvOpen = loadPvOpen();
   private _setupAck = loadSetupAck();
-  private _period: Period = "today";
-  private _periodSums?: Partial<Record<PeriodKey, number>>;
-  /** Past day for Tagesbilanz (`YYYY-MM-DD`). Undefined follows the live calendar day. */
-  private _balanceDay?: string;
-  private _daySums?: Partial<Record<PeriodKey, number>>;
+  private _grain: BalanceGrain = "day";
+  /** Anchor day inside the selected range; undefined follows today for day grain. */
+  private _anchor?: string;
+  private _rangeSums?: Partial<Record<PeriodKey, number>>;
+  private _daySparks?: Record<SparkKey, Point[]>;
+  /** Past ranges / days; capped LRU so browsing stays snappy without unbounded RAM. */
+  private _rangeSumsCache = new Map<string, Partial<Record<PeriodKey, number>>>();
+  private _daySparksCache = new Map<string, Record<SparkKey, Point[]>>();
+  private _rangePrefetch = new Set<string>();
+  private _calOpen = false;
+  private _calViewAnchor = calendarDay();
   private _pulseRange: PulseRange = "week";
   private _pulseDays?: BalanceDay[];
   private _pulseState: "idle" | "loading" | "ready" | "error" = "idle";
@@ -527,6 +535,89 @@ class MaestroPanel extends LitElement {
 
   // ------------------------------------------------------------ history
 
+  private _balanceRange() {
+    return resolveBalanceRange(this._grain, this._anchor ?? calendarDay());
+  }
+
+  /** Load range sums (and day sparks) from LRU/recorder; prefetch ±1 grain in the background. */
+  private async _ensureBalanceRange(hass: Hass): Promise<void> {
+    const range = this._balanceRange();
+    if (range.grain === "day" && range.live) {
+      this._rangeSums = undefined;
+      this._daySparks = undefined;
+      return;
+    }
+    const sumsHit = peekLruCache(this._rangeSumsCache, range.cacheKey);
+    if (sumsHit) this._rangeSums = sumsHit;
+    let sparksHit: Record<SparkKey, Point[]> | undefined;
+    if (range.grain === "day") {
+      sparksHit = peekLruCache(this._daySparksCache, range.start);
+      if (sparksHit) this._daySparks = sparksHit;
+    } else {
+      this._daySparks = undefined;
+    }
+    const needSums = !sumsHit;
+    const needSparks = range.grain === "day" && !sparksHit;
+    if (!needSums && !needSparks) {
+      this.requestUpdate();
+      this._prefetchNeighborRanges(hass, range.grain, range.anchor);
+      return;
+    }
+    const tasks: Promise<void>[] = [];
+    if (needSums) {
+      tasks.push(
+        loadRangeSums(hass, range).then((sums) => {
+          touchLruCache(this._rangeSumsCache, range.cacheKey, sums);
+          if (this._balanceRange().cacheKey === range.cacheKey) this._rangeSums = sums;
+        }),
+      );
+    }
+    if (needSparks) {
+      tasks.push(
+        loadSparks(hass, range.start).then((sparks) => {
+          touchLruCache(this._daySparksCache, range.start, sparks);
+          if (this._balanceRange().cacheKey === range.cacheKey) this._daySparks = sparks;
+        }),
+      );
+    }
+    try {
+      await Promise.all(tasks);
+    } catch {
+      // recorder excluded / not ready: tiles keep their empty spark state
+    }
+    this.requestUpdate();
+    this._prefetchNeighborRanges(hass, range.grain, range.anchor);
+  }
+
+  private _prefetchNeighborRanges(hass: Hass, grain: BalanceGrain, anchor: string): void {
+    for (const delta of [-1, 1] as const) {
+      const neighborAnchor = shiftBalanceAnchor(grain, anchor, delta);
+      const neighbor = resolveBalanceRange(grain, neighborAnchor);
+      if (neighbor.live && neighbor.grain === "day") continue;
+      if (this._rangeSumsCache.has(neighbor.cacheKey) && (grain !== "day" || this._daySparksCache.has(neighbor.start))) {
+        continue;
+      }
+      if (this._rangePrefetch.has(neighbor.cacheKey)) continue;
+      this._rangePrefetch.add(neighbor.cacheKey);
+      void (async () => {
+        try {
+          const needSums = !this._rangeSumsCache.has(neighbor.cacheKey);
+          const needSparks = grain === "day" && !this._daySparksCache.has(neighbor.start);
+          const [sums, sparks] = await Promise.all([
+            needSums ? loadRangeSums(hass, neighbor) : Promise.resolve(undefined),
+            needSparks ? loadSparks(hass, neighbor.start) : Promise.resolve(undefined),
+          ]);
+          if (sums) touchLruCache(this._rangeSumsCache, neighbor.cacheKey, sums);
+          if (sparks) touchLruCache(this._daySparksCache, neighbor.start, sparks);
+        } catch {
+          // ignore prefetch failures
+        } finally {
+          this._rangePrefetch.delete(neighbor.cacheKey);
+        }
+      })();
+    }
+  }
+
   private async _ensureHistory(): Promise<void> {
     const hass = this._hass;
     if (!hass || document.hidden) return;
@@ -543,14 +634,7 @@ class MaestroPanel extends LitElement {
       }
     };
     if (this._screen === "live") await run("sparks", async () => void (this._sparks = await loadSparks(hass)));
-    if (this._screen === "live" && this._period !== "today") {
-      const period = this._period;
-      await run(`period-${period}`, async () => void (this._periodSums = await loadPeriodSums(hass, period)));
-    }
-    if (this._screen === "live" && this._period === "today" && this._balanceDay && !isCalendarToday(this._balanceDay)) {
-      const day = this._balanceDay;
-      await run(`day-${day}`, async () => void (this._daySums = await loadDaySums(hass, day)));
-    }
+    if (this._screen === "live") await this._ensureBalanceRange(hass);
     if (this._screen === "live" && !this._collapsed.has("balancePulse")) {
       const range = this._pulseRange;
       const key = `pulse-${range}`;
@@ -946,6 +1030,7 @@ class MaestroPanel extends LitElement {
       fmt,
       mobile: this._mobile,
       sparks: this._sparks,
+      daySparks: this._daySparks,
       ist: this._ist,
       timeline: this._timeline,
       range: this._range,
@@ -993,23 +1078,35 @@ class MaestroPanel extends LitElement {
         saveAutoOpen(this._autoOpen);
         this.requestUpdate();
       },
-      period: this._period,
-      periodSums: this._periodSums,
-      onPeriod: (period) => {
-        this._period = period;
+      balanceRange: this._balanceRange(),
+      rangeSums: this._rangeSums,
+      onBalanceSelect: (grain, anchor) => {
+        const range = resolveBalanceRange(grain, anchor);
+        const nextAnchor = range.grain === "day" && range.live ? undefined : range.anchor;
+        if (grain === this._grain && nextAnchor === this._anchor) return;
+        this._grain = grain;
+        this._anchor = nextAnchor;
+        this._calViewAnchor = range.anchor;
+        if (range.grain === "day" && range.live) {
+          this._rangeSums = undefined;
+          this._daySparks = undefined;
+        } else {
+          this._rangeSums = peekLruCache(this._rangeSumsCache, range.cacheKey);
+          this._daySparks = range.grain === "day" ? peekLruCache(this._daySparksCache, range.start) : undefined;
+        }
         this.requestUpdate();
         void this._ensureHistory();
       },
-      balanceDay: this._balanceDay ?? calendarDay(),
-      daySums: this._daySums,
-      onBalanceDay: (day) => {
-        const next = isCalendarToday(day) ? undefined : day;
-        if (next === this._balanceDay) return;
-        this._balanceDay = next;
-        this._daySums = undefined;
-        if (next) this._loadedAt.delete(`day-${next}`);
+      calOpen: this._calOpen,
+      calViewAnchor: this._calViewAnchor,
+      onCalOpen: (open) => {
+        this._calOpen = open;
+        if (open) this._calViewAnchor = this._balanceRange().anchor;
         this.requestUpdate();
-        void this._ensureHistory();
+      },
+      onCalViewAnchor: (day) => {
+        this._calViewAnchor = day;
+        this.requestUpdate();
       },
       pulseRange: this._pulseRange,
       onPulseRange: (range) => {
