@@ -11,6 +11,29 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1-beta.5] – Live-Fluss, Zeitraum und Akku-Overlay (2026-10-21)
+
+> **Beta.** Enthält 0.5.1-beta.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.5.md](docs/release-notes/v0.5.1-beta.5.md).
+
+### Neu
+- **Blob- und Haus-Energiefluss.** Neben den Knoten wählbar; Last-Balken an der WR-Leistung, Mobile-Layout und mehr Bewegung im Blob.
+- **Tageswerte und mehrere Zusatz-Erzeuger am Live-Fluss.** PV und Haus heute aus RSCP-Zählern plus Zusatz-PV – dieselbe Summe wie in der Tagesbilanz.
+- **Globaler Kalender** für Tag, Woche, Monat und Jahr; Heute- und Bilanz-KPIs folgen dem Zeitraum.
+- **Bilanzpuls** mit Tagesbilanzen für Woche und Monat (divergierende Balken, kumulative Linie).
+- **Akku-Pack-Ansicht** und Forecast-Kachel für Peak, Sockel und Netzbezug als Uhrzeiten.
+- **Akku-Steuerung im Overlay** (Entladung, Reserve, Auto) auf der Akku-Karte.
+- **Kosten-Simulation** Fixpreis und dynamisch parallel; Alarm-Banner bestätigbar und unter Darstellung abschaltbar.
+
+### Geändert
+- **Notstromreserve** zählt nicht mehr als ungerechtfertigte Netzladung.
+- **Forecast Idle-0 W** nach Ladestopp erzeugt keine Phantom-Ladeleistung mehr in der SoC-Trajektorie.
+- **Zusatzverbraucher im Haus-Fluss** überdecken auf dem iPhone nicht mehr die Tageswerte.
+
+### Hinweise
+- Neustart oder Reload der Integration und hartes Neuladen des Browsers, damit das neue Panel ankommt.
+
+---
+
 ## [0.5.1-beta.4] – Prognose-SoC und Preisplan-FAQ (2026-10-20)
 
 > **Beta.** Enthält 0.5.1-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.4.md](docs/release-notes/v0.5.1-beta.4.md).
