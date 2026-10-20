@@ -31,6 +31,13 @@ import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { pauseMenu, pauseStatus, pauseUntil } from "./pause";
 import { styles } from "./styles";
+import {
+  clearConsumerPlaces,
+  loadConsumerPlaces,
+  saveConsumerPlaces,
+  type ConsumerPlace,
+} from "./consumer-layout";
+import { loadFlowStyle, saveFlowStyle, type FlowStyleId } from "./flow-style";
 import { loadTheme, saveTheme, type ThemeId } from "./theme";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
 
@@ -92,6 +99,9 @@ class MaestroPanel extends LitElement {
   private _settingsGroup?: string = initialLocation.settingsGroup;
   private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
+  private _flowStyle: FlowStyleId = loadFlowStyle();
+  private _consumerPlaces: Record<string, ConsumerPlace> = loadConsumerPlaces();
+  private _arrangeConsumers = false;
   private _sheet = false;
   private _pauseOpen = false;
   private _pauseClock?: number;
@@ -530,6 +540,24 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private _setFlowStyle(style: FlowStyleId): void {
+    this._flowStyle = style;
+    saveFlowStyle(style);
+    this.requestUpdate();
+  }
+
+  private _placeConsumer(id: string, place: ConsumerPlace): void {
+    this._consumerPlaces = { ...this._consumerPlaces, [id]: place };
+    saveConsumerPlaces(this._consumerPlaces);
+    this.requestUpdate();
+  }
+
+  private _resetConsumerPlaces(): void {
+    this._consumerPlaces = {};
+    clearConsumerPlaces();
+    this.requestUpdate();
+  }
+
   private _go(screen: Screen): void {
     this._screen = screen;
     this._settingsGroup = undefined;
@@ -847,6 +875,14 @@ class MaestroPanel extends LitElement {
       consumers: toFlow(this._consumers, hass),
       consumerOverflow: this._heldOverflow(includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass))),
       onEditConsumers: () => this._openConsumers(),
+      arrangeConsumers: this._arrangeConsumers,
+      onToggleArrange: () => {
+        this._arrangeConsumers = !this._arrangeConsumers;
+        this.requestUpdate();
+      },
+      onResetConsumerPlaces: () => this._resetConsumerPlaces(),
+      consumerPlaces: this._consumerPlaces,
+      onPlaceConsumer: (id, place) => this._placeConsumer(id, place),
       onFlowNode: (key) => this._openFlow(key),
       motion: this._motion,
       collapsed: this._collapsed,
@@ -914,6 +950,8 @@ class MaestroPanel extends LitElement {
       },
       theme: this._theme,
       onTheme: (theme) => this._setTheme(theme),
+      flowStyle: this._flowStyle,
+      onFlowStyle: (style) => this._setFlowStyle(style),
       phasePoints: this._phasePoints,
       phaseHistory: this._phaseHistory,
       options,

@@ -1,4 +1,12 @@
 import { svg, type TemplateResult } from "lit";
+import {
+  fanBoxHeight,
+  fanBoxPad,
+  houseFan,
+  onConsumerDrag,
+  resolveConsumerPositions,
+  type ConsumerPlace,
+} from "./consumer-layout";
 import { CONSUMER_ICON_PATH, type FlowConsumer } from "./consumers";
 import maestroLogo from "./maestro-logo.png";
 import type { Fmt } from "./format";
@@ -9,9 +17,16 @@ export interface FlowInput {
   house?: number;
   grid?: number; // negative = import
   battery?: number; // negative = discharging
+  /** Total plant AC rating from Maestro WR-Leistung (W). Scales the city load bars. */
+  loadMax?: number;
   /** State of charge, 0–100. Draws the level inside the battery outline. */
   soc?: number;
   consumers?: FlowConsumer[];
+  /** Saved fan slots (id → t/r). */
+  consumerPlaces?: Record<string, ConsumerPlace>;
+  /** Drag consumers on the fan instead of opening history. */
+  arrange?: boolean;
+  onPlaceConsumer?: (id: string, place: ConsumerPlace) => void;
   /** False when the user prefers reduced motion: the soft line stays, particles do not. */
   motion?: boolean;
   onSelect?: (key: string) => void;
@@ -185,7 +200,7 @@ const OUTLINE: Record<string, string> = {
 
 const tone = (color: string, outline: boolean) => (outline ? (OUTLINE[color] ?? "#152033") : color);
 
-function electrons(
+export function electrons(
   from: { x: number; y: number },
   to: { x: number; y: number },
   fromR: number,
@@ -221,20 +236,24 @@ export function compactFlowHeight(count: number): number {
 export function flowBoxHeight(compact: boolean, count: number): number | undefined {
   if (!count) return undefined;
   if (compact) return Math.round(compactFlowHeight(count) * 0.94);
-  return Math.round((380 * Math.max(420, 48 + count * 96)) / 420);
+  const fan = houseFan(LAYOUTS.wide.house, count);
+  const h = fanBoxHeight(LAYOUTS.wide.house.y, fan, LAYOUTS.wide.box[1]);
+  return Math.round((380 * h) / 420);
 }
 
-function compactBuses(
-  places: { c: FlowConsumer; p: Pos }[],
-  house: Pos,
+/** Phone list: trunk from a node to a right rail, then stubs into each consumer. */
+export function compactBuses(
+  places: { c: FlowConsumer; p: { x: number; y: number } }[],
+  from: { x: number; y: number },
   boxW: number,
   motion: boolean,
+  fromR = 0,
 ): TemplateResult {
   if (!places.length) return svg``;
   const railX = boxW - 14;
   const bottom = Math.max(...places.map(({ p }) => p.y));
-  const x0 = house.x + NODE_R;
-  return svg`<path class="flow-line" d="M${x0} ${house.y} L${railX} ${house.y} L${railX} ${bottom}" stroke="var(--house)"/>
+  const x0 = from.x + fromR;
+  return svg`<path class="flow-line" d="M${x0} ${from.y} L${railX} ${from.y} L${railX} ${bottom}" stroke="var(--house)"/>
     ${places.map(({ c, p }) => {
       const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
       const end = flowEnds({ x: railX, y: p.y }, p, 0, COMPACT_LIST_R);
@@ -246,13 +265,21 @@ function compactBuses(
 export function energyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
-  const boxW = L.box[0] + (!i.compact && consumers.length ? 160 : 0);
-  const boxH = i.compact ? compactFlowHeight(consumers.length) : Math.max(L.box[1], 48 + consumers.length * 96);
+  const fan = houseFan(L.house, consumers.length);
+  const boxW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
+  const boxH = i.compact
+    ? compactFlowHeight(consumers.length)
+    : fanBoxHeight(L.house.y, fan, L.box[1]);
   const compactPlaces = i.compact ? compactConsumerPositions(consumers.length, boxW) : [];
+  const fanPlaces = i.compact
+    ? []
+    : resolveConsumerPositions(
+        consumers.map((c) => c.id),
+        i.consumerPlaces ?? {},
+        fan,
+      );
   const consumerAt = (index: number): Pos =>
-    i.compact
-      ? compactPlaces[index]
-      : { x: L.box[0] + 78, y: boxH * ((index + 1) / (consumers.length + 1)), labelDy: 44 };
+    i.compact ? compactPlaces[index] : { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
   const motion = i.motion !== false;
   const outline = i.outline === true;
@@ -295,7 +322,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
       <radialGradient id="hubg"><stop offset="0" stop-color="rgba(56,189,248,.5)"/><stop offset="1" stop-color="rgba(56,189,248,0)"/></radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, NODE_R, hubR)} stroke=${nodes[k].color}/>`)}
-    ${i.compact ? compactBuses(places, L.house, boxW, motion) : places.map(({ c, p }) => {
+    ${i.compact ? compactBuses(places, L.house, boxW, motion, NODE_R) : places.map(({ c, p }) => {
       const from = c.mode === "included" ? L.house : L.hub;
       const fromR = c.mode === "included" ? NODE_R : hubR;
       const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
@@ -327,8 +354,11 @@ export function energyFlow(i: FlowInput): TemplateResult {
     ${places.map(({ c, p }) => {
       const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
       const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
-      const open = () => i.onSelect?.(c.id);
+      const open = () => {
+        if (!i.arrange) i.onSelect?.(c.id);
+      };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan, i.arrange, i.onPlaceConsumer);
       if (i.compact) {
         return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>
@@ -336,11 +366,11 @@ export function energyFlow(i: FlowInput): TemplateResult {
           <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${i.fmt.w(c.watts)}  ${clip(c.name, 24)}</text>
         </g>`;
       }
-      return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
+      return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
         <circle cx=${p.x} cy=${p.y} r="26" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
         <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
-        <text class="node-val-sm" x=${p.x} y=${p.y + p.labelDy} text-anchor="middle">${i.fmt.w(c.watts)}</text>
-        <text class="node-lbl-sm" x=${p.x} y=${p.y + p.labelDy + 14} text-anchor="middle">${clip(c.name)}</text>
+        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${i.fmt.w(c.watts)}</text>
+        <text class="node-lbl-sm" x=${p.x + 34} y=${p.y + 14} text-anchor="start">${clip(c.name, 18)}</text>
       </g>`;
     })}
   </svg>`;

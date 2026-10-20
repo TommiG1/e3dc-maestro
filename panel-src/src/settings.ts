@@ -10,6 +10,7 @@ import { settingTip } from "./setting-tips";
 import { pauseStatus } from "./pause";
 import { sliderField } from "./slider-field";
 import "./setting-tip";
+import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { THEMES, type ThemeId } from "./theme";
 
 /** One labelled block inside a settings area. */
@@ -288,6 +289,8 @@ export interface SettingsCtx {
   onPress: (entityId: string) => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  flowStyle: FlowStyleId;
+  onFlowStyle: (style: FlowStyleId) => void;
   options: OptionCtx;
   expert: boolean;
   onExpert: (on: boolean) => void;
@@ -906,6 +909,11 @@ function lookView(c: SettingsCtx): TemplateResult {
     classic: { title: "themeClassic", hint: "themeClassicHint" },
     e3dc: { title: "themeE3dc", hint: "themeE3dcHint" },
   };
+  const flowCopy: Record<FlowStyleId, { title: Key; hint: Key }> = {
+    nodes: { title: "flowStyleNodes", hint: "flowStyleNodesHint" },
+    blob: { title: "flowStyleBlob", hint: "flowStyleBlobHint" },
+    city: { title: "flowStyleCity", hint: "flowStyleCityHint" },
+  };
   return html`<div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
     ${THEMES.map(
       (id) => html`<button
@@ -917,6 +925,22 @@ function lookView(c: SettingsCtx): TemplateResult {
       >
         <span class="swatch ${id}" aria-hidden="true"></span>
         <span class="txt"><b>${t(copy[id].title)}</b><span>${t(copy[id].hint)}</span></span>
+      </button>`,
+    )}
+  </div>
+  <h3 class="look-flow-title">${t("flowStyleTitle")}</h3>
+  <p class="hint">${t("flowStyleHint")}</p>
+  <div class="theme-choices" role="radiogroup" aria-label=${t("flowStyleLabel")}>
+    ${FLOW_STYLES.map(
+      (id) => html`<button
+        type="button"
+        class="theme-choice ${c.flowStyle === id ? "on" : ""}"
+        role="radio"
+        aria-checked=${c.flowStyle === id}
+        @click=${() => c.onFlowStyle(id)}
+      >
+        <span class="swatch flow-${id}" aria-hidden="true"></span>
+        <span class="txt"><b>${t(flowCopy[id].title)}</b><span>${t(flowCopy[id].hint)}</span></span>
       </button>`,
     )}
   </div>`;

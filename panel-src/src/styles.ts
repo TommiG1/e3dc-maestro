@@ -550,6 +550,150 @@ export const styles = css`
     justify-content: space-between;
     gap: 12px;
   }
+  .flow-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .flow-style {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--fill);
+  }
+  .flow-style-btn {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: 600 11px Inter, system-ui, sans-serif;
+    padding: 5px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .flow-node:focus-visible .flow-city-roof,
+  .flow-node:focus-visible .flow-city-body,
+  .flow-node:focus-visible .flow-city-cellar {
+    stroke-width: 3.2;
+  }
+  .flow-node:focus-visible .flow-city-mast line {
+    stroke-width: 3.2;
+  }
+  .flow-style-btn.on {
+    background: var(--accent-soft, rgba(56, 189, 248, 0.16));
+    color: var(--text);
+  }
+  .flow-style-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .arrange-btn {
+    border: 1px solid var(--stroke-strong);
+    background: var(--fill);
+  }
+  .flow-arrange-hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .flow-arrange-hint .linkish {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .flow-wrap.arrange .flow-node.arrange {
+    cursor: grab;
+  }
+  .flow-wrap.arrange .flow-node.arrange:active {
+    cursor: grabbing;
+  }
+  .flow-blob.motion .flow-blob-shape {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: blob-breathe var(--blob-period, 2.6s) ease-in-out infinite;
+  }
+  .flow-blob.motion .flow-blob-core {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: blob-core-pulse var(--blob-period, 2.6s) ease-in-out infinite;
+  }
+  .flow-blob.motion .flow-blob-halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: blob-halo-spin calc(var(--blob-period, 2.6s) * 2.4) linear infinite;
+  }
+  @keyframes blob-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.055);
+    }
+  }
+  @keyframes blob-core-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scale(1.12);
+      opacity: 1;
+    }
+  }
+  @keyframes blob-halo-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-blob.motion .flow-blob-shape,
+    .flow-blob.motion .flow-blob-core,
+    .flow-blob.motion .flow-blob-halo {
+      animation: none;
+    }
+  }
+  .look-flow-title {
+    margin: 22px 0 6px;
+  }
+  .theme-choice .swatch.flow-nodes {
+    background:
+      radial-gradient(circle at 50% 22%, #38bdf8 0 18%, transparent 19%),
+      radial-gradient(circle at 18% 55%, #f97316 0 14%, transparent 15%),
+      radial-gradient(circle at 82% 55%, #a78bfa 0 14%, transparent 15%),
+      radial-gradient(circle at 50% 82%, #22d3ee 0 14%, transparent 15%),
+      #0f172a;
+  }
+  .theme-choice .swatch.flow-blob {
+    background:
+      radial-gradient(ellipse 58% 48% at 50% 42%, rgba(249, 115, 22, 0.85), rgba(34, 211, 238, 0.35) 55%, transparent 70%),
+      #0f172a;
+  }
+  .theme-choice .swatch.flow-city {
+    background:
+      linear-gradient(180deg, rgba(249, 115, 22, 0.7) 18% 28%, transparent 29%),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0 10px,
+        rgba(167, 139, 250, 0.55) 10px 14px,
+        transparent 14px 18px
+      ),
+      linear-gradient(180deg, transparent 32%, rgba(15, 23, 42, 0.2) 33% 72%, transparent 73%),
+      linear-gradient(180deg, transparent 74%, rgba(34, 211, 238, 0.65) 75% 82%, transparent 83%),
+      linear-gradient(90deg, transparent 12%, rgba(52, 211, 153, 0.75) 13% 15%, transparent 16%),
+      #0f172a;
+  }
   .icon-btn {
     width: 36px;
     height: 36px;

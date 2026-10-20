@@ -5,8 +5,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Off: never from the grid. Time windows: in off-peak windows. Price threshold: below a fixed price. Automatic: the price plan picks the cheapest hours. Expert: like automatic, with your own values.",
   },
   inverter_power: {
-    de: "Leistung des Wechselrichters. Begrenzt, wie stark Maestro den Akku entladen darf.",
-    en: "Inverter power. Caps how hard Maestro may discharge the battery.",
+    de: "Gesamte WR-Leistung der Anlage inkl. zusätzlicher Erzeuger. Begrenzt die Entladung und skaliert die Last-Balken im Haus-Fluss.",
+    en: "Total plant inverter power including additional producers. Caps discharge and scales the house-flow load bars.",
   },
   installed_kwp: {
     de: "Installierte PV-Leistung. Daraus vergleicht Maestro den Tagesertrag.",

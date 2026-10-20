@@ -14,7 +14,11 @@ import {
 } from "./charts";
 import type { ClassicStatus } from "./classic";
 import { separateDayEnergy, type FlowConsumer } from "./consumers";
+import type { ConsumerPlace } from "./consumer-layout";
+import { blobEnergyFlow } from "./flow-blob";
+import { cityEnergyFlow, cityFlowBoxHeight } from "./flow-city";
 import { energyFlow, flowBoxHeight } from "./flow";
+import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
 import type { ThemeId } from "./theme";
@@ -64,6 +68,11 @@ export interface Ctx {
   consumers: FlowConsumer[];
   consumerOverflow: boolean;
   onEditConsumers: () => void;
+  arrangeConsumers: boolean;
+  onToggleArrange: () => void;
+  onResetConsumerPlaces: () => void;
+  consumerPlaces: Record<string, ConsumerPlace>;
+  onPlaceConsumer: (id: string, place: ConsumerPlace) => void;
   onFlowNode: (key: string) => void;
   motion: boolean;
   collapsed: ReadonlySet<string>;
@@ -100,6 +109,8 @@ export interface Ctx {
   onToggleDebug: () => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  flowStyle: FlowStyleId;
+  onFlowStyle: (style: FlowStyleId) => void;
   phasePoints?: Readonly<Record<string, Point[]>>;
   phaseHistory?: "idle" | "loading" | "ready" | "error";
   options: OptionCtx;
@@ -184,7 +195,11 @@ export function liveView(c: Ctx): TemplateResult {
   ).filter(([, active]) => active);
   const sp = (key: SparkKey, color: string) =>
     c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.theme, c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
-  const flowH = flowBoxHeight(c.mobile, c.consumers.length);
+  const flowH =
+    c.flowStyle === "city"
+      ? cityFlowBoxHeight(c.mobile, c.consumers.length)
+      : flowBoxHeight(c.mobile, c.consumers.length);
+  const renderFlow = c.flowStyle === "blob" ? blobEnergyFlow : c.flowStyle === "city" ? cityEnergyFlow : energyFlow;
   const amount = (key: PeriodKey): number | undefined => (c.period === "today" ? num(st(c, E[key])) : c.periodSums?.[key]);
   const balanceParts = [amount("feedRevenue"), amount("saving"), amount("costToday"), amount("wear")];
   const balance = c.period === "today" ? num(st(c, E.balance)) : balanceParts.some((v) => v === undefined) ? undefined : balanceParts[0]! + balanceParts[1]! - balanceParts[2]! - balanceParts[3]!;
@@ -238,18 +253,50 @@ export function liveView(c: Ctx): TemplateResult {
             <div class="sub live-state">${t("flowSub")}<i class="live-dot ${reachable ? "ok" : "bad"}" role="img" aria-label=${reachable ? t("chipReachable") : t("chipUnreachable")}></i></div>
             ${modes ? html`<div class="sub mode-line">${modes}</div>` : nothing}
           </div>
-          <button type="button" class="icon-btn" aria-label=${t("editConsumers")} @click=${c.onEditConsumers}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-          </button>
+          <div class="flow-head-actions">
+            <div class="flow-style" role="radiogroup" aria-label=${t("flowStyleLabel")}>
+              ${FLOW_STYLES.map(
+                (id) => html`<button
+                  type="button"
+                  class="flow-style-btn ${c.flowStyle === id ? "on" : ""}"
+                  role="radio"
+                  aria-checked=${c.flowStyle === id}
+                  @click=${() => c.onFlowStyle(id)}
+                >${t(
+                  id === "nodes" ? "flowStyleNodes" : id === "blob" ? "flowStyleBlob" : "flowStyleCity",
+                )}</button>`,
+              )}
+            </div>
+            ${c.consumers.length && !c.mobile
+              ? html`<button
+                  type="button"
+                  class="flow-style-btn arrange-btn ${c.arrangeConsumers ? "on" : ""}"
+                  aria-pressed=${c.arrangeConsumers}
+                  @click=${c.onToggleArrange}
+                >${c.arrangeConsumers ? t("arrangeDone") : t("arrangeConsumers")}</button>`
+              : nothing}
+            <button type="button" class="icon-btn" aria-label=${t("editConsumers")} @click=${c.onEditConsumers}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+          </div>
         </div>
-        <div class="flow-wrap" style=${flowH ? `height:${flowH}px` : nothing}>
-          ${energyFlow({
+        ${c.arrangeConsumers
+          ? html`<p class="flow-arrange-hint">${t("arrangeHint")}
+              <button type="button" class="linkish" @click=${c.onResetConsumerPlaces}>${t("arrangeReset")}</button>
+            </p>`
+          : nothing}
+        <div class="flow-wrap ${c.flowStyle} ${c.arrangeConsumers ? "arrange" : ""}" style=${flowH ? `height:${flowH}px` : nothing}>
+          ${renderFlow({
             pv: num(st(c, E.pv)),
             house: num(st(c, E.house)),
             grid: num(st(c, E.grid)),
             battery: bat,
+            loadMax: num(st(c, E.inverterPower)),
             soc,
             consumers: c.consumers,
+            consumerPlaces: c.consumerPlaces,
+            arrange: c.arrangeConsumers,
+            onPlaceConsumer: c.onPlaceConsumer,
             motion: c.motion,
             onSelect: c.onFlowNode,
             compact: c.mobile,

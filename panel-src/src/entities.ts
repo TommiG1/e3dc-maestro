@@ -77,6 +77,8 @@ export const DEFAULT_IDS = {
   sentDischargeLimit: sensor("gesendetes_entlade_limit"),
   forceDischargePower: "number.e3dc_maestro_erzwungene_entladungsleistung",
   fixedReserveSoc: "number.e3dc_maestro_notstromreserve_prozent",
+  /** Total plant AC rating (W), incl. additional producers — Maestro WR-Leistung. */
+  inverterPower: "number.e3dc_maestro_wr_leistung",
   ctrlActive: sw("regelung_aktiv"),
   ctrlPredictive: sw("vorausschauende_ladung"),
   ctrlPvDelay: sw("pv_prognose_verzogerung"),
