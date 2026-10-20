@@ -9,10 +9,19 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.1-beta.3] – Debug-Log und Preisplan-Diagnose (2026-10-20)
+
+> **Beta.** Enthält 0.5.1-beta.2. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.3.md](docs/release-notes/v0.5.1-beta.3.md).
+
 ### Geändert
 - **Debug-Log bleibt unter 255 Zeichen.** Lange Regelzeilen haben den Sensor-State gesprengt; Home Assistant hat ihn auf `unknown` gesetzt und Core-Fehler geloggt. Der State kürzt auf das Limit, die vollständigen letzten Zeilen stehen im Attribut `lines` (Panel liest die).
 - **Preisplan-Seite ohne Chart erklärt sich.** Bei Zeitfenster oder Preisschwelle steht, dass es keinen Plan-Chart gibt, die Ladung aber trotzdem läuft. Nach Wechsel auf automatisch/Experte zeigt ein Spinner „wird berechnet…“; fehlen Preise, Profil oder Spielraum, steht der konkrete Grund.
 - **Preisplan zeigt Rechenwerte.** Restbudget, Boden, Obergrenze, Wirkungsgrad, Mindestspanne, Verschleiß und Sicherheitsfaktor stehen in der Plan-Kachel, damit leere Charts und fehlende Nachtladung nachvollziehbar sind.
+
+### Hinweise
+- Neustart oder Reload der Integration und hartes Neuladen des Browsers, damit Panel und Sensor ankommen.
 
 ---
 
