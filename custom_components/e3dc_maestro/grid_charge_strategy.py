@@ -13,15 +13,12 @@ from .const import (
     CONF_LOW_SLOT_GRID_CHARGE_ENABLED,
     CONF_PRICE_PLAN_ACTIVE,
     CONF_PRICE_PLAN_ENABLED,
-    CONF_TARIFF_MODE,
     GRID_CHARGE_OFF,
     GRID_CHARGE_PLAN_AUTO,
     GRID_CHARGE_PLAN_EXPERT,
     GRID_CHARGE_SLOTS,
     GRID_CHARGE_STRATEGIES,
     GRID_CHARGE_THRESHOLD,
-    TARIFF_MODE_DYNAMIC,
-    TARIFF_MODE_FIXED,
 )
 
 _PLAN = (GRID_CHARGE_PLAN_AUTO, GRID_CHARGE_PLAN_EXPERT)
@@ -58,11 +55,12 @@ def strategy_updates(strategy: str, params: Any) -> dict[str, Any]:
     if strategy not in GRID_CHARGE_STRATEGIES:
         return {}
     plan = strategy in _PLAN
+    # tariff_mode stays with the user: it is the real contract (fixed vs dynamic)
+    # and drives cost accounting. Strategies must not overwrite it.
     updates: dict[str, Any] = {
         CONF_GRID_CHARGE_STRATEGY: strategy,
         CONF_LOW_SLOT_GRID_CHARGE_ENABLED: strategy in (GRID_CHARGE_SLOTS, GRID_CHARGE_THRESHOLD),
         CONF_PRICE_PLAN_ENABLED: plan,
-        CONF_TARIFF_MODE: TARIFF_MODE_FIXED if strategy == GRID_CHARGE_OFF else TARIFF_MODE_DYNAMIC,
     }
     # Beim Wechsel in den Preisplan erst einmal nur anzeigen; zwischen den
     # beiden Plan-Stufen bleibt die Steuerung, wie sie war.

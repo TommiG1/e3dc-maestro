@@ -548,12 +548,16 @@ STAT_PV_ADDITIONAL_TODAY = "pv_additional_today_kwh"  # kWh Zusatz-PV heute (ext
 STAT_PV_ADDITIONAL_INTEGRATED = "pv_additional_integrated_kwh"  # Leistung ohne Energiezähler
 STAT_HOUSE_CONSUMPTION_TODAY = "house_consumption_today_kwh"  # kWh Hausverbrauch (Zähler)
 STAT_GRID_TO_BATTERY_TODAY = "grid_to_battery_today_kwh"  # kWh Netz → Akku (Sanity)
+# Anteil von STAT_GRID_TO_BATTERY_TODAY mit berechtigter Phase (Reserve, Notladung, …).
+STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY = "grid_to_battery_justified_today_kwh"
 STAT_BATTERY_THROUGHPUT_TODAY = "battery_throughput_today_kwh"  # für Wear-Cost
 # v0.3.0: zeitvariable €-Akkumulation + Eigenverbrauch + Verschleiß
-STAT_COST_TODAY_EUR = "cost_today_eur"                # Bezugskosten heute (€), zeitvariabel
+STAT_COST_TODAY_EUR = "cost_today_eur"                # Bezugskosten heute (€), Abrechnungspreis
+STAT_COST_TODAY_SIM_EUR = "cost_today_sim_eur"        # Bezugskosten heute (€), Simulation dynamisch
 STAT_FEED_IN_REVENUE_TODAY_EUR = "feed_in_revenue_today_eur"  # Einspeise-Erlös heute (€)
 STAT_PV_SELF_CONSUMPTION_TODAY = "pv_self_consumption_today_kwh"  # PV direkt → Haus (kWh)
-STAT_PV_SAVINGS_TODAY_EUR = "pv_savings_today_eur"   # vermiedener Bezug durch PV (€)
+STAT_PV_SAVINGS_TODAY_EUR = "pv_savings_today_eur"   # vermiedener Bezug (€), Abrechnungspreis
+STAT_PV_SAVINGS_TODAY_SIM_EUR = "pv_savings_today_sim_eur"  # vermiedener Bezug (€), Simulation dynamisch
 STAT_BATTERY_WEAR_TODAY_EUR = "battery_wear_today_eur"  # Akku-Verschleiß heute (€)
 # Wallbox-Energieverbrauch separat (kWh, total_increasing)
 STAT_WALLBOX_ENERGY_TODAY = "wallbox_energy_today_kwh"

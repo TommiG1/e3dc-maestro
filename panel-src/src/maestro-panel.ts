@@ -26,7 +26,21 @@ import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
 import { makeFmt, type Fmt } from "./format";
 import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollapsed, saveControlsOpen } from "./groups";
-import { loadIst, loadPeriodSums, loadPowerSeries, loadPowerSeriesMany, loadSparks, loadTimeline, type IstSeries, type Period, type PeriodKey, type SparkKey } from "./history";
+import {
+  calendarDay,
+  isCalendarToday,
+  loadDaySums,
+  loadIst,
+  loadPeriodSums,
+  loadPowerSeries,
+  loadPowerSeriesMany,
+  loadSparks,
+  loadTimeline,
+  type IstSeries,
+  type Period,
+  type PeriodKey,
+  type SparkKey,
+} from "./history";
 import { memo } from "./memo";
 import { makeI18n, type Key } from "./i18n";
 import { pauseMenu, pauseStatus, pauseUntil } from "./pause";
@@ -37,6 +51,17 @@ import {
   saveConsumerPlaces,
   type ConsumerPlace,
 } from "./consumer-layout";
+import {
+  activeAlertKeys,
+  alertLabelKey,
+  bannerVisible,
+  loadBannerHidden,
+  loadDismissed,
+  pruneDismissed,
+  saveBannerHidden,
+  saveDismissed,
+  type AlertKey,
+} from "./alert-banner";
 import { loadBatteryStyle, saveBatteryStyle, type BatteryStyleId } from "./battery-style";
 import { loadFlowStyle, saveFlowStyle, type FlowStyleId } from "./flow-style";
 import { loadTheme, saveTheme, type ThemeId } from "./theme";
@@ -102,6 +127,8 @@ class MaestroPanel extends LitElement {
   private _theme: ThemeId = loadTheme();
   private _flowStyle: FlowStyleId = loadFlowStyle();
   private _batteryStyle: BatteryStyleId = loadBatteryStyle();
+  private _bannerHidden = loadBannerHidden();
+  private _alertDismissed: Set<AlertKey> = loadDismissed();
   private _consumerPlaces: Record<string, ConsumerPlace> = loadConsumerPlaces();
   private _arrangeConsumers = false;
   private _sheet = false;
@@ -145,6 +172,9 @@ class MaestroPanel extends LitElement {
   private _setupAck = loadSetupAck();
   private _period: Period = "today";
   private _periodSums?: Partial<Record<PeriodKey, number>>;
+  /** Past day for Tagesbilanz (`YYYY-MM-DD`). Undefined follows the live calendar day. */
+  private _balanceDay?: string;
+  private _daySums?: Partial<Record<PeriodKey, number>>;
   private _debugOpen = false;
   private _picking = false;
   private _pickQuery = "";
@@ -457,17 +487,36 @@ class MaestroPanel extends LitElement {
     </p>`;
   }
 
+  private _syncAlertDismissed(active: readonly AlertKey[]): void {
+    const next = pruneDismissed(this._alertDismissed, active);
+    if (next.size === this._alertDismissed.size && [...next].every((k) => this._alertDismissed.has(k))) {
+      return;
+    }
+    this._alertDismissed = next;
+    saveDismissed(next);
+  }
+
+  private _dismissAlerts(active: readonly AlertKey[]): void {
+    const next = new Set(active);
+    this._alertDismissed = next;
+    saveDismissed(next);
+    this.requestUpdate();
+  }
+
+  private _setBannerHidden(hidden: boolean): void {
+    this._bannerHidden = hidden;
+    saveBannerHidden(hidden);
+    this.requestUpdate();
+  }
+
   private _alerts(hass: Hass, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
-    const state = (id: string) => hass.states[id]?.state;
-    const down = state(E.reachable) === "off";
-    const notes = [
-      down ? t("alertUnreachable") : null,
-      state(E.chargeLock) === "on" ? t("alertChargeLock") : null,
-      state(E.dischargeLock) === "on" ? t("alertDischargeLock") : null,
-      state(E.unjustified) === "on" ? t("alertUnjustified") : null,
-    ].filter((x): x is string => !!x);
-    if (!notes.length) return nothing;
-    return html`<div class="banner ${down ? "bad" : ""}" role="status">${notes.map((n) => html`<span>${n}</span>`)}</div>`;
+    const active = activeAlertKeys(hass);
+    if (!bannerVisible(active, this._alertDismissed, this._bannerHidden)) return nothing;
+    const down = active.includes("unreachable");
+    return html`<div class="banner ${down ? "bad" : ""}" role="status">
+      <div class="banner-notes">${active.map((key) => html`<span>${t(alertLabelKey(key))}</span>`)}</div>
+      <button type="button" class="banner-ack" @click=${() => this._dismissAlerts(active)}>${t("alertDismiss")}</button>
+    </div>`;
   }
 
   // ------------------------------------------------------------ history
@@ -491,6 +540,10 @@ class MaestroPanel extends LitElement {
     if (this._screen === "live" && this._period !== "today") {
       const period = this._period;
       await run(`period-${period}`, async () => void (this._periodSums = await loadPeriodSums(hass, period)));
+    }
+    if (this._screen === "live" && this._period === "today" && this._balanceDay && !isCalendarToday(this._balanceDay)) {
+      const day = this._balanceDay;
+      await run(`day-${day}`, async () => void (this._daySums = await loadDaySums(hass, day)));
     }
     if (this._screen === "forecast" && this._showIst) {
       await run("ist", async () => void (this._ist = await loadIst(hass, IST_HOURS)));
@@ -920,6 +973,17 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
         void this._ensureHistory();
       },
+      balanceDay: this._balanceDay ?? calendarDay(),
+      daySums: this._daySums,
+      onBalanceDay: (day) => {
+        const next = isCalendarToday(day) ? undefined : day;
+        if (next === this._balanceDay) return;
+        this._balanceDay = next;
+        this._daySums = undefined;
+        if (next) this._loadedAt.delete(`day-${next}`);
+        this.requestUpdate();
+        void this._ensureHistory();
+      },
       pending: this._pending,
       groupId: this._screen === "plant" ? this._plantGroup : this._settingsGroup,
       onOpenGroup: (id) => this._openSettingsGroup(id),
@@ -960,6 +1024,8 @@ class MaestroPanel extends LitElement {
       onTheme: (theme) => this._setTheme(theme),
       flowStyle: this._flowStyle,
       onFlowStyle: (style) => this._setFlowStyle(style),
+      alertBannerHidden: this._bannerHidden,
+      onAlertBannerHidden: (hidden) => this._setBannerHidden(hidden),
       batteryStyle: this._batteryStyle,
       onBatteryStyle: (style) => this._setBatteryStyle(style),
       phasePoints: this._phasePoints,
@@ -1172,6 +1238,10 @@ class MaestroPanel extends LitElement {
 
   protected willUpdate(): void {
     if (this.getAttribute("theme") !== this._theme) this.setAttribute("theme", this._theme);
+    if (this._hass) {
+      // Drop confirmed keys that cleared so the same alarm can show again later.
+      this._syncAlertDismissed(activeAlertKeys(this._hass));
+    }
   }
 
   protected updated(): void {

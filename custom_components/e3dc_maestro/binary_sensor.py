@@ -21,10 +21,15 @@ from .const import (
     PHASE_FEED_IN_LIMIT,
     PHASE_GRID_CHARGE,
     PHASE_HT_PROTECTION,
+    STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY,
+    STAT_GRID_TO_BATTERY_TODAY,
     TARIFF_MODE_FIXED,
-    UNJUSTIFIED_GRID_CHARGE_THRESHOLD_KWH,
 )
 from .coordinator import E3DCMaestroCoordinator
+from .grid_charge_justify import (
+    grid_to_battery_charge_attrs,
+    is_unjustified_grid_charge,
+)
 from .sensor import _device_info
 from .sensor_device import set_stable_entity_id
 
@@ -108,16 +113,19 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[MaestroBinarySensorDescription, ...] = (
             coord.last_decision and coord.last_decision.battery_priority
         ),
     ),
-    # v0.2.0: Sanity-Check – Netzladung trotz festem Tarif
+    # Sanity-Check: Netz→Akku bei Festtarif ohne berechtigte Phase (Reserve etc.).
     MaestroBinarySensorDescription(
         key="unjustified_grid_charge",
         name="Netzladung ohne Rechtfertigung",
         icon="mdi:alert-circle-outline",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        value_fn=lambda coord: bool(
-            getattr(coord._params, "tariff_mode", "fixed") == TARIFF_MODE_FIXED
-            and coord.stats.get("grid_to_battery_today_kwh", 0)
-            > UNJUSTIFIED_GRID_CHARGE_THRESHOLD_KWH
+        value_fn=lambda coord: is_unjustified_grid_charge(
+            tariff_mode=getattr(coord._params, "tariff_mode", TARIFF_MODE_FIXED),
+            total_kwh=float(coord.stats.get(STAT_GRID_TO_BATTERY_TODAY, 0) or 0),
+            justified_kwh=float(
+                coord.stats.get(STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY, 0) or 0
+            ),
+            last_phase=coord.last_phase,
         ),
     ),
     # Sizing Advisor: WR upgrade needed for recommended OR current slider scenario
@@ -175,3 +183,22 @@ class MaestroBinarySensor(CoordinatorEntity[E3DCMaestroCoordinator], BinarySenso
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key != "unjustified_grid_charge":
+            return None
+        coord = self.coordinator
+        params = coord._params
+        return grid_to_battery_charge_attrs(
+            total_kwh=float(coord.stats.get(STAT_GRID_TO_BATTERY_TODAY, 0) or 0),
+            justified_kwh=float(
+                coord.stats.get(STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY, 0) or 0
+            ),
+            last_phase=coord.last_phase,
+            tariff_mode=getattr(params, "tariff_mode", TARIFF_MODE_FIXED),
+            fixed_reserve_enabled=bool(getattr(params, "fixed_reserve_enabled", False)),
+            seasonal_reserve_enabled=bool(
+                getattr(params, "seasonal_reserve_enabled", False)
+            ),
+        )

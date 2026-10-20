@@ -19,14 +19,63 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import ALL_PHASES, DOMAIN
+from .const import (
+    ALL_PHASES,
+    DOMAIN,
+    STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY,
+    STAT_GRID_TO_BATTERY_TODAY,
+    TARIFF_MODE_FIXED,
+)
 from .coordinator import E3DCMaestroCoordinator
+from .cost_accounting import simulation_comparable
+from .grid_charge_justify import grid_to_battery_charge_attrs
 from .debug_log_format import (
     DEBUG_LOG_MAX_LINES as _DEBUG_LOG_MAX_LINES,
     format_debug_log_state,
 )
 from .explanation import decision_explanation as _decision_explanation
 from .sensor_device import device_info as _device_info, set_stable_entity_id
+
+_COST_SIM_KEYS = frozenset({"kosten_heute", "netto_kosten_heute", "pv_ersparnis_heute"})
+
+
+def _cost_simulation_attrs(coord: E3DCMaestroCoordinator, key: str) -> dict[str, Any] | None:
+    """Dynamic-tariff simulation next to fixed-price billing, with signed delta."""
+    if not getattr(coord, "cost_simulation_active", False):
+        return None
+    cost_real = float(coord.stats.get("cost_today_eur", 0) or 0)
+    cost_sim = float(coord.stats.get("cost_today_sim_eur", 0) or 0)
+    feed = float(coord.stats.get("feed_in_revenue_today_eur", 0) or 0)
+    save_real = float(coord.stats.get("pv_savings_today_eur", 0) or 0)
+    save_sim = float(coord.stats.get("pv_savings_today_sim_eur", 0) or 0)
+    # kind: cost → lower sim is better; saving → higher sim is better
+    if key == "kosten_heute":
+        real, sim, kind = cost_real, cost_sim, "cost"
+    elif key == "netto_kosten_heute":
+        # Only subtract feed once sim covers a real share of the day; otherwise
+        # ~0 − feed looks like a fake "−3 ct saving" after a mid-day restart.
+        real = cost_real - feed
+        sim = (
+            cost_sim - feed
+            if cost_sim >= 0.05 or abs(cost_real) < 0.05
+            else cost_sim
+        )
+        kind = "cost"
+    elif key == "pv_ersparnis_heute":
+        real, sim, kind = save_real, save_sim, "saving"
+    else:
+        return None
+    real_r, sim_r = round(real, 2), round(sim, 2)
+    delta = round(sim_r - real_r, 2)
+    comparable = simulation_comparable(real_r, sim_r)
+    return {
+        "simulation_dynamic_eur": sim_r,
+        "simulation_delta_eur": delta if comparable else None,
+        "simulation_comparable": comparable,
+        "simulation_kind": kind,
+        "billing": "fixed",
+        "simulation": "dynamic_buy_price",
+    }
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -891,6 +940,25 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         key = self.entity_description.key
+        if key in _COST_SIM_KEYS:
+            return _cost_simulation_attrs(self.coordinator, key)
+        if key == "grid_to_battery_today":
+            coord = self.coordinator
+            params = coord._params
+            return grid_to_battery_charge_attrs(
+                total_kwh=float(coord.stats.get(STAT_GRID_TO_BATTERY_TODAY, 0) or 0),
+                justified_kwh=float(
+                    coord.stats.get(STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY, 0) or 0
+                ),
+                last_phase=coord.last_phase,
+                tariff_mode=getattr(params, "tariff_mode", TARIFF_MODE_FIXED),
+                fixed_reserve_enabled=bool(
+                    getattr(params, "fixed_reserve_enabled", False)
+                ),
+                seasonal_reserve_enabled=bool(
+                    getattr(params, "seasonal_reserve_enabled", False)
+                ),
+            )
         if key == "last_action":
             attrs = dict(self.coordinator.last_action_info)
             # News-Ticker: letzte Phasen-/Grund-Wechsel, neueste zuerst.

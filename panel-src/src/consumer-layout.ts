@@ -136,7 +136,10 @@ export function fanBoxPad(count: number): number {
 export function fanBoxHeight(originY: number, fan: FanOpts, baseH: number): number {
   const top = fanPoint(0, 1.35, fan).y - 36;
   const bottom = fanPoint(1, 1.35, fan).y + 36;
-  return Math.max(baseH, Math.ceil(bottom + 24), Math.ceil(originY + (originY - top) + 24));
+  // Mirror top overhang below the origin only when that top space is inside the viewBox.
+  // When the fan already clips above y=0, mirroring would invent empty space under the house.
+  const mirrored = top >= 0 ? originY + (originY - top) + 24 : bottom + 24;
+  return Math.max(baseH, Math.ceil(bottom + 24), Math.ceil(mirrored));
 }
 
 /** Client coordinates → SVG user space. */

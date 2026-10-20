@@ -181,16 +181,16 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Pauses minimum charging while the SoC sits in the lower corridor.",
   },
   tariff_mode: {
-    de: "Fest rechnet mit dem Bezugspreis. Dynamisch nutzt den Preis-Sensor.",
-    en: "Fixed uses the buy price. Dynamic uses the price sensor.",
+    de: "Dein echter Vertrag. Fest: Kosten und PV-Ersparnis mit dem Bezugspreis; ein dynamischer Preis-Sensor erscheint daneben als Simulation. Dynamisch: Kosten und Ersparnis mit dem Preis-Sensor.",
+    en: "Your real contract. Fixed: cost and PV savings use the buy price; a dynamic price sensor shows beside them as a simulation. Dynamic: cost and savings use the price sensor.",
   },
   dynamic_tariff_enabled: {
-    de: "Schaltet die Auswertung des dynamischen Preises ein.",
-    en: "Turns evaluation of the dynamic price on.",
+    de: "Schaltet die Auswertung des dynamischen Preises für Regelung und Simulation ein.",
+    en: "Turns evaluation of the dynamic price on for control and simulation.",
   },
   fixed_buy_price: {
-    de: "Bezugspreis bei festem Tarif, in Euro pro kWh.",
-    en: "Buy price on a fixed tariff, in euros per kWh.",
+    de: "Echter Bezugspreis bei festem Tarif, in Euro pro kWh. Daraus werden die Hauptzahlen für Kosten und Ersparnis gerechnet.",
+    en: "Real buy price on a fixed tariff, in euros per kWh. Main cost and savings figures use this.",
   },
   feed_in_price: {
     de: "Vergütung pro eingespeister kWh. Der Preisplan rechnet sie gegen den Bezug.",

@@ -26,7 +26,16 @@ import { memo } from "./memo";
 import type { ThemeId } from "./theme";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
-import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
+import {
+  calendarDay,
+  isCalendarToday,
+  parseCalendarDay,
+  shiftCalendarDay,
+  type IstSeries,
+  type Period,
+  type PeriodKey,
+  type SparkKey,
+} from "./history";
 import { downloadCsv } from "./csv";
 import { setupBanner } from "./onboarding-view";
 import type { OptionCtx } from "./options-view";
@@ -99,6 +108,10 @@ export interface Ctx {
   period: Period;
   periodSums?: Partial<Record<PeriodKey, number>>;
   onPeriod: (period: Period) => void;
+  /** Selected calendar day for Tagesbilanz (`YYYY-MM-DD`). Only used when period is today. */
+  balanceDay: string;
+  daySums?: Partial<Record<PeriodKey, number>>;
+  onBalanceDay: (day: string) => void;
   pending: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onPress: (id: string) => void;
@@ -116,6 +129,8 @@ export interface Ctx {
   onTheme: (theme: ThemeId) => void;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
+  alertBannerHidden: boolean;
+  onAlertBannerHidden: (hidden: boolean) => void;
   batteryStyle: BatteryStyleId;
   onBatteryStyle: (style: BatteryStyleId) => void;
   phasePoints?: Readonly<Record<string, Point[]>>;
@@ -134,6 +149,21 @@ const attrs = (c: Ctx, id: string): Record<string, unknown> => st(c, id)?.attrib
 const n = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
 const unit = (v: string, u: string) => html`${v}<small>${u}</small>`;
+
+/** Dynamic-tariff simulation while billing stays on the fixed buy price. */
+const simDynamic = (
+  c: Ctx,
+  id: string,
+): { sim: number; delta?: number; kind: "cost" | "saving"; comparable: boolean } | undefined => {
+  const a = attrs(c, id);
+  if (a.simulation !== "dynamic_buy_price") return undefined;
+  const sim = n(a.simulation_dynamic_eur);
+  if (sim === undefined) return undefined;
+  const kind = a.simulation_kind === "saving" ? "saving" : "cost";
+  const comparable = a.simulation_comparable === true;
+  const delta = comparable ? n(a.simulation_delta_eur) : undefined;
+  return { sim, delta, kind, comparable };
+};
 
 const infoRow = (label: string, value: string) =>
   html`<div class="row"><span>${label}</span><b>${value}</b></div>`;
@@ -290,6 +320,29 @@ function socMetrics(
   </div>`;
 }
 
+const gridBatDelta = (
+  c: Ctx,
+  t: Ctx["i18n"]["t"],
+  on: (id: string) => boolean,
+): string => {
+  if (on(E.unjustified)) return t("kpiGridBatWarn");
+  const phase = st(c, E.phase)?.state;
+  if (phase === "reserve_protection") return t("kpiGridBatReserve");
+  if (phase === "emergency") return t("kpiGridBatEmergency");
+  const reason = String(st(c, E.gridToBattery)?.attributes?.charge_reason ?? "");
+  if (reason === "reserve") return t("kpiGridBatReserve");
+  if (reason === "emergency") return t("kpiGridBatEmergency");
+  // After a reserve top-up the phase may already be corridor again — still
+  // label the day's justified G→B as reserve when that switch is on.
+  if (reason === "justified" && on(E.fixedReserve)) {
+    return t("kpiGridBatReserve");
+  }
+  if (reason === "justified" || reason === "curtailment" || reason === "feed_in_limit") {
+    return t("kpiGridBatJustified");
+  }
+  return t("kpiGridBatSub");
+};
+
 export function liveView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const soc = num(st(c, E.soc));
@@ -306,28 +359,120 @@ export function liveView(c: Ctx): TemplateResult {
       [t("chipCurtail"), on(E.curtail), "warn"],
       [t("chipEmergency"), on(E.emergency), "warn"],
       [t("chipFeedIn"), on(E.feedInLimit), "warn"],
+      [t("chipReserveCharge"), st(c, E.phase)?.state === "reserve_protection", "on"],
       [t("chipGridCharge"), on(E.gridCharge), "on"],
       [t("chipBatteryPriority"), on(E.batteryPriority), "warn"],
       [t("chipLowYield"), on(E.lowYield), "warn"],
     ] as [string, boolean, "on" | "warn"][]
   ).filter(([, active]) => active);
-  const sp = (key: SparkKey, color: string) =>
-    c.period !== "today" || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.theme, c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
+  const balanceDayLive = c.period === "today" && isCalendarToday(c.balanceDay);
+  const sp = (key: SparkKey, color: string, live = c.period === "today") =>
+    !live || !c.sparks?.[key]?.length ? nothing : html`<maestro-chart class="spark" .options=${memo(`spark-${key}`, [c.theme, c.sparks[key]], () => sparkOptions(c.sparks![key], color))}></maestro-chart>`;
+  // City sizes itself via viewBox aspect ratio (see .flow-wrap.city); a fixed height
+  // letterboxed empty space under the foundation on wide cards.
   const flowH =
     c.flowStyle === "city"
-      ? cityFlowBoxHeight(c.mobile, c.consumers.length)
+      ? c.mobile
+        ? cityFlowBoxHeight(true, c.consumers.length)
+        : undefined
       : c.flowStyle === "blob"
         ? blobFlowBoxHeight(c.mobile, c.consumers.length)
         : flowBoxHeight(c.mobile, c.consumers.length);
   const renderFlow = c.flowStyle === "blob" ? blobEnergyFlow : c.flowStyle === "city" ? cityEnergyFlow : energyFlow;
   const amount = (key: PeriodKey): number | undefined => (c.period === "today" ? num(st(c, E[key])) : c.periodSums?.[key]);
-  const balanceParts = [amount("feedRevenue"), amount("saving"), amount("costToday"), amount("wear")];
-  const balance = c.period === "today" ? num(st(c, E.balance)) : balanceParts.some((v) => v === undefined) ? undefined : balanceParts[0]! + balanceParts[1]! - balanceParts[2]! - balanceParts[3]!;
+  const balanceAmount = (key: PeriodKey): number | undefined => {
+    if (c.period !== "today") return c.periodSums?.[key];
+    if (!balanceDayLive) return c.daySums?.[key];
+    return num(st(c, E[key]));
+  };
+  const balanceParts = [balanceAmount("feedRevenue"), balanceAmount("saving"), balanceAmount("costToday"), balanceAmount("wear")];
+  const balance = balanceDayLive
+    ? num(st(c, E.balance))
+    : balanceParts.some((v) => v === undefined)
+      ? undefined
+      : balanceParts[0]! + balanceParts[1]! - balanceParts[2]! - balanceParts[3]!;
   const euroOf = (v: number | undefined) => `${c.fmt.n(v, 2)} €`;
   const when = t(c.period === "today" ? "whenToday" : c.period === "week" ? "whenWeek" : "whenMonth");
+  const balanceWhen = c.period !== "today" ? when : balanceDayLive ? when : c.fmt.day(parseCalendarDay(c.balanceDay));
   const groupTitle = t(c.period === "today" ? "groupToday" : c.period === "week" ? "groupWeek" : "groupMonth");
   const balanceTitle = t(c.period === "today" ? "balanceTitle" : c.period === "week" ? "balanceWeek" : "balanceMonth");
   const balanceTone = balance === undefined || balance === 0 ? "" : balance > 0 ? "pos" : "neg";
+  const todayKey = calendarDay();
+  const simLine = (id: string, live = c.period === "today") => {
+    if (!live) return nothing;
+    const info = simDynamic(c, id);
+    if (!info) return nothing;
+    let deltaNode: typeof nothing | ReturnType<typeof html> = nothing;
+    if (!info.comparable) {
+      deltaNode = html`<span class="sim-delta muted">${t("kpiSimPending")}</span>`;
+    } else if (info.delta !== undefined && Math.abs(info.delta) >= 0.005) {
+      const abs = c.fmt.n(Math.abs(info.delta), 2);
+      // Costs: lower sim is better (green). Savings: higher sim is better (green).
+      const better =
+        info.kind === "cost" ? info.delta < 0 : info.delta > 0;
+      const label =
+        info.kind === "cost"
+          ? t(info.delta > 0 ? "kpiSimCostlier" : "kpiSimCheaper", { v: abs })
+          : t(info.delta > 0 ? "kpiSimMoreSaving" : "kpiSimLessSaving", { v: abs });
+      deltaNode = html`<span class="sim-delta ${better ? "pos" : "neg"}">${label}</span>`;
+    }
+    return html`<div class="sim-dyn">${t("kpiSimDynamic", { v: c.fmt.n(info.sim, 2) })} ${deltaNode}</div>`;
+  };
+  const pickBalanceDay = (day: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > todayKey) return;
+    c.onBalanceDay(day);
+  };
+  const openDayPicker = (e: Event) => {
+    const root = (e.currentTarget as HTMLElement).closest(".day-nav-pick");
+    const input = root?.querySelector("input[type=date]") as HTMLInputElement | null;
+    if (!input) return;
+    e.preventDefault();
+    try {
+      // Chromium / Safari: open the native calendar. Fallback: focus + click.
+      if (typeof input.showPicker === "function") input.showPicker();
+      else {
+        input.focus();
+        input.click();
+      }
+    } catch {
+      input.focus();
+      input.click();
+    }
+  };
+  const dayNav =
+    c.period !== "today"
+      ? nothing
+      : html`<div class="day-nav" role="group" aria-label=${t("dayNav")}>
+          <button type="button" class="day-nav-btn" aria-label=${t("dayPrev")} @click=${() => pickBalanceDay(shiftCalendarDay(c.balanceDay, -1))}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <div class="day-nav-pick">
+            <button type="button" class="day-nav-date" aria-label=${t("dayPick")} @click=${openDayPicker}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+              <span class="day-nav-label">${balanceDayLive ? t("periodToday") : c.fmt.day(parseCalendarDay(c.balanceDay))}</span>
+            </button>
+            <input
+              type="date"
+              .value=${c.balanceDay}
+              max=${todayKey}
+              tabindex="-1"
+              aria-hidden="true"
+              @change=${(e: Event) => pickBalanceDay((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <button
+            type="button"
+            class="day-nav-btn"
+            aria-label=${t("dayNext")}
+            ?disabled=${balanceDayLive}
+            @click=${() => pickBalanceDay(shiftCalendarDay(c.balanceDay, 1))}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          ${balanceDayLive
+            ? nothing
+            : html`<button type="button" class="day-nav-today" @click=${() => pickBalanceDay(todayKey)}>${t("periodToday")}</button>`}
+        </div>`;
   const power = st(c, E.forceDischargePower);
   const powerAttrs = power?.attributes ?? {};
   const powerMin = typeof powerAttrs.min === "number" ? powerAttrs.min : 100;
@@ -348,7 +493,7 @@ export function liveView(c: Ctx): TemplateResult {
   const openToday = () => {
     if (c.collapsed.has("today")) c.onToggleGroup("today");
   };
-  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult, extra?: TemplateResult) => {
+  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult, extra?: TemplateResult | typeof nothing) => {
     const open = !c.collapsed.has(id);
     return html`<section class="group">
       <div class="group-bar">
@@ -544,13 +689,13 @@ export function liveView(c: Ctx): TemplateResult {
       html`
       <div class="card kpi">
         <h3>${t("kpiCost", { when })}</h3>
-        <div class="v">${unit(c.fmt.n(amount("costNet"), 2), "€")}</div>
+        <div class="v">${unit(c.fmt.n(amount("costNet"), 2), "€")}${simLine(E.costNet)}</div>
         <div class="delta">${t("kpiCostSub")}</div>
         ${sp("costNet", COLORS.gridIn)}
       </div>
       <div class="card kpi">
         <h3>${t("kpiSaving", { when })}</h3>
-        <div class="v">${unit(c.fmt.n(amount("saving"), 2), "€")}</div>
+        <div class="v">${unit(c.fmt.n(amount("saving"), 2), "€")}${simLine(E.saving)}</div>
         <div class="delta">${t("kpiSavingSub")}</div>
         ${sp("saving", COLORS.gridOut)}
       </div>
@@ -573,50 +718,56 @@ export function liveView(c: Ctx): TemplateResult {
         )}
       </div>`,
     )}
-    ${group("balance", balanceTitle, html`<b class="group-sum ${balanceTone}">${euroOf(balance)}</b>`, html`
+    ${group(
+      "balance",
+      balanceTitle,
+      html`<b class="group-sum ${balanceTone}">${euroOf(balance)}</b>`,
+      html`
       <div class="card kpi">
         <h3>${t("kpiCostGross")}</h3>
-        <div class="v">${unit(c.fmt.n(amount("costToday"), 2), "€")}</div>
+        <div class="v">${unit(c.fmt.n(balanceAmount("costToday"), 2), "€")}${simLine(E.costToday, balanceDayLive)}</div>
         <div class="delta">${t("kpiCostGrossSub")}</div>
-        ${sp("costToday", COLORS.gridIn)}
+        ${sp("costToday", COLORS.gridIn, balanceDayLive)}
       </div>
       <div class="card kpi">
         <h3>${t("kpiRevenue")}</h3>
-        <div class="v">${unit(c.fmt.n(amount("feedRevenue"), 2), "€")}</div>
-        <div class="delta">${t("kpiRevenueSub", { when })}</div>
-        ${sp("feedRevenue", COLORS.gridOut)}
+        <div class="v">${unit(c.fmt.n(balanceAmount("feedRevenue"), 2), "€")}</div>
+        <div class="delta">${t("kpiRevenueSub", { when: balanceWhen })}</div>
+        ${sp("feedRevenue", COLORS.gridOut, balanceDayLive)}
       </div>
       <div class="card kpi">
         <h3>${t("kpiWear")}</h3>
-        <div class="v">${unit(c.fmt.n(amount("wear"), 2), "€")}</div>
+        <div class="v">${unit(c.fmt.n(balanceAmount("wear"), 2), "€")}</div>
         <div class="delta">${t("kpiWearSub")}</div>
-        ${sp("wear", COLORS.accent2)}
+        ${sp("wear", COLORS.accent2, balanceDayLive)}
       </div>
       <div class="card kpi">
         <h3>${t("kpiBalance")}</h3>
         <div class="v">${unit(c.fmt.n(balance, 2), "€")}</div>
         <div class="delta">${t("kpiBalanceSub")}</div>
-        ${sp("balance", COLORS.accent)}
+        ${sp("balance", COLORS.accent, balanceDayLive)}
       </div>
-      <div class="card kpi ${on(E.unjustified) ? "alert" : ""}">
+      <div class="card kpi ${balanceDayLive && on(E.unjustified) ? "alert" : ""}">
         <h3>${t("kpiGridBat")}</h3>
-        <div class="v">${unit(c.fmt.n(amount("gridToBattery")), "kWh")}</div>
-        <div class="delta">${on(E.unjustified) ? t("kpiGridBatWarn") : t("kpiGridBatSub")}</div>
-        ${sp("gridToBattery", COLORS.gridIn)}
+        <div class="v">${unit(c.fmt.n(balanceAmount("gridToBattery")), "kWh")}</div>
+        <div class="delta">${balanceDayLive ? gridBatDelta(c, t, on) : t("kpiGridBatSub")}</div>
+        ${sp("gridToBattery", COLORS.gridIn, balanceDayLive)}
       </div>
       <div class="card kpi">
-        <h3>${t("kpiWallbox", { when })}</h3>
-        <div class="v">${unit(c.fmt.n(amount("wallboxEnergy")), "kWh")}</div>
+        <h3>${t("kpiWallbox", { when: balanceWhen })}</h3>
+        <div class="v">${unit(c.fmt.n(balanceAmount("wallboxEnergy")), "kWh")}</div>
         <div class="delta">${t("kpiWallboxSub")}</div>
-        ${sp("wallboxEnergy", COLORS.house)}
+        ${sp("wallboxEnergy", COLORS.house, balanceDayLive)}
       </div>
       <div class="card kpi">
         <h3>${t("kpiFeedLimit")}</h3>
-        <div class="v">${unit(c.fmt.n(amount("curtailAvoided")), "kWh")}</div>
-        <div class="delta">${t("kpiFeedLimitSub", { n: c.fmt.n(amount("feedInInterventions"), 0), dc: c.fmt.n(amount("feedInAvoided")) })}</div>
-        ${sp("curtailAvoided", COLORS.pv)}
+        <div class="v">${unit(c.fmt.n(balanceAmount("curtailAvoided")), "kWh")}</div>
+        <div class="delta">${t("kpiFeedLimitSub", { n: c.fmt.n(balanceAmount("feedInInterventions"), 0), dc: c.fmt.n(balanceAmount("feedInAvoided")) })}</div>
+        ${sp("curtailAvoided", COLORS.pv, balanceDayLive)}
       </div>
-    `)}`;
+    `,
+      dayNav,
+    )}`;
 }
 
 const qualityLabel = (t: Ctx["i18n"]["t"], state: string | undefined): string => {

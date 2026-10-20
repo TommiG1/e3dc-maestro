@@ -42,10 +42,15 @@ def test_strategies_never_run_both_grid_charge_paths():
     for strategy in ("slots", "threshold", "dynamic_auto", "dynamic_expert"):
         p = _apply(MaestroParams(low_slot_grid_charge_enabled=True, price_plan_enabled=True), strategy)
         assert not (p.low_slot_grid_charge_enabled and p.price_plan_enabled)
-        assert p.tariff_mode == "dynamic"
     off = _apply(MaestroParams(price_plan_enabled=True, price_plan_active=True), "off")
     assert (off.low_slot_grid_charge_enabled, off.price_plan_enabled, off.price_plan_active) == (False, False, False)
-    assert off.tariff_mode == "fixed"
+
+
+def test_strategies_leave_tariff_mode_alone():
+    """tariff_mode is the real contract and must not flip with the charge strategy."""
+    for strategy in ("off", "slots", "threshold", "dynamic_auto", "dynamic_expert"):
+        assert _apply(MaestroParams(tariff_mode="fixed"), strategy).tariff_mode == "fixed"
+        assert _apply(MaestroParams(tariff_mode="dynamic"), strategy).tariff_mode == "dynamic"
 
 
 def test_entering_the_plan_starts_in_shadow_mode_and_switching_keeps_control():

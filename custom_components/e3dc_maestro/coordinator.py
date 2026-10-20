@@ -48,6 +48,7 @@ from .const import (
     STAT_BATTERY_WEAR_TODAY_EUR,
     STAT_CHARGED_TODAY,
     STAT_COST_TODAY_EUR,
+    STAT_COST_TODAY_SIM_EUR,
     STAT_CURTAILMENT_AVOIDED,
     STAT_DISCHARGED_TODAY,
     STAT_FEED_IN_AVOIDED,
@@ -55,6 +56,7 @@ from .const import (
     STAT_FEED_IN_REVENUE_TODAY_EUR,
     STAT_GRID_DRAW_TODAY,
     STAT_GRID_FEED_IN_TODAY,
+    STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY,
     STAT_GRID_TO_BATTERY_TODAY,
     STAT_HOUSE_CONSUMPTION_TODAY,
     STAT_PV_ADDITIONAL_INTEGRATED,
@@ -62,9 +64,12 @@ from .const import (
     STAT_PV_PRODUCTION_TODAY,
     STAT_PV_SAVED,
     STAT_PV_SAVINGS_TODAY_EUR,
+    STAT_PV_SAVINGS_TODAY_SIM_EUR,
     STAT_PV_SELF_CONSUMPTION_TODAY,
     STAT_WALLBOX_ENERGY_TODAY,
 )
+from .cost_accounting import buy_prices_for_stats
+from .grid_charge_justify import JUSTIFIED_GRID_CHARGE_PHASES
 from .consumption_stats import ConsumptionStats
 from .control_engine import (
     MaestroDecision,
@@ -195,14 +200,19 @@ class E3DCMaestroCoordinator(
             STAT_PV_ADDITIONAL_INTEGRATED: 0.0,
             STAT_HOUSE_CONSUMPTION_TODAY: 0.0,
             STAT_GRID_TO_BATTERY_TODAY: 0.0,
+            STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY: 0.0,
             STAT_BATTERY_THROUGHPUT_TODAY: 0.0,
             STAT_COST_TODAY_EUR: 0.0,
+            STAT_COST_TODAY_SIM_EUR: 0.0,
             STAT_FEED_IN_REVENUE_TODAY_EUR: 0.0,
             STAT_PV_SELF_CONSUMPTION_TODAY: 0.0,
             STAT_PV_SAVINGS_TODAY_EUR: 0.0,
+            STAT_PV_SAVINGS_TODAY_SIM_EUR: 0.0,
             STAT_BATTERY_WEAR_TODAY_EUR: 0.0,
             STAT_WALLBOX_ENERGY_TODAY: 0.0,
         }
+        # True while € counters bill at the fixed price and a dynamic sim is tracked.
+        self.cost_simulation_active: bool = False
         self._last_stats_date: str | None = None
         # Per-entity midnight bases for additional lifetime energy totals.
         self._additional_bases: dict[str, float] = {}
@@ -830,10 +840,15 @@ class E3DCMaestroCoordinator(
 
         # v0.2.0 / v0.3.0: Grid energy bookkeeping for cost sensors + sanity check.
         # grid_power: positiv = Einspeisung (über HA-Konvention im Setup), negativ = Bezug.
-        # Current buy price: use price_sensor if dynamic, else fixed_buy_price.
-        _buy_price = getattr(self._params, "fixed_buy_price", 0.30)
-        if opts.get(CONF_DYNAMIC_TARIFF_ENABLED) and current_price is not None:
-            _buy_price = current_price
+        # Abrechnung: Fixpreis, außer Tarif ist wirklich dynamisch. Bei Simulation
+        # (Fixpreis + dynamischer Sensor) parallel den dynamischen €-Zähler pflegen.
+        _buy_price, _buy_sim = buy_prices_for_stats(
+            tariff_mode=getattr(self._params, "tariff_mode", "fixed"),
+            dynamic_tariff_enabled=bool(opts.get(CONF_DYNAMIC_TARIFF_ENABLED)),
+            fixed_buy_price=getattr(self._params, "fixed_buy_price", 0.30),
+            current_price=current_price,
+        )
+        self.cost_simulation_active = _buy_sim is not None
         _feed_in_price = getattr(self._params, "feed_in_price", 0.08)
 
         if interval_h is not None:
@@ -846,10 +861,15 @@ class E3DCMaestroCoordinator(
                 draw_kwh = grid_draw_w / 1000 * interval_h
                 self.stats[STAT_GRID_DRAW_TODAY] += draw_kwh
                 self.stats[STAT_COST_TODAY_EUR] += draw_kwh * _buy_price
+                if _buy_sim is not None:
+                    self.stats[STAT_COST_TODAY_SIM_EUR] += draw_kwh * _buy_sim
                 # Grid → Akku: Netzbezug UND Akku lädt gleichzeitig.
                 if state_data.battery_power > 0:
-                    gtb_w = min(grid_draw_w, state_data.battery_power)
-                    self.stats[STAT_GRID_TO_BATTERY_TODAY] += gtb_w / 1000 * interval_h
+                    gtb_kwh = min(grid_draw_w, state_data.battery_power) / 1000 * interval_h
+                    self.stats[STAT_GRID_TO_BATTERY_TODAY] += gtb_kwh
+                    # Reserve / Notladung / Abregelung dürfen auch bei Festtarif laden.
+                    if decision.phase in JUSTIFIED_GRID_CHARGE_PHASES:
+                        self.stats[STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY] += gtb_kwh
 
             if house_native is None and house_w > 0:
                 self.stats[STAT_HOUSE_CONSUMPTION_TODAY] += house_w / 1000 * interval_h
@@ -881,6 +901,8 @@ class E3DCMaestroCoordinator(
             if self_supplied_w > 0:
                 self_supplied_kwh = self_supplied_w / 1000 * interval_h
                 self.stats[STAT_PV_SAVINGS_TODAY_EUR] += self_supplied_kwh * _buy_price
+                if _buy_sim is not None:
+                    self.stats[STAT_PV_SAVINGS_TODAY_SIM_EUR] += self_supplied_kwh * _buy_sim
 
             # E3/Phase 1: Track avoided curtailment energy
             if decision.phase == PHASE_CURTAILMENT_GUARD and decision.charge_power_limit is not None:
@@ -1029,6 +1051,7 @@ class E3DCMaestroCoordinator(
                 if key in stored_stats:
                     self.stats[key] = stored_stats[key]
             self._last_stats_date = stored_date
+            self._bootstrap_justified_grid_charge(stored_stats)
         bases = data.get("additional_bases")
         if isinstance(bases, dict):
             cleaned: dict[str, float] = {}
@@ -1041,6 +1064,26 @@ class E3DCMaestroCoordinator(
                     continue
             self._additional_bases = cleaned
 
+    def _bootstrap_justified_grid_charge(self, stored_stats: dict[str, Any]) -> None:
+        """One-shot: credit pre-tracking Netz→Akku to justified when reserve is on.
+
+        Older builds only counted total grid→battery. After upgrade the problem
+        flag would otherwise stay on for the rest of the day even though the
+        charge was intentional Notstromreserve.
+        """
+        if STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY in stored_stats:
+            return
+        total = float(self.stats.get(STAT_GRID_TO_BATTERY_TODAY, 0.0) or 0.0)
+        if total <= 0:
+            return
+        params = self._params
+        if not (
+            getattr(params, "fixed_reserve_enabled", False)
+            or getattr(params, "seasonal_reserve_enabled", False)
+        ):
+            return
+        self.stats[STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY] = total
+        self._stats_dirty = True
 
     async def _async_save_stats(self) -> None:
         """Persist current stats to disk."""

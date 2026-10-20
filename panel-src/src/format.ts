@@ -14,7 +14,9 @@ export const makeFmt = (lang: string) => {
     new Date(v).toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
   const dayTime = (v: number | string): string =>
     new Date(v).toLocaleString(loc, { weekday: "short", hour: "2-digit", minute: "2-digit" });
-  return { loc, n, w, time, dayTime };
+  const day = (v: number | string | Date): string =>
+    new Date(v).toLocaleDateString(loc, { weekday: "short", day: "numeric", month: "short" });
+  return { loc, n, w, time, dayTime, day };
 };
 
 export type Fmt = ReturnType<typeof makeFmt>;

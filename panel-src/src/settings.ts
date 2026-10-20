@@ -291,6 +291,9 @@ export interface SettingsCtx {
   onTheme: (theme: ThemeId) => void;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
+  /** When true the live alert banner stays hidden; chips still show the same info. */
+  alertBannerHidden: boolean;
+  onAlertBannerHidden: (hidden: boolean) => void;
   options: OptionCtx;
   expert: boolean;
   onExpert: (on: boolean) => void;
@@ -914,6 +917,7 @@ function lookView(c: SettingsCtx): TemplateResult {
     blob: { title: "flowStyleBlob", hint: "flowStyleBlobHint" },
     city: { title: "flowStyleCity", hint: "flowStyleCityHint" },
   };
+  const showBanner = !c.alertBannerHidden;
   return html`<div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
     ${THEMES.map(
       (id) => html`<button
@@ -943,6 +947,16 @@ function lookView(c: SettingsCtx): TemplateResult {
         <span class="txt"><b>${t(flowCopy[id].title)}</b><span>${t(flowCopy[id].hint)}</span></span>
       </button>`,
     )}
+  </div>
+  <div class="ctrl setting-row look-banner">
+    <div class="txt"><span class="name"><b>${t("alertBannerShow")}</b></span><span>${t("alertBannerShowHint")}</span></div>
+    <button
+      class="switch ${showBanner ? "on" : ""}"
+      role="switch"
+      aria-checked=${showBanner}
+      aria-label=${t("alertBannerShow")}
+      @click=${() => c.onAlertBannerHidden(showBanner)}
+    ></button>
   </div>`;
 }
 

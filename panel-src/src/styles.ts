@@ -488,6 +488,14 @@ export const styles = css`
     height: 100%;
     overflow: visible;
   }
+  /* Haus: size to the SVG viewBox — no letterboxed band under the foundation. */
+  .flow-wrap.city {
+    height: auto;
+  }
+  .flow-wrap.city svg {
+    height: auto;
+    display: block;
+  }
   .flow-day {
     display: flex;
     flex-wrap: wrap;
@@ -984,6 +992,7 @@ export const styles = css`
   }
   .group-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin: 0 0 10px;
@@ -997,6 +1006,111 @@ export const styles = css`
   .group-bar .seg.period {
     flex: none;
     margin: 0;
+  }
+  .group-bar .day-nav {
+    flex: none;
+    margin: 0;
+  }
+  .day-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--fill);
+    border: 1px solid var(--stroke);
+  }
+  .day-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .day-nav-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+  .day-nav-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--fill-strong, var(--stroke));
+  }
+  .day-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .day-nav-btn:focus-visible,
+  .day-nav-date:focus-visible,
+  .day-nav-today:focus-visible {
+    outline: 2px solid var(--accent, #38bdf8);
+    outline-offset: 1px;
+  }
+  .day-nav-pick {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .day-nav-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 7.5rem;
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: 650 12px Inter, system-ui, sans-serif;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+  .day-nav-date svg {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    color: var(--muted);
+  }
+  .day-nav-date:hover {
+    background: var(--fill-strong, var(--stroke));
+  }
+  .day-nav-date:hover svg {
+    color: var(--text);
+  }
+  .day-nav-label {
+    white-space: nowrap;
+  }
+  /* Native picker host — kept for showPicker(), not for hit-testing. */
+  .day-nav-pick input[type="date"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    border: 0;
+    font-size: 16px;
+  }
+  .day-nav-today {
+    height: 28px;
+    margin-right: 2px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--accent, #38bdf8);
+    font: 650 11px Inter, system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .day-nav-today:hover {
+    background: var(--fill-strong, var(--stroke));
   }
   .group-head {
     display: flex;
@@ -1611,6 +1725,30 @@ export const styles = css`
     color: var(--muted);
     margin-left: 3px;
   }
+  .kpi .v .sim-dyn {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+  .kpi .v .sim-dyn .sim-delta {
+    display: inline;
+    margin-left: 0.35em;
+    font-weight: 700;
+  }
+  .kpi .v .sim-dyn .sim-delta.pos {
+    color: var(--ok);
+  }
+  .kpi .v .sim-dyn .sim-delta.neg {
+    color: var(--grid-in);
+  }
+  .kpi .v .sim-dyn .sim-delta.muted {
+    font-weight: 600;
+    color: var(--muted);
+  }
   .kpi .delta {
     margin-top: 6px;
     font-size: 12px;
@@ -1817,7 +1955,8 @@ export const styles = css`
   .banner {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 16px;
+    align-items: center;
+    gap: 8px 12px;
     margin: 0 0 16px;
     padding: 10px 14px;
     border-radius: 12px;
@@ -1830,6 +1969,37 @@ export const styles = css`
   .banner.bad {
     border-color: rgba(248, 113, 113, 0.5);
     background: rgba(248, 113, 113, 0.1);
+  }
+  .banner-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .banner-ack {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .banner-ack:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .banner-ack:focus-visible {
+    outline: 2px solid var(--accent, #38bdf8);
+    outline-offset: 2px;
+  }
+  .look-banner {
+    margin-top: 20px;
   }
   .dec-extra {
     grid-template-columns: repeat(3, 1fr);

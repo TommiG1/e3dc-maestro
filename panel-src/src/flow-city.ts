@@ -2,6 +2,7 @@ import { svg, type TemplateResult } from "lit";
 import {
   fanBoxHeight,
   fanBoxPad,
+  fanPoint,
   houseFan,
   onConsumerDrag,
   resolveConsumerPositions,
@@ -140,17 +141,19 @@ function layout(compact: boolean, consumerCount: number): HouseGeom {
   const mastH = Math.round(facadeH * 0.48);
   const mastX = 76;
   const mastY = facadeY + 8 + mastH;
+  const groundY = plinthY + plinthH + 3;
   const side = consumerCount ? fanBoxPad(consumerCount) : 0;
   return {
     boxW: boxW + side,
-    boxH: Math.max(440, mastY + 72),
+    // Sit just under the foundation; the consumer fan may grow the viewBox later.
+    boxH: groundY + 20,
     roof: { x: x - overhang, y: roofY, w: facadeW + overhang * 2, h: roofH },
     soffit: { x: x - overhang + 2, y: roofY + roofH, w: facadeW + overhang * 2 - 4, h: soffitH },
     facade: { x, y: facadeY, w: facadeW, h: facadeH },
     plinth: { x: x + 3, y: plinthY, w: facadeW - 6, h: plinthH },
     mast: { x: mastX, y: mastY, h: mastH },
     logo: { x: x + 10, y: facadeY + facadeH - 32, s: 22 },
-    groundY: plinthY + plinthH + 3,
+    groundY,
   };
 }
 
@@ -285,13 +288,18 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
       },
     };
   });
+  const fanH = consumers.length ? fanBoxHeight(midFacade.y, fan, g.boxH) : g.boxH;
+  // Idle: crop to the real fan slots. Arrange keeps the wider r=1.35 envelope for dragging.
+  const contentBottom = places.length
+    ? Math.max(g.groundY + 20, ...places.map(({ p }) => p.y + 44))
+    : g.boxH;
   const boxH = i.compact
     ? places.length
       ? places.at(-1)!.p.y + 40
       : g.mast.y + 56
-    : consumers.length
-      ? fanBoxHeight(midFacade.y, fan, g.boxH)
-      : g.boxH;
+    : i.arrange
+      ? fanH
+      : Math.max(g.boxH, contentBottom);
 
   const aria = [
     `${t("nodePv")} ${i.fmt.w(pv)}`,
@@ -473,7 +481,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   </svg>`;
 }
 
-/** CSS height hint for the city flow card. */
+/** CSS height hint for the city flow card (compact / phone). Desktop uses viewBox aspect ratio. */
 export function cityFlowBoxHeight(compact: boolean, count: number): number | undefined {
   const g = layout(compact, count);
   if (compact) {
@@ -485,5 +493,6 @@ export function cityFlowBoxHeight(compact: boolean, count: number): number | und
   if (!count) return Math.round(g.boxH * 0.95);
   const origin = { x: g.facade.x + g.facade.w, y: g.facade.y + g.facade.h * 0.45 };
   const fan = houseFan(origin, count);
-  return Math.round(fanBoxHeight(origin.y, fan, g.boxH) * 0.95);
+  const bottom = fanPoint(1, 1, fan).y + 44;
+  return Math.round(Math.max(g.boxH, bottom) * 0.95);
 }

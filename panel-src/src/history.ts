@@ -97,6 +97,33 @@ export type PeriodKey = (typeof PERIOD_KEYS)[number];
 // Net cost is state_class "total" without last_reset: its midnight reset would count as a negative change.
 const STAT_KEYS = PERIOD_KEYS.filter((key) => key !== "costNet");
 
+/** Local calendar day as `YYYY-MM-DD`. */
+export const calendarDay = (d = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+/** Parse a `YYYY-MM-DD` key into a local midnight Date. Invalid keys fall back to today. */
+export const parseCalendarDay = (day: string): Date => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) {
+    const fallback = new Date();
+    fallback.setHours(0, 0, 0, 0);
+    return fallback;
+  }
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
+
+export const isCalendarToday = (day: string): boolean => day === calendarDay();
+
+export const shiftCalendarDay = (day: string, delta: number): string => {
+  const d = parseCalendarDay(day);
+  d.setDate(d.getDate() + delta);
+  return calendarDay(d);
+};
+
 const periodStart = (period: Exclude<Period, "today">): number => {
   const start = new Date();
   if (period === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
@@ -105,12 +132,11 @@ const periodStart = (period: Exclude<Period, "today">): number => {
   return start.getTime();
 };
 
-/** Sum of daily statistic changes since Monday or the first of the month. */
-export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today">): Promise<Partial<Record<PeriodKey, number>>> {
+async function loadStatSums(hass: Hass, startMs: number, endMs: number): Promise<Partial<Record<PeriodKey, number>>> {
   const raw = await hass.callWS<Record<string, { change?: number | null }[]>>({
     type: "recorder/statistics_during_period",
-    start_time: new Date(periodStart(period)).toISOString(),
-    end_time: new Date().toISOString(),
+    start_time: new Date(startMs).toISOString(),
+    end_time: new Date(endMs).toISOString(),
     statistic_ids: STAT_KEYS.map((key) => E[key]),
     period: "day",
     types: ["change"],
@@ -122,6 +148,19 @@ export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today"
   }
   if (out.costToday !== undefined && out.feedRevenue !== undefined) out.costNet = out.costToday - out.feedRevenue;
   return out;
+}
+
+/** Sum of daily statistic changes since Monday or the first of the month. */
+export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today">): Promise<Partial<Record<PeriodKey, number>>> {
+  return loadStatSums(hass, periodStart(period), Date.now());
+}
+
+/** Sum of daily statistic changes for one local calendar day (`YYYY-MM-DD`). */
+export async function loadDaySums(hass: Hass, day: string): Promise<Partial<Record<PeriodKey, number>>> {
+  const start = parseCalendarDay(day);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return loadStatSums(hass, start.getTime(), end.getTime());
 }
 
 /** Cumulative daily counters since midnight, 30-minute grid. */
