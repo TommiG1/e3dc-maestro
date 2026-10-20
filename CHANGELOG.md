@@ -9,9 +9,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.1-beta.4] – Prognose-SoC und Preisplan-FAQ (2026-10-20)
+
+> **Beta.** Enthält 0.5.1-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.4.md](docs/release-notes/v0.5.1-beta.4.md).
+
 ### Geändert
 - **Prognose zeigt Plan-SoC, wenn der Preisplan steuert.** Steuert der Preisplan den Akku, ersetzt die Kurve „SoC geplant“ die generische Trajektorie – dieselbe Rechnung wie auf der Preisplan-Seite.
 - **Hilfe-FAQ zum Preisplan ergänzt.** Automatik-Defaults (Wirkungsgrad, Mindestspanne, kein Verschleiß), Halten ohne Netzladung und der Hinweis zur Prognose-Kurve stehen in der Hilfe.
+
+### Hinweise
+- Neustart oder Reload der Integration und hartes Neuladen des Browsers, damit das neue Panel ankommt.
 
 ---
 
