@@ -438,6 +438,34 @@ export const styles = css`
     text-align: center;
     margin: 0;
   }
+  .plan-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 48px 20px;
+  }
+  .plan-empty p {
+    margin: 0;
+    max-width: 36em;
+  }
+  .plan-empty .sub {
+    font-size: 13px;
+    opacity: 0.85;
+  }
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--stroke-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   .err {
     color: #f87171;
     font-size: 13px;
@@ -1521,6 +1549,24 @@ export const styles = css`
     display: flex;
     flex-direction: column;
     gap: 14px;
+  }
+  .plan-diag {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+  }
+  .plan-diag h4 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .plan-empty + .plan-diag {
+    margin: 0 16px 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
   }
   .plan-tune {
     margin-top: 14px;

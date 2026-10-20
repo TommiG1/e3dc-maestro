@@ -24,16 +24,29 @@ import type { IstSeries, Period, PeriodKey, SparkKey } from "./history";
 import { downloadCsv } from "./csv";
 import { setupBanner } from "./onboarding-view";
 import type { OptionCtx } from "./options-view";
-import { isPlanStrategy, planControls, strategyOf } from "./settings";
+import { planControls, strategyOf } from "./settings";
 import {
   parseSlots,
   parseTrajectory,
+  planEmptyKind,
   priceExtremes,
   slotAction,
+  type PlanEmptyKind,
   type Point,
   type TimelineItem,
   type Trajectory,
 } from "./transform";
+
+const PLAN_EMPTY_KEY: Record<PlanEmptyKind, "noPlanOff" | "noPlanSlots" | "noPlanThreshold" | "planComputing" | "noPlanPrices" | "noPlanProfile" | "noPlanRoom" | "noPlan"> = {
+  off: "noPlanOff",
+  slots: "noPlanSlots",
+  threshold: "noPlanThreshold",
+  computing: "planComputing",
+  no_prices: "noPlanPrices",
+  no_profile: "noPlanProfile",
+  no_room: "noPlanRoom",
+  no_plan: "noPlan",
+};
 
 export interface Ctx {
   hass: Hass;
@@ -126,7 +139,12 @@ const timelineCsv = (c: Ctx): string[][] => [
 const onDebug = (c: Ctx): boolean => isOn(st(c, E.debug));
 
 const debugText = (c: Ctx): string => {
-  const state = st(c, E.debugLog)?.state;
+  const entity = st(c, E.debugLog);
+  const lines = entity?.attributes?.lines;
+  if (Array.isArray(lines) && lines.length > 0) {
+    return lines.map(String).join("\n");
+  }
+  const state = entity?.state;
   return !state || state === "unknown" || state === "unavailable" ? c.i18n.t("debugEmpty") : state;
 };
 
@@ -471,15 +489,59 @@ export function forecastView(c: Ctx): TemplateResult {
 
 // ---------------------------------------------------------------- Price plan
 
+const planRow = (label: string, value: string, color?: string) =>
+  html`<div class="row"><span>${label}</span><b style=${color ? `color:${color}` : ""}>${value}</b></div>`;
+
+/** Inputs the planner used — explains empty charts and missing overnight charge. */
+function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | typeof nothing {
+  const { t } = c.i18n;
+  const { fmt } = c;
+  const budget = n(a.budget_kwh);
+  const floor = n(a.floor_pct);
+  const ceiling = n(a.ceiling_pct);
+  const efficiency = n(a.efficiency);
+  const spread = n(a.min_spread);
+  const wear = n(a.wear_eur_per_kwh);
+  const safety = n(a.safety_factor);
+  if (
+    budget === undefined &&
+    floor === undefined &&
+    ceiling === undefined &&
+    efficiency === undefined &&
+    spread === undefined
+  ) {
+    return nothing;
+  }
+  return html`<div class="plan-diag">
+    <h4>${t("planDiag")}</h4>
+    ${budget !== undefined ? planRow(t("planBudget"), `${fmt.n(budget, 2)} kWh`) : nothing}
+    ${floor !== undefined ? planRow(t("planFloor"), `${fmt.n(floor, 0)} %`) : nothing}
+    ${ceiling !== undefined ? planRow(t("planCeiling"), `${fmt.n(ceiling, 0)} %`) : nothing}
+    ${efficiency !== undefined ? planRow(t("planEfficiency"), fmt.n(efficiency, 2)) : nothing}
+    ${spread !== undefined ? planRow(t("planMinSpread"), `${fmt.n(spread * 100, 1)} ct/kWh`) : nothing}
+    ${wear !== undefined ? planRow(t("planWear"), `${fmt.n(wear, 3)} €/kWh`) : nothing}
+    ${safety !== undefined ? planRow(t("planSafety"), fmt.n(safety, 2)) : nothing}
+  </div>`;
+}
+
 export function planView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const a = attrs(c, E.plan);
   const slots = parseSlots(a.plan_slots);
   const strategy = strategyOf(c.hass);
   const controls = planControls({ ...c, priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined });
+  const diag = planDiagRows(c, a);
   if (!slots.length) {
-    const why = strategy && !isPlanStrategy(strategy) ? t("noPlanStrategy") : t("noPlan");
-    return html`<div class="card"><p class="empty">${why}</p></div>${controls}`;
+    const kind = planEmptyKind(strategy, a);
+    const detail = typeof a.message === "string" && a.message && kind !== "computing" ? a.message : "";
+    return html`<div class="card">
+      <div class="empty plan-empty ${kind === "computing" ? "busy" : ""}" role="status">
+        ${kind === "computing" ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
+        <p>${t(PLAN_EMPTY_KEY[kind])}</p>
+        ${detail ? html`<p class="sub">${detail}</p>` : nothing}
+      </div>
+      ${diag}
+    </div>${controls}`;
   }
   const ext = priceExtremes(slots);
   const legend: [string, string][] = [
@@ -488,8 +550,6 @@ export function planView(c: Ctx): TemplateResult {
     [COLORS.bat, t("legendRelease")],
   ];
   const known = typeof a.known_until === "string" ? c.fmt.dayTime(a.known_until) : "–";
-  const row = (label: string, value: string, color?: string) =>
-    html`<div class="row"><span>${label}</span><b style=${color ? `color:${color}` : ""}>${value}</b></div>`;
   const slotText = (s: { price: number; start_local: string }) => `${c.fmt.n(s.price * 100)} ct · ${s.start_local}`;
 
   return html`
@@ -520,13 +580,14 @@ export function planView(c: Ctx): TemplateResult {
           <div class="sub msg">${typeof a.message === "string" ? a.message : ""}</div>
         </div>
         <div>
-          ${row(t("planStrategy"), strategy ? c.i18n.option(strategy) : "–")}
-          ${row(t("planGridCharge"), `${c.fmt.n(n(a.total_grid_charge_kwh), 2)} kWh`)}
-          ${row(t("planSaving"), `${c.fmt.n(n(a.expected_saving_eur), 2)} €`, "var(--ok)")}
-          ${ext ? row(t("planCheapest"), slotText(ext.min)) : nothing}
-          ${ext ? row(t("planMostExpensive"), slotText(ext.max)) : nothing}
-          ${row(t("planKnownUntil"), known)}
+          ${planRow(t("planStrategy"), strategy ? c.i18n.option(strategy) : "–")}
+          ${planRow(t("planGridCharge"), `${c.fmt.n(n(a.total_grid_charge_kwh), 2)} kWh`)}
+          ${planRow(t("planSaving"), `${c.fmt.n(n(a.expected_saving_eur), 2)} €`, "var(--ok)")}
+          ${ext ? planRow(t("planCheapest"), slotText(ext.min)) : nothing}
+          ${ext ? planRow(t("planMostExpensive"), slotText(ext.max)) : nothing}
+          ${planRow(t("planKnownUntil"), known)}
         </div>
+        ${diag}
       </div>
     </div>
     ${controls}`;

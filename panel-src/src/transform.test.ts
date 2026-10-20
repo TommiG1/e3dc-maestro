@@ -8,6 +8,7 @@ import {
   parseSlots,
   parseTrajectory,
   phaseBands,
+  planEmptyKind,
   priceExtremes,
   slotAction,
   splitGrid,
@@ -109,6 +110,27 @@ describe("history", () => {
     const pts: [number, number][] = [[0, 1], [10, 3], [60, 5], [70, 9]];
     expect(bucket(pts, 60, "mean")).toEqual([[0, 2], [60, 7]]);
     expect(bucket(pts, 60, "last")).toEqual([[0, 3], [60, 9]]);
+  });
+});
+
+describe("planEmptyKind", () => {
+  it("explains strategies that never draw a price-plan chart", () => {
+    expect(planEmptyKind("off", {})).toBe("off");
+    expect(planEmptyKind("slots", {})).toBe("slots");
+    expect(planEmptyKind("threshold", { status: "ok" })).toBe("threshold");
+  });
+
+  it("shows computing until the plan snapshot is ready", () => {
+    expect(planEmptyKind("dynamic_auto", { enabled: false })).toBe("computing");
+    expect(planEmptyKind("dynamic_expert", {})).toBe("computing");
+    expect(planEmptyKind("dynamic_auto", { enabled: true })).toBe("computing");
+  });
+
+  it("surfaces runner status codes", () => {
+    expect(planEmptyKind("dynamic_auto", { enabled: true, status: "no_prices" })).toBe("no_prices");
+    expect(planEmptyKind("dynamic_auto", { enabled: true, status: "no_profile" })).toBe("no_profile");
+    expect(planEmptyKind("dynamic_auto", { enabled: true, status: "no_room" })).toBe("no_room");
+    expect(planEmptyKind("dynamic_auto", { enabled: true, status: "ok" })).toBe("no_plan");
   });
 });
 

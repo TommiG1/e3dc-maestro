@@ -30,8 +30,13 @@ class PricePlanSnapshot:
     plan: PricePlan | None = None
     rows: list[dict[str, Any]] = field(default_factory=list)
     known_until: _dt.datetime | None = None
-    budget_kwh: float = 0.0
-    floor_pct: float = 0.0
+    budget_kwh: float | None = None
+    floor_pct: float | None = None
+    ceiling_pct: float | None = None
+    efficiency: float | None = None
+    min_spread: float | None = None
+    wear_eur_per_kwh: float | None = None
+    safety_factor: float | None = None
 
     @property
     def summary(self) -> str:
@@ -94,17 +99,30 @@ def compute_price_plan(
     pv_tomorrow_w: Sequence[float] | None,
     pv_hist_w: Sequence[float] | None,
 ) -> PricePlanSnapshot:
-    if horizon is None or not horizon.prices:
-        return PricePlanSnapshot(STATUS_NO_PRICES, "Keine gültige Preiskurve ab jetzt", now)
-    if ceiling_pct <= floor_pct + 1.0 or capacity_kwh <= 0:
+    def _snap(status: str, message: str, **extra: Any) -> PricePlanSnapshot:
         return PricePlanSnapshot(
+            status,
+            message,
+            computed_at=now,
+            floor_pct=floor_pct,
+            ceiling_pct=ceiling_pct,
+            efficiency=efficiency,
+            min_spread=min_spread,
+            wear_eur_per_kwh=wear_eur_per_kwh,
+            safety_factor=safety_factor,
+            **extra,
+        )
+
+    if horizon is None or not horizon.prices:
+        return _snap(STATUS_NO_PRICES, "Keine gültige Preiskurve ab jetzt")
+    if ceiling_pct <= floor_pct + 1.0 or capacity_kwh <= 0:
+        return _snap(
             STATUS_NO_ROOM,
             f"Kein Spielraum zwischen Boden ({floor_pct:.0f} %) und Obergrenze ({ceiling_pct:.0f} %)",
-            now,
         )
     cons_ok = cons_profile_w is not None and any(v > 0 for v in cons_profile_w)
     if not cons_ok and house_power_w <= 0:
-        return PricePlanSnapshot(STATUS_NO_PROFILE, "Noch keine Verbrauchsstatistik", now)
+        return _snap(STATUS_NO_PROFILE, "Noch keine Verbrauchsstatistik")
 
     local_today = now.date()
     consumption: list[float] = []
@@ -168,13 +186,11 @@ def compute_price_plan(
             "consumption_kwh": round(consumption[i], 3),
             "pv_kwh": round(pv[i], 3),
         })
-    return PricePlanSnapshot(
-        status=STATUS_OK,
-        message=plan.reason,
-        computed_at=now,
+    return _snap(
+        STATUS_OK,
+        plan.reason,
         plan=plan,
         rows=rows,
         known_until=horizon.known_until,
         budget_kwh=round(budget, 2),
-        floor_pct=floor_pct,
     )

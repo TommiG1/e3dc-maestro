@@ -21,6 +21,10 @@ from homeassistant.util import dt as dt_util
 
 from .const import ALL_PHASES, DOMAIN
 from .coordinator import E3DCMaestroCoordinator
+from .debug_log_format import (
+    DEBUG_LOG_MAX_LINES as _DEBUG_LOG_MAX_LINES,
+    format_debug_log_state,
+)
 from .explanation import decision_explanation as _decision_explanation
 from .sensor_device import device_info as _device_info, set_stable_entity_id
 
@@ -304,7 +308,7 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Debug-Log",
         icon="mdi:text-box-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coord: "\n".join(list(coord.debug_log)[-5:]) if coord.debug_log else "",
+        value_fn=lambda coord: format_debug_log_state(coord.debug_log),
     ),
     # C1: Autonomy time
     MaestroSensorDescription(
@@ -874,6 +878,10 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
             # News-Ticker: letzte Phasen-/Grund-Wechsel, neueste zuerst.
             attrs["history"] = list(self.coordinator._action_history)
             return attrs
+        if key == "debug_log":
+            # Full recent lines for the panel; state is truncated to HA's 255 limit.
+            lines = list(self.coordinator.debug_log)[-_DEBUG_LOG_MAX_LINES:]
+            return {"lines": lines} if lines else None
         if key == "decision_explanation":
             coord = self.coordinator
             dec = coord.last_decision
@@ -914,6 +922,11 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "expected_saving_eur": round(plan.expected_saving_eur, 2) if plan else None,
                 "budget_kwh": snap.budget_kwh,
                 "floor_pct": snap.floor_pct,
+                "ceiling_pct": snap.ceiling_pct,
+                "efficiency": snap.efficiency,
+                "min_spread": snap.min_spread,
+                "wear_eur_per_kwh": snap.wear_eur_per_kwh,
+                "safety_factor": snap.safety_factor,
                 "plan_slots": snap.rows,
             }
         if key == "autonomy_time":

@@ -106,6 +106,39 @@ export function priceExtremes(slots: Slot[]): { min: Slot; max: Slot } | undefin
   };
 }
 
+/** Why the price-plan chart is empty (unit-tested). */
+export type PlanEmptyKind =
+  | "off"
+  | "slots"
+  | "threshold"
+  | "computing"
+  | "no_prices"
+  | "no_profile"
+  | "no_room"
+  | "no_plan";
+
+/**
+ * Classify an empty plan page from strategy + sensor attributes.
+ * Slot/threshold strategies never produce a price-plan chart; plan strategies
+ * may still be computing or blocked on prices/profile/room.
+ */
+export function planEmptyKind(
+  strategy: string | undefined,
+  attrs: Record<string, unknown>,
+): PlanEmptyKind {
+  if (strategy === "off") return "off";
+  if (strategy === "slots") return "slots";
+  if (strategy === "threshold") return "threshold";
+  const status = typeof attrs.status === "string" ? attrs.status : undefined;
+  if (status === "no_prices") return "no_prices";
+  if (status === "no_profile") return "no_profile";
+  if (status === "no_room") return "no_room";
+  if (strategy === "dynamic_auto" || strategy === "dynamic_expert") {
+    if (attrs.enabled !== true || status === undefined) return "computing";
+  }
+  return "no_plan";
+}
+
 // ---- Recorder history -------------------------------------------------------
 
 /** History row as returned by history/history_during_period (compressed or full form). */

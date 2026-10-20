@@ -65,6 +65,11 @@ class TestStatus:
         snap = _run(None)
         assert snap.status == STATUS_NO_PRICES
         assert snap.summary == "keine Preise"
+        assert snap.budget_kwh is None
+        assert snap.efficiency == 0.85
+        assert snap.min_spread == 0.08
+        assert snap.floor_pct == 10.0
+        assert snap.ceiling_pct == 90.0
 
     def test_no_room(self):
         snap = _run(_horizon(), floor_pct=89.5)
@@ -73,6 +78,14 @@ class TestStatus:
     def test_no_profile(self):
         snap = _run(_horizon(), cons_profile_w=None, house_power_w=0.0)
         assert snap.status == STATUS_NO_PROFILE
+
+    def test_ok_exposes_tuning_inputs(self):
+        snap = _run(_horizon(), efficiency=0.9, min_spread=0.03, wear_eur_per_kwh=0.01)
+        assert snap.status == STATUS_OK
+        assert snap.efficiency == 0.9
+        assert snap.min_spread == 0.03
+        assert snap.wear_eur_per_kwh == 0.01
+        assert snap.budget_kwh is not None
 
     def test_falls_back_to_house_power(self):
         snap = _run(_horizon(), cons_profile_w=None, house_power_w=500.0)
