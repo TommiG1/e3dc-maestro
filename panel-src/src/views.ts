@@ -31,6 +31,7 @@ import { calendarPopover } from "./calendar-popover";
 import {
   calendarDay,
   canShiftBalanceForward,
+  dayBalance,
   formatBalanceRange,
   parseCalendarDay,
   shiftBalanceAnchor,
@@ -99,10 +100,9 @@ export interface Ctx {
   motion: boolean;
   collapsed: ReadonlySet<string>;
   onToggleGroup: (id: string) => void;
-  controlsOpen: boolean;
-  onToggleControls: () => void;
-  autoOpen: boolean;
-  onToggleAuto: () => void;
+  batteryCtrlOpen: boolean;
+  onOpenBatteryCtrl: () => void;
+  onCloseBatteryCtrl: () => void;
   groupId?: string;
   onOpenGroup: (id: string) => void;
   setupAck: boolean;
@@ -406,12 +406,20 @@ export function liveView(c: Ctx): TemplateResult {
   const renderFlow = c.flowStyle === "blob" ? blobEnergyFlow : c.flowStyle === "city" ? cityEnergyFlow : energyFlow;
   const amount = (key: PeriodKey): number | undefined => (dayLive ? num(st(c, E[key])) : c.rangeSums?.[key]);
   const balanceAmount = amount;
-  const balanceParts = [balanceAmount("feedRevenue"), balanceAmount("saving"), balanceAmount("costToday"), balanceAmount("wear")];
   const balance = dayLive
     ? num(st(c, E.balance))
-    : balanceParts.some((v) => v === undefined)
-      ? undefined
-      : balanceParts[0]! + balanceParts[1]! - balanceParts[2]! - balanceParts[3]!;
+    : dayBalance({
+        feedRevenue: balanceAmount("feedRevenue"),
+        saving: balanceAmount("saving"),
+        costToday: balanceAmount("costToday"),
+        wear: balanceAmount("wear"),
+      });
+  const rangeEmpty =
+    !dayLive &&
+    c.rangeSums !== undefined &&
+    balance === undefined &&
+    amount("costNet") === undefined &&
+    amount("saving") === undefined;
   const euroOf = (v: number | undefined) => `${c.fmt.n(v, 2)} €`;
   const whenKey =
     br.grain === "day" ? (br.live ? "whenToday" : "whenToday") : br.grain === "week" ? "whenWeek" : br.grain === "month" ? "whenMonth" : "whenYear";
@@ -498,18 +506,8 @@ export function liveView(c: Ctx): TemplateResult {
         ? nothing
         : html`<button type="button" class="day-nav-today" @click=${() => c.onBalanceSelect("day", todayKey)}>${t("periodToday")}</button>`}
     </div>`;
-  const power = st(c, E.forceDischargePower);
-  const powerAttrs = power?.attributes ?? {};
-  const powerMin = typeof powerAttrs.min === "number" ? powerAttrs.min : 100;
-  const powerMax = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
-  const powerStep = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
-  const powerValue = c.forcePowerDraft ?? num(power) ?? powerMin;
-  const reserve = st(c, E.fixedReserveSoc);
-  const reserveAttrs = reserve?.attributes ?? {};
-  const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
-  const reserveMax = typeof reserveAttrs.max === "number" ? reserveAttrs.max : 100;
-  const reserveStep = typeof reserveAttrs.step === "number" ? reserveAttrs.step : 1;
-  const reserveValue = c.reserveDraft ?? num(reserve) ?? reserveMin;
+  const powerValue = c.forcePowerDraft ?? num(st(c, E.forceDischargePower)) ?? 100;
+  const reserveValue = c.reserveDraft ?? num(st(c, E.fixedReserveSoc)) ?? 0;
   const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
     .filter(Boolean)
     .join(" · ");
@@ -651,6 +649,13 @@ export function liveView(c: Ctx): TemplateResult {
             : nothing}
         </div>
         ${socMetrics(c, soc, target, on(E.fixedReserve) ? reserveValue : undefined)}
+        <button type="button" class="soc-ctrl-btn" @click=${() => c.onOpenBatteryCtrl()}>
+          <span class="soc-ctrl-copy">
+            <span class="soc-ctrl-label">${t("batteryCtrl")}</span>
+            <span class="soc-ctrl-meta">${batteryCtrlMeta(c, powerValue, reserveValue)}</span>
+          </span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
       </div>
     </div>
     ${chips.length
@@ -658,63 +663,8 @@ export function liveView(c: Ctx): TemplateResult {
           ${chips.map(([label, , cls]) => html`<span class="chip ${cls}"><i></i>${label}</span>`)}
         </div>`
       : nothing}
-    <section class="card grip">
-      <button type="button" class="grip-head ${c.controlsOpen ? "open" : ""}" aria-expanded=${c.controlsOpen} @click=${() => c.onToggleControls()}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        <span class="grip-title">${t("controlsPair")}</span>
-        ${on(E.forceDischarge) ? html`<span class="grip-state warn">${t("controlsForceOn", { v: c.fmt.w(powerValue) })}</span>` : nothing}
-        ${on(E.fixedReserve) ? html`<span class="grip-state on">${t("controlsReserveOn", { v: Math.round(reserveValue) })}</span>` : nothing}
-      </button>
-      ${c.controlsOpen
-        ? html`<div class="grip-body">
-            <div class="force">
-              <div class="txt"><b>${t("forceTitle")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
-              <button
-                class="switch ${on(E.forceDischarge) ? "on" : ""}"
-                role="switch"
-                aria-checked=${on(E.forceDischarge)}
-                aria-label=${t("forceTitle")}
-                ?disabled=${!st(c, E.forceDischarge) || c.pending.has(E.forceDischarge)}
-                @click=${() => c.onToggle(E.forceDischarge)}
-              ></button>
-              ${sliderField({
-                label: t("ctrlForcePower", { v: "" }),
-                min: powerMin,
-                max: powerMax,
-                step: powerStep,
-                value: powerValue,
-                disabled: !power || power.state === "unavailable",
-                onPreview: c.onPowerDraft,
-                onCommit: c.onPowerCommit,
-              })}
-            </div>
-            <div class="force">
-              <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
-              <button
-                class="switch ${on(E.fixedReserve) ? "on" : ""}"
-                role="switch"
-                aria-checked=${on(E.fixedReserve)}
-                aria-label=${t("fixedReserve")}
-                ?disabled=${!st(c, E.fixedReserve) || c.pending.has(E.fixedReserve)}
-                @click=${() => c.onToggle(E.fixedReserve)}
-              ></button>
-              ${sliderField({
-                label: t("fixedReserve"),
-                min: reserveMin,
-                max: reserveMax,
-                step: reserveStep,
-                value: reserveValue,
-                unit: "%",
-                disabled: !reserve || reserve.state === "unavailable",
-                onPreview: c.onReserveDraft,
-                onCommit: c.onReserveCommit,
-              })}
-            </div>
-          </div>`
-        : nothing}
-    </section>
-    ${autoLive(c)}
     <div class="range-bar">${rangeNav}</div>
+    ${rangeEmpty ? html`<p class="hint range-empty">${t("rangeEmpty")}</p>` : nothing}
     ${group(
       "today",
       groupTitle,
@@ -1066,10 +1016,30 @@ function autoSummary(c: Ctx): { text: string; tone: string } {
   return { text: t("autoOn", { goal, eur }), tone: "on" };
 }
 
-function autoLive(c: Ctx): TemplateResult {
+function batteryCtrlMeta(c: Ctx, powerValue: number, reserveValue: number): string {
   const { t } = c.i18n;
-  const open = c.autoOpen;
-  const summary = autoSummary(c);
+  const parts: string[] = [];
+  if (isOn(st(c, E.forceDischarge))) parts.push(t("controlsForceOn", { v: c.fmt.w(powerValue) }));
+  if (isOn(st(c, E.fixedReserve))) parts.push(t("controlsReserveOn", { v: Math.round(reserveValue) }));
+  if (isOn(st(c, E.ctrlAuto))) parts.push(autoSummary(c).text);
+  return parts.length ? parts.join(" · ") : t("batteryCtrlIdle");
+}
+
+/** Overlay from the battery card: forced discharge, reserve, and auto strategy. */
+export function batteryControlOverlay(c: Ctx): TemplateResult {
+  const { t } = c.i18n;
+  const power = st(c, E.forceDischargePower);
+  const powerAttrs = power?.attributes ?? {};
+  const powerMin = typeof powerAttrs.min === "number" ? powerAttrs.min : 100;
+  const powerMax = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
+  const powerStep = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
+  const powerValue = c.forcePowerDraft ?? num(power) ?? powerMin;
+  const reserve = st(c, E.fixedReserveSoc);
+  const reserveAttrs = reserve?.attributes ?? {};
+  const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
+  const reserveMax = typeof reserveAttrs.max === "number" ? reserveAttrs.max : 100;
+  const reserveStep = typeof reserveAttrs.step === "number" ? reserveAttrs.step : 1;
+  const reserveValue = c.reserveDraft ?? num(reserve) ?? reserveMin;
   const enabled = isOn(st(c, E.ctrlAuto));
   const a = attrs(c, E.autoStrategy);
   const select = st(c, E.selAuto);
@@ -1077,31 +1047,72 @@ function autoLive(c: Ctx): TemplateResult {
   const saving = num(st(c, E.autoSaving));
   const ran = typeof a.last_run === "string";
   const cap = autoCapText(c);
-  const detail = !enabled
+  const summary = autoSummary(c);
+  const autoDetail = !enabled
     ? nothing
     : a.fallback === true
       ? html`<p class="sub">${t("autoFallback")}</p>`
       : !ran
         ? nothing
         : html`<p class="sub">${cap ?? t("autoNone")}</p>`;
-  return html`<section class="card grip">
-    <div class="auto-bar">
-      <button type="button" class="grip-head ${open ? "open" : ""}" aria-expanded=${open} @click=${() => c.onToggleAuto()}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        <span class="grip-title">${t("autoTitle")}</span>
-        <span class="grip-state ${summary.tone}">${summary.text}</span>
-      </button>
-      <button
-        class="switch ${enabled ? "on" : ""}"
-        role="switch"
-        aria-checked=${enabled}
-        aria-label=${t("autoTitle")}
-        ?disabled=${!st(c, E.ctrlAuto) || c.pending.has(E.ctrlAuto)}
-        @click=${() => c.onToggle(E.ctrlAuto)}
-      ></button>
-    </div>
-    ${open
-      ? html`<div class="grip-body">
+  const toggle = (id: string, label: string) => html`<button
+    class="switch ${isOn(st(c, id)) ? "on" : ""}"
+    role="switch"
+    aria-checked=${isOn(st(c, id))}
+    aria-label=${label}
+    ?disabled=${!st(c, id) || c.pending.has(id)}
+    @click=${() => c.onToggle(id)}
+  ></button>`;
+
+  return html`
+    <div class="scrim open hist-scrim" @click=${() => c.onCloseBatteryCtrl()}></div>
+    <aside class="overlay battery-ctrl" role="dialog" aria-modal="true" aria-label=${t("batteryCtrlTitle")} ?inert=${!c.batteryCtrlOpen}>
+      <div class="sheet-head">
+        <div class="grow">
+          <h2>${t("batteryCtrlTitle")}</h2>
+          <div class="sub">${t("batteryCtrlSub")}</div>
+        </div>
+        <button class="btn" @click=${() => c.onCloseBatteryCtrl()}>${t("close")}</button>
+      </div>
+      <div class="battery-ctrl-body">
+        <section class="battery-ctrl-block">
+          <div class="force">
+            <div class="txt"><b>${t("forceTitle")}</b><span>${t("ctrlForcePower", { v: c.fmt.w(powerValue) })}</span></div>
+            ${toggle(E.forceDischarge, t("forceTitle"))}
+            ${sliderField({
+              label: t("ctrlForcePower", { v: "" }),
+              min: powerMin,
+              max: powerMax,
+              step: powerStep,
+              value: powerValue,
+              disabled: !power || power.state === "unavailable",
+              onPreview: c.onPowerDraft,
+              onCommit: c.onPowerCommit,
+            })}
+          </div>
+        </section>
+        <section class="battery-ctrl-block">
+          <div class="force">
+            <div class="txt"><b>${t("fixedReserve")}</b><span>${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</span></div>
+            ${toggle(E.fixedReserve, t("fixedReserve"))}
+            ${sliderField({
+              label: t("fixedReserve"),
+              min: reserveMin,
+              max: reserveMax,
+              step: reserveStep,
+              value: reserveValue,
+              unit: "%",
+              disabled: !reserve || reserve.state === "unavailable",
+              onPreview: c.onReserveDraft,
+              onCommit: c.onReserveCommit,
+            })}
+          </div>
+        </section>
+        <section class="battery-ctrl-block">
+          <div class="force">
+            <div class="txt"><b>${t("autoTitle")}</b><span class="grip-state ${summary.tone}">${summary.text}</span></div>
+            ${toggle(E.ctrlAuto, t("autoTitle"))}
+          </div>
           <div class="force">
             <div class="txt"><b>${t("autoObjective")}</b></div>
             <select
@@ -1116,11 +1127,12 @@ function autoLive(c: Ctx): TemplateResult {
           ${enabled && a.fallback !== true && saving !== undefined
             ? html`<div class="row"><span>${t("autoSaving")}</span><b>${saving > 0 ? "+" : ""}${c.fmt.n(saving, 2)} €</b></div>`
             : nothing}
-          ${detail}
+          ${autoDetail}
           <p class="sub">${t("autoLiveHint")}</p>
-        </div>`
-      : nothing}
-  </section>`;
+        </section>
+      </div>
+    </aside>
+  `;
 }
 
 const autoText = (value: unknown): string => {

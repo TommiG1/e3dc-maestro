@@ -45,8 +45,9 @@ describe("dayBalance", () => {
     expect(dayBalance({ feedRevenue: 2, saving: 3, costToday: 1, wear: 0.5 })).toBe(3.5);
   });
 
-  it("needs every part", () => {
-    expect(dayBalance({ feedRevenue: 2, saving: 3, costToday: 1 })).toBeUndefined();
+  it("treats missing parts as zero so month/year totals still resolve", () => {
+    expect(dayBalance({ feedRevenue: 107.65, saving: 285.1, costToday: 4.98 })).toBeCloseTo(387.77);
+    expect(dayBalance({})).toBeUndefined();
   });
 });
 

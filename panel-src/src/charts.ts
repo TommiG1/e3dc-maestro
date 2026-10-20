@@ -486,38 +486,123 @@ export interface BalancePulseInput {
 }
 
 const pulseBarColor = (value: number, today: boolean): string => {
-  if (value >= 0) return today ? "#6ee7b7" : COLORS.gridOut;
-  return today ? "#fca5a5" : COLORS.gridIn;
+  if (value >= 0) return today ? "#6ee7b7" : "rgba(52, 211, 153, 0.78)";
+  return today ? "#fca5a5" : "rgba(248, 113, 113, 0.78)";
 };
 
-/** Diverging daily balance bars plus a cumulative euro line for week/month. */
+const pulseDayLabel = (ts: number, loc: string, dense: boolean): string => {
+  const d = new Date(ts);
+  if (dense) return d.toLocaleDateString(loc, { day: "numeric" });
+  return d.toLocaleDateString(loc, { weekday: "short", day: "numeric" });
+};
+
+const pulseNiceCeil = (value: number): number => {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  const sign = value < 0 ? -1 : 1;
+  const abs = Math.abs(value);
+  const exp = Math.floor(Math.log10(abs));
+  const frac = abs / 10 ** exp;
+  const nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
+  return sign * nice * 10 ** exp;
+};
+
+const pulseNiceFloor = (value: number): number => {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  return -pulseNiceCeil(-value);
+};
+
+/**
+ * Twin y-axes share one horizontal zero. Without this, a positive cumulative
+ * line sits under the daily-balance zero whenever the left axis dips below 0.
+ */
+export function alignTwinAxisZeros(
+  primaryValues: number[],
+  secondaryValues: number[],
+  pad = 0.1,
+): { primary: { min: number; max: number }; secondary: { min: number; max: number } } {
+  const pVals = primaryValues.filter((v) => Number.isFinite(v));
+  const sVals = secondaryValues.filter((v) => Number.isFinite(v));
+  let pMin = pVals.length ? Math.min(...pVals, 0) : 0;
+  let pMax = pVals.length ? Math.max(...pVals, 0) : 1;
+  const pSpan = pMax - pMin || 1;
+  pMin -= pSpan * pad;
+  pMax += pSpan * pad;
+  if (pMin > 0) pMin = 0;
+  if (pMax < 0) pMax = 0;
+  pMin = pulseNiceFloor(pMin);
+  pMax = pulseNiceCeil(pMax);
+  if (pMin === pMax) {
+    pMin = Math.min(0, pMin - 1);
+    pMax = Math.max(0, pMax + 1);
+  }
+
+  const sDataMin = sVals.length ? Math.min(...sVals) : 0;
+  const sDataMax = sVals.length ? Math.max(...sVals) : 1;
+  const pRange = pMax - pMin;
+  const zeroFrac = (0 - pMin) / pRange;
+
+  if (zeroFrac <= 1e-6) {
+    const sMax = pulseNiceCeil(Math.max(sDataMax, 0) * (1 + pad) || 1);
+    return { primary: { min: pMin, max: pMax }, secondary: { min: 0, max: Math.max(sMax, 1) } };
+  }
+  if (zeroFrac >= 1 - 1e-6) {
+    const sMin = pulseNiceFloor(Math.min(sDataMin, 0) * (1 + pad) || -1);
+    return { primary: { min: pMin, max: pMax }, secondary: { min: Math.min(sMin, -1), max: 0 } };
+  }
+
+  const needBelow = Math.max(0, -Math.min(sDataMin, 0));
+  const needAbove = Math.max(0, Math.max(sDataMax, 0));
+  const total =
+    Math.max(needBelow / zeroFrac, needAbove / (1 - zeroFrac), Number.EPSILON) * (1 + pad);
+  // Keep zeroFrac exact; round the positive side up so ticks stay readable.
+  const sMax = pulseNiceCeil((1 - zeroFrac) * total);
+  const sMin = sMax === 0 ? pulseNiceFloor(-zeroFrac * total) : -(zeroFrac / (1 - zeroFrac)) * sMax;
+  return { primary: { min: pMin, max: pMax }, secondary: { min: sMin, max: Math.max(sMax, 1e-6) } };
+}
+
+/** Diverging daily balance bars (left €) plus cumulative running total (right €). */
 export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInput): Opts {
   const todayKey = calendarDay();
-  const row = (label: string, value: string) =>
-    `<div style="display:flex;justify-content:space-between;gap:16px;color:${COLORS.muted}"><span>${label}</span><b style="color:${COLORS.text}">${value}</b></div>`;
+  const dense = days.length > 14;
+  const row = (label: string, value: string, accent?: string) =>
+    `<div style="display:flex;justify-content:space-between;gap:18px;color:${COLORS.muted}"><span>${label}</span><b style="color:${accent ?? COLORS.text};font-variant-numeric:tabular-nums">${value}</b></div>`;
   let running = 0;
+  const categories = days.map((d) => pulseDayLabel(d.ts, fmt.loc, dense));
   const columns = days.map((d) => {
     const today = d.day === todayKey;
     return {
-      x: d.ts,
+      x: pulseDayLabel(d.ts, fmt.loc, dense),
       y: d.balance === undefined ? null : +d.balance.toFixed(2),
       fillColor: d.balance === undefined ? COLORS.faint : pulseBarColor(d.balance, today),
     };
   });
   const cumulative = days.map((d) => {
     if (d.balance !== undefined) running += d.balance;
-    return { x: d.ts, y: +running.toFixed(2) };
+    return { x: pulseDayLabel(d.ts, fmt.loc, dense), y: +running.toFixed(2) };
   });
-  const todayTs = days.find((d) => d.day === todayKey)?.ts;
+  const axes = alignTwinAxisZeros(
+    columns.map((p) => p.y).filter((v): v is number => v !== null),
+    cumulative.map((p) => p.y),
+  );
+  const todayIndex = days.findIndex((d) => d.day === todayKey);
+  const dailyName = i18n.t("pulseDaily");
+  const sumName = i18n.t("pulseCumulative");
+  const axisTitle = (text: string, color: string) => ({
+    text,
+    offsetX: 0,
+    offsetY: 0,
+    style: { color, fontSize: "12px", fontWeight: 700, fontFamily: "Inter, system-ui, sans-serif" },
+  });
 
   return withBase({
     chart: {
       type: "line",
-      height: 240,
+      height: 268,
+      parentHeightOffset: 0,
       animations: {
         enabled: true,
-        speed: 520,
-        animateGradually: { enabled: true, delay: 28 },
+        speed: 480,
+        animateGradually: { enabled: true, delay: 24 },
         dynamicAnimation: { enabled: false },
       },
       events: {
@@ -530,47 +615,127 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
       },
     },
     series: [
-      { name: i18n.t("kpiBalance"), type: "column", data: columns },
-      { name: i18n.t("pulseCumulative"), type: "line", data: cumulative },
+      { name: dailyName, type: "column", data: columns },
+      { name: sumName, type: "area", data: cumulative },
     ],
     colors: [COLORS.gridOut, COLORS.accent],
-    stroke: { width: [0, 2.4], curve: ["smooth", "stepline"] },
+    stroke: { width: [0, 2.5], curve: ["smooth", "straight"], lineCap: "round" },
     plotOptions: {
       bar: {
-        columnWidth: days.length > 14 ? "58%" : "68%",
-        borderRadius: 5,
-        borderRadiusApplication: "around",
-        borderRadiusWhenStacked: "all",
+        columnWidth: dense ? "42%" : "46%",
+        borderRadius: 4,
+        borderRadiusApplication: "end",
+        borderRadiusWhenStacked: "last",
       },
     },
-    fill: { opacity: [0.92, 1] },
+    fill: {
+      type: ["solid", "gradient"],
+      opacity: [0.9, 1],
+      gradient: {
+        type: "vertical",
+        shadeIntensity: 0.15,
+        gradientToColors: [COLORS.accent],
+        inverseColors: false,
+        opacityFrom: 0.28,
+        opacityTo: 0.02,
+        stops: [0, 95],
+      },
+    },
+    markers: {
+      size: [0, 0],
+      hover: { size: 5, sizeOffset: 1 },
+      strokeWidth: 0,
+      colors: [COLORS.accent],
+    },
+    legend: {
+      show: true,
+      position: "top",
+      horizontalAlign: "left",
+      fontSize: "12px",
+      fontWeight: 600,
+      markers: { size: 5, shape: "circle", offsetX: -2 },
+      itemMargin: { horizontal: 14, vertical: 0 },
+      labels: { colors: COLORS.text },
+      onItemClick: { toggleDataSeries: false },
+      onItemHover: { highlightDataSeries: true },
+    },
+    grid: {
+      borderColor: COLORS.grid,
+      strokeDashArray: 3,
+      padding: { left: 8, right: 8, top: 4, bottom: 0 },
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+    },
     xaxis: {
-      type: "datetime",
+      type: "category",
+      categories,
+      tickPlacement: "on",
+      tickAmount: dense ? Math.min(10, days.length) : days.length,
       labels: {
-        datetimeUTC: false,
-        format: days.length > 14 ? "dd." : "ddd dd.",
+        rotate: 0,
+        hideOverlappingLabels: true,
+        style: { colors: COLORS.muted, fontSize: dense ? "10px" : "11px", fontWeight: 550 },
       },
       axisBorder: { show: false },
       axisTicks: { show: false },
+      crosshairs: {
+        show: true,
+        width: 1,
+        stroke: { color: COLORS.accent, width: 1, dashArray: 4 },
+      },
     },
-    yaxis: {
-      decimalsInFloat: 1,
-      labels: { formatter: (v: number) => fmt.n(v, 0) },
-      title: { text: "€" },
-    },
+    yaxis: [
+      {
+        seriesName: dailyName,
+        min: axes.primary.min,
+        max: axes.primary.max,
+        tickAmount: 5,
+        forceNiceScale: false,
+        decimalsInFloat: 0,
+        title: axisTitle(i18n.t("pulseDailyAxis"), COLORS.muted),
+        labels: {
+          style: { colors: COLORS.muted, fontSize: "11px", fontWeight: 550 },
+          formatter: (v: number) => `${fmt.n(v, 0)} €`,
+        },
+      },
+      {
+        seriesName: sumName,
+        opposite: true,
+        min: axes.secondary.min,
+        max: axes.secondary.max,
+        tickAmount: 5,
+        forceNiceScale: false,
+        decimalsInFloat: 0,
+        title: axisTitle(i18n.t("pulseSumAxis"), COLORS.accent),
+        labels: {
+          style: { colors: COLORS.accent, fontSize: "11px", fontWeight: 600 },
+          // Padding below the shared zero is empty; hide negative ticks on the sum axis.
+          formatter: (v: number) => (v < -1e-9 ? "" : `${fmt.n(v, 0)} €`),
+        },
+      },
+    ],
     annotations: {
-      yaxis: [{ y: 0, borderColor: COLORS.muted, strokeDashArray: 0, opacity: 0.45 }],
-      ...(todayTs !== undefined
+      yaxis: [{ y: 0, yAxisIndex: 0, borderColor: "rgba(148,163,184,0.55)", strokeDashArray: 0, opacity: 0.9 }],
+      ...(todayIndex >= 0
         ? {
             xaxis: [
               {
-                x: todayTs,
+                x: categories[todayIndex],
                 borderColor: COLORS.accent,
-                opacity: 0.35,
+                strokeDashArray: 5,
+                opacity: 0.55,
                 label: {
                   text: i18n.t("periodToday"),
+                  orientation: "horizontal",
                   borderWidth: 0,
-                  style: { background: "transparent", color: COLORS.accent, fontSize: "11px", fontWeight: 700 },
+                  offsetY: -2,
+                  style: {
+                    background: COLORS.accent,
+                    color: COLORS.bg,
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: { left: 6, right: 6, top: 2, bottom: 2 },
+                  },
                 },
               },
             ],
@@ -583,9 +748,12 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
       custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
         const d = days[dataPointIndex];
         if (!d) return "";
-        return `<div style="padding:12px 14px;min-width:200px">
-          <div style="font-weight:700;margin-bottom:8px">${fmt.day(d.ts)}</div>
-          ${row(i18n.t("kpiBalance"), `${fmt.n(d.balance, 2)} €`)}
+        const sum = cumulative[dataPointIndex]?.y;
+        return `<div style="padding:12px 14px;min-width:212px">
+          <div style="font-weight:700;margin-bottom:8px;color:${COLORS.text}">${fmt.day(d.ts)}</div>
+          ${row(dailyName, `${fmt.n(d.balance, 2)} €`, d.balance !== undefined && d.balance < 0 ? COLORS.gridIn : COLORS.gridOut)}
+          ${row(sumName, `${fmt.n(sum, 2)} €`, COLORS.accent)}
+          <div style="height:1px;background:${COLORS.grid};margin:8px 0"></div>
           ${row(i18n.t("kpiRevenue"), `${fmt.n(d.feedRevenue, 2)} €`)}
           ${row(i18n.t("kpiSaving", { when: "" }).trim(), `${fmt.n(d.saving, 2)} €`)}
           ${row(i18n.t("kpiCostGross"), `${fmt.n(d.costToday, 2)} €`)}

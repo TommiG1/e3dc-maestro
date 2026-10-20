@@ -38,44 +38,6 @@ export function loadCollapsed(): Set<string> {
   }
 }
 
-const CONTROLS_KEY = "e3dc-maestro.live-controls";
-
-/** The live discharge/reserve pair starts collapsed so the sliders do not take the screen. */
-export function loadControlsOpen(): boolean {
-  try {
-    return localStorage.getItem(CONTROLS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-const AUTO_KEY = "e3dc-maestro.live-auto";
-
-/** The live auto card starts collapsed; the switch stays visible either way. */
-export function loadAutoOpen(): boolean {
-  try {
-    return localStorage.getItem(AUTO_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function saveAutoOpen(open: boolean): void {
-  try {
-    localStorage.setItem(AUTO_KEY, open ? "1" : "0");
-  } catch {
-    // storage blocked or full: the card still toggles for this session
-  }
-}
-
-export function saveControlsOpen(open: boolean): void {
-  try {
-    localStorage.setItem(CONTROLS_KEY, open ? "1" : "0");
-  } catch {
-    // storage blocked or full: the pair still toggles for this session
-  }
-}
-
 export function saveCollapsed(collapsed: ReadonlySet<string>): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...collapsed]));

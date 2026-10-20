@@ -276,13 +276,22 @@ export interface BalanceDay {
   balance?: number;
 }
 
-/** Same formula as the live Tagesbilanz for a past calendar day. */
+/**
+ * Same formula as the live Tagesbilanz.
+ * Missing recorder parts (common early after a sensor appears) count as 0 so
+ * week/month/year totals still resolve when e.g. wear has no long-term stats yet.
+ */
 export function dayBalance(parts: Pick<BalanceDay, BalancePartKey>): number | undefined {
   const { feedRevenue, saving, costToday, wear } = parts;
-  if (feedRevenue === undefined || saving === undefined || costToday === undefined || wear === undefined) {
+  if (
+    feedRevenue === undefined &&
+    saving === undefined &&
+    costToday === undefined &&
+    wear === undefined
+  ) {
     return undefined;
   }
-  return feedRevenue + saving - costToday - wear;
+  return (feedRevenue ?? 0) + (saving ?? 0) - (costToday ?? 0) - (wear ?? 0);
 }
 
 /** Recorder row start → local midnight ms. Accepts unix seconds/ms or ISO strings. */

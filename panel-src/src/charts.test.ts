@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asMonths, balancePulseOptions, socArc, socRingGradient, useChartTheme } from "./charts";
+import { alignTwinAxisZeros, asMonths, balancePulseOptions, socArc, socRingGradient, useChartTheme } from "./charts";
 import { makeFmt } from "./format";
 import { makeI18n } from "./i18n";
 import type { BalanceDay } from "./history";
@@ -13,8 +13,19 @@ describe("asMonths", () => {
   });
 });
 
+describe("alignTwinAxisZeros", () => {
+  it("keeps both zeros on the same relative height", () => {
+    const aligned = alignTwinAxisZeros([-5, 20], [10, 200]);
+    const pFrac = (0 - aligned.primary.min) / (aligned.primary.max - aligned.primary.min);
+    const sFrac = (0 - aligned.secondary.min) / (aligned.secondary.max - aligned.secondary.min);
+    expect(pFrac).toBeCloseTo(sFrac, 5);
+    expect(aligned.secondary.min).toBeLessThan(0);
+    expect(aligned.secondary.max).toBeGreaterThanOrEqual(200);
+  });
+});
+
 describe("balancePulseOptions", () => {
-  it("builds diverging columns and a cumulative line", () => {
+  it("builds diverging columns and a cumulative area on dual axes", () => {
     useChartTheme("dark");
     const days: BalanceDay[] = [
       { day: "2026-10-20", ts: new Date(2026, 9, 20).getTime(), balance: 2, feedRevenue: 3, saving: 1, costToday: 1.5, wear: 0.5 },
@@ -24,11 +35,24 @@ describe("balancePulseOptions", () => {
     const series = opts.series as { name: string; type: string; data: { y: number | null; fillColor?: string }[] }[];
     expect(series).toHaveLength(2);
     expect(series[0]?.type).toBe("column");
-    expect(series[1]?.type).toBe("line");
+    expect(series[1]?.type).toBe("area");
+    expect(series[0]?.name).toBe("Tagesbilanz");
+    expect(series[1]?.name).toBe("Laufende Summe");
     expect(series[0]?.data.map((p) => p.y)).toEqual([2, -1]);
     expect(series[1]?.data.map((p) => p.y)).toEqual([2, 1]);
     expect(series[0]?.data[0]?.fillColor).toBeTruthy();
     expect(series[0]?.data[1]?.fillColor).toBeTruthy();
+    expect(opts.legend?.show).toBe(true);
+    const axes = opts.yaxis as { opposite?: boolean; min?: number; max?: number; title?: { text?: string } }[];
+    expect(axes).toHaveLength(2);
+    expect(axes[0]?.title?.text).toBe("€ / Tag");
+    expect(axes[1]?.opposite).toBe(true);
+    expect(axes[1]?.title?.text).toBe("Summe €");
+    expect(axes[0]?.min).toBeLessThan(0);
+    expect(axes[1]?.min).toBeLessThan(0);
+    const pFrac = (0 - (axes[0]?.min ?? 0)) / ((axes[0]?.max ?? 1) - (axes[0]?.min ?? 0));
+    const sFrac = (0 - (axes[1]?.min ?? 0)) / ((axes[1]?.max ?? 1) - (axes[1]?.min ?? 0));
+    expect(pFrac).toBeCloseTo(sFrac, 5);
   });
 });
 

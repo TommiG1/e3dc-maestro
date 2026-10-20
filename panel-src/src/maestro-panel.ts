@@ -25,7 +25,7 @@ import { powerHistoryOptions, useChartTheme } from "./charts";
 import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
 import { makeFmt, type Fmt } from "./format";
-import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollapsed, saveControlsOpen } from "./groups";
+import { loadCollapsed, saveCollapsed } from "./groups";
 import {
   calendarDay,
   loadBalanceDays,
@@ -84,7 +84,7 @@ import { slotsFrom, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
-import { decisionView, forecastView, liveView, planView, type Ctx } from "./views";
+import { batteryControlOverlay, decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 import { helpAnchor, type HelpAction } from "./help-content";
 import { helpOverlay } from "./help-view";
 
@@ -169,8 +169,7 @@ class MaestroPanel extends LitElement {
   private _resolvedAt = 0;
   private _consumers: Consumer[] = loadConsumers();
   private _collapsed = loadCollapsed();
-  private _controlsOpen = loadControlsOpen();
-  private _autoOpen = loadAutoOpen();
+  private _batteryCtrlOpen = false;
   private _expert = loadExpert();
   private _planTuneOpen = loadPlanTuneOpen();
   private _pvOpen = loadPvOpen();
@@ -186,7 +185,7 @@ class MaestroPanel extends LitElement {
   private _rangePrefetch = new Set<string>();
   private _calOpen = false;
   private _calViewAnchor = calendarDay();
-  private _pulseRange: PulseRange = "week";
+  private _pulseRange: PulseRange = "month";
   private _pulseDays?: BalanceDay[];
   private _pulseState: "idle" | "loading" | "ready" | "error" = "idle";
   private _debugOpen = false;
@@ -306,7 +305,10 @@ class MaestroPanel extends LitElement {
         this._pauseOpen = false;
         this.requestUpdate();
       } else if (this._help) this._closeHelp();
-      else if (this._hist) this._closeHistory();
+      else if (this._batteryCtrlOpen) {
+        this._batteryCtrlOpen = false;
+        this.requestUpdate();
+      } else if (this._hist) this._closeHistory();
       else if (this._sheet) this._setSheet(false);
       return;
     }
@@ -583,7 +585,11 @@ class MaestroPanel extends LitElement {
     try {
       await Promise.all(tasks);
     } catch {
-      // recorder excluded / not ready: tiles keep their empty spark state
+      // recorder excluded / not ready — mark the range loaded so the UI can show empty state
+      if (this._balanceRange().cacheKey === range.cacheKey && this._rangeSums === undefined) {
+        this._rangeSums = {};
+        touchLruCache(this._rangeSumsCache, range.cacheKey, {});
+      }
     }
     this.requestUpdate();
     this._prefetchNeighborRanges(hass, range.grain, range.anchor);
@@ -1066,16 +1072,13 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
         if (id === "balancePulse" && !next.has("balancePulse")) void this._ensureHistory();
       },
-      controlsOpen: this._controlsOpen,
-      onToggleControls: () => {
-        this._controlsOpen = !this._controlsOpen;
-        saveControlsOpen(this._controlsOpen);
+      batteryCtrlOpen: this._batteryCtrlOpen,
+      onOpenBatteryCtrl: () => {
+        this._batteryCtrlOpen = true;
         this.requestUpdate();
       },
-      autoOpen: this._autoOpen,
-      onToggleAuto: () => {
-        this._autoOpen = !this._autoOpen;
-        saveAutoOpen(this._autoOpen);
+      onCloseBatteryCtrl: () => {
+        this._batteryCtrlOpen = false;
         this.requestUpdate();
       },
       balanceRange: this._balanceRange(),
@@ -1348,6 +1351,7 @@ class MaestroPanel extends LitElement {
             },
           )
         : nothing}
+      ${this._batteryCtrlOpen ? batteryControlOverlay(ctx) : nothing}
       ${this._hist
         ? html`<div class="scrim open hist-scrim" @click=${() => this._closeHistory()}></div>
             <aside class="overlay" role="dialog" aria-modal="true" aria-label=${this._hist.name}>

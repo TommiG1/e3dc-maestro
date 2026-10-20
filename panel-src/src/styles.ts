@@ -757,6 +757,80 @@ export const styles = css`
   .soc-head h3 {
     margin: 0;
   }
+  .soc-ctrl-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--stroke-strong);
+    background: color-mix(in srgb, var(--fill) 88%, transparent);
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .soc-ctrl-btn:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--stroke-strong));
+    background: color-mix(in srgb, var(--accent-wash) 55%, var(--fill));
+  }
+  .soc-ctrl-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .soc-ctrl-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .soc-ctrl-label {
+    font: 700 13px/1.2 Inter, system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+  .soc-ctrl-meta {
+    color: var(--muted);
+    font: 550 11px/1.3 Inter, system-ui, sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .soc-ctrl-btn svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--muted);
+  }
+  .overlay.battery-ctrl {
+    width: min(440px, calc(100% - 24px));
+    max-height: min(720px, calc(100% - 24px));
+  }
+  .battery-ctrl-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .battery-ctrl-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--stroke);
+    background: color-mix(in srgb, var(--fill) 70%, transparent);
+  }
+  .battery-ctrl-block .force {
+    margin: 0;
+  }
+  .battery-ctrl-block .grip-state {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: 4px;
+  }
   .soc-visual {
     flex: 1;
     display: flex;
@@ -997,6 +1071,10 @@ export const styles = css`
   }
   .range-bar .day-nav {
     margin: 0;
+  }
+  .range-empty {
+    margin: 8px 0 0;
+    text-align: right;
   }
   .group-bar {
     display: flex;
@@ -1281,12 +1359,19 @@ export const styles = css`
   .pulse-body {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 4px 0 2px;
+    gap: 2px;
+    padding: 2px 0 0;
   }
   .pulse-chart {
     width: 100%;
-    min-height: 240px;
+    min-height: 268px;
+  }
+  .pulse-chart .apexcharts-legend-series {
+    display: inline-flex !important;
+    align-items: center;
+  }
+  .pulse-chart .apexcharts-yaxis-title-text {
+    letter-spacing: 0.02em;
   }
   .pulse-sum {
     display: inline-flex;
