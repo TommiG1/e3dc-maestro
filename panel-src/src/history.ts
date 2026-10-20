@@ -124,23 +124,98 @@ export const shiftCalendarDay = (day: string, delta: number): string => {
   return calendarDay(d);
 };
 
-const periodStart = (period: Exclude<Period, "today">): number => {
-  const start = new Date();
+export const periodStart = (period: Exclude<Period, "today">, now = Date.now()): number => {
+  const start = new Date(now);
   if (period === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
   else start.setDate(1);
   start.setHours(0, 0, 0, 0);
   return start.getTime();
 };
 
-async function loadStatSums(hass: Hass, startMs: number, endMs: number): Promise<Partial<Record<PeriodKey, number>>> {
-  const raw = await hass.callWS<Record<string, { change?: number | null }[]>>({
+type StatRow = { start?: unknown; change?: number | null };
+type StatRaw = Record<string, StatRow[]>;
+
+const BALANCE_PART_KEYS = ["costToday", "feedRevenue", "saving", "wear"] as const;
+export type BalancePartKey = (typeof BALANCE_PART_KEYS)[number];
+export type PulseRange = Exclude<Period, "today">;
+
+export interface BalanceDay {
+  day: string;
+  ts: number;
+  costToday?: number;
+  feedRevenue?: number;
+  saving?: number;
+  wear?: number;
+  balance?: number;
+}
+
+/** Same formula as the live Tagesbilanz for a past calendar day. */
+export function dayBalance(parts: Pick<BalanceDay, BalancePartKey>): number | undefined {
+  const { feedRevenue, saving, costToday, wear } = parts;
+  if (feedRevenue === undefined || saving === undefined || costToday === undefined || wear === undefined) {
+    return undefined;
+  }
+  return feedRevenue + saving - costToday - wear;
+}
+
+/** Recorder row start → local midnight ms. Accepts unix seconds/ms or ISO strings. */
+export function statRowStartMs(row: StatRow): number | undefined {
+  const s = row.start;
+  if (typeof s === "number" && Number.isFinite(s)) return s > 1e12 ? s : s * 1000;
+  if (typeof s === "string") {
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? t : undefined;
+  }
+  return undefined;
+}
+
+function changeByDay(rows: StatRow[] | undefined): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows ?? []) {
+    const ms = statRowStartMs(row);
+    if (ms === undefined || typeof row.change !== "number" || !Number.isFinite(row.change)) continue;
+    map.set(calendarDay(new Date(ms)), row.change);
+  }
+  return map;
+}
+
+/** Build one BalanceDay per local calendar day from Monday / 1st until `now`. */
+export function buildBalanceDays(raw: StatRaw, period: PulseRange, now = Date.now()): BalanceDay[] {
+  const maps = Object.fromEntries(BALANCE_PART_KEYS.map((key) => [key, changeByDay(raw[E[key]])])) as Record<
+    BalancePartKey,
+    Map<string, number>
+  >;
+  const startMs = periodStart(period, now);
+  const endKey = calendarDay(new Date(now));
+  const out: BalanceDay[] = [];
+  const cursor = new Date(startMs);
+  while (calendarDay(cursor) <= endKey) {
+    const day = calendarDay(cursor);
+    const parts = {
+      costToday: maps.costToday.get(day),
+      feedRevenue: maps.feedRevenue.get(day),
+      saving: maps.saving.get(day),
+      wear: maps.wear.get(day),
+    };
+    out.push({ day, ts: cursor.getTime(), ...parts, balance: dayBalance(parts) });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
+async function fetchDayStats(hass: Hass, startMs: number, endMs: number, keys: readonly PeriodKey[]): Promise<StatRaw> {
+  return hass.callWS<StatRaw>({
     type: "recorder/statistics_during_period",
     start_time: new Date(startMs).toISOString(),
     end_time: new Date(endMs).toISOString(),
-    statistic_ids: STAT_KEYS.map((key) => E[key]),
+    statistic_ids: keys.map((key) => E[key]),
     period: "day",
     types: ["change"],
   });
+}
+
+async function loadStatSums(hass: Hass, startMs: number, endMs: number): Promise<Partial<Record<PeriodKey, number>>> {
+  const raw = await fetchDayStats(hass, startMs, endMs, STAT_KEYS);
   const out: Partial<Record<PeriodKey, number>> = {};
   for (const key of STAT_KEYS) {
     const sum = sumChanges(raw[E[key]]);
@@ -148,6 +223,13 @@ async function loadStatSums(hass: Hass, startMs: number, endMs: number): Promise
   }
   if (out.costToday !== undefined && out.feedRevenue !== undefined) out.costNet = out.costToday - out.feedRevenue;
   return out;
+}
+
+/** Daily economic balances since Monday or the first of the month. */
+export async function loadBalanceDays(hass: Hass, period: PulseRange): Promise<BalanceDay[]> {
+  const now = Date.now();
+  const raw = await fetchDayStats(hass, periodStart(period, now), now, BALANCE_PART_KEYS);
+  return buildBalanceDays(raw, period, now);
 }
 
 /** Sum of daily statistic changes since Monday or the first of the month. */

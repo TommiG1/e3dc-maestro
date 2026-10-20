@@ -29,6 +29,7 @@ import { loadAutoOpen, loadCollapsed, loadControlsOpen, saveAutoOpen, saveCollap
 import {
   calendarDay,
   isCalendarToday,
+  loadBalanceDays,
   loadDaySums,
   loadIst,
   loadPeriodSums,
@@ -36,9 +37,11 @@ import {
   loadPowerSeriesMany,
   loadSparks,
   loadTimeline,
+  type BalanceDay,
   type IstSeries,
   type Period,
   type PeriodKey,
+  type PulseRange,
   type SparkKey,
 } from "./history";
 import { memo } from "./memo";
@@ -175,6 +178,9 @@ class MaestroPanel extends LitElement {
   /** Past day for Tagesbilanz (`YYYY-MM-DD`). Undefined follows the live calendar day. */
   private _balanceDay?: string;
   private _daySums?: Partial<Record<PeriodKey, number>>;
+  private _pulseRange: PulseRange = "week";
+  private _pulseDays?: BalanceDay[];
+  private _pulseState: "idle" | "loading" | "ready" | "error" = "idle";
   private _debugOpen = false;
   private _picking = false;
   private _pickQuery = "";
@@ -544,6 +550,26 @@ class MaestroPanel extends LitElement {
     if (this._screen === "live" && this._period === "today" && this._balanceDay && !isCalendarToday(this._balanceDay)) {
       const day = this._balanceDay;
       await run(`day-${day}`, async () => void (this._daySums = await loadDaySums(hass, day)));
+    }
+    if (this._screen === "live" && !this._collapsed.has("balancePulse")) {
+      const range = this._pulseRange;
+      const key = `pulse-${range}`;
+      if (stale(key)) {
+        if (!this._pulseDays) {
+          this._pulseState = "loading";
+          this.requestUpdate();
+        }
+        this._loadedAt.set(key, Date.now() - HISTORY_TTL + HISTORY_RETRY);
+        try {
+          this._pulseDays = await loadBalanceDays(hass, range);
+          this._pulseState = "ready";
+          this._loadedAt.set(key, Date.now());
+          this.requestUpdate();
+        } catch {
+          this._pulseState = "error";
+          this.requestUpdate();
+        }
+      }
     }
     if (this._screen === "forecast" && this._showIst) {
       await run("ist", async () => void (this._ist = await loadIst(hass, IST_HOURS)));
@@ -953,6 +979,7 @@ class MaestroPanel extends LitElement {
         this._collapsed = next;
         saveCollapsed(next);
         this.requestUpdate();
+        if (id === "balancePulse" && !next.has("balancePulse")) void this._ensureHistory();
       },
       controlsOpen: this._controlsOpen,
       onToggleControls: () => {
@@ -984,6 +1011,18 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
         void this._ensureHistory();
       },
+      pulseRange: this._pulseRange,
+      onPulseRange: (range) => {
+        if (range === this._pulseRange) return;
+        this._pulseRange = range;
+        this._pulseDays = undefined;
+        this._pulseState = "idle";
+        this._loadedAt.delete(`pulse-${range}`);
+        this.requestUpdate();
+        void this._ensureHistory();
+      },
+      pulseDays: this._pulseDays,
+      pulseState: this._pulseState,
       pending: this._pending,
       groupId: this._screen === "plant" ? this._plantGroup : this._settingsGroup,
       onOpenGroup: (id) => this._openSettingsGroup(id),

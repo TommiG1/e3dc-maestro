@@ -1158,6 +1158,26 @@ export const styles = css`
   .group-sum.neg {
     color: var(--grid-in);
   }
+  .pulse-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 2px;
+  }
+  .pulse-chart {
+    width: 100%;
+    min-height: 240px;
+  }
+  .pulse-sum {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pulse-spark {
+    width: 72px;
+    height: 28px;
+    flex: none;
+  }
   .group-head svg {
     width: 16px;
     height: 16px;

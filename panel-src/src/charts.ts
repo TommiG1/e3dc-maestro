@@ -1,7 +1,7 @@
 import type ApexChartsType from "apexcharts";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
-import type { IstSeries } from "./history";
+import { calendarDay, type BalanceDay, type IstSeries } from "./history";
 import type { ThemeId } from "./theme";
 import {
   chartSlots,
@@ -475,5 +475,124 @@ export function sparkOptions(data: Point[], color: string): Opts {
     fill: { type: "gradient", gradient: { opacityFrom: 0.35, opacityTo: 0 } },
     xaxis: { type: "datetime" },
     tooltip: { enabled: false },
+  });
+}
+
+export interface BalancePulseInput {
+  days: BalanceDay[];
+  fmt: Fmt;
+  i18n: I18n;
+  onDay?: (day: string) => void;
+}
+
+const pulseBarColor = (value: number, today: boolean): string => {
+  if (value >= 0) return today ? "#6ee7b7" : COLORS.gridOut;
+  return today ? "#fca5a5" : COLORS.gridIn;
+};
+
+/** Diverging daily balance bars plus a cumulative euro line for week/month. */
+export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInput): Opts {
+  const todayKey = calendarDay();
+  const row = (label: string, value: string) =>
+    `<div style="display:flex;justify-content:space-between;gap:16px;color:${COLORS.muted}"><span>${label}</span><b style="color:${COLORS.text}">${value}</b></div>`;
+  let running = 0;
+  const columns = days.map((d) => {
+    const today = d.day === todayKey;
+    return {
+      x: d.ts,
+      y: d.balance === undefined ? null : +d.balance.toFixed(2),
+      fillColor: d.balance === undefined ? COLORS.faint : pulseBarColor(d.balance, today),
+    };
+  });
+  const cumulative = days.map((d) => {
+    if (d.balance !== undefined) running += d.balance;
+    return { x: d.ts, y: +running.toFixed(2) };
+  });
+  const todayTs = days.find((d) => d.day === todayKey)?.ts;
+
+  return withBase({
+    chart: {
+      type: "line",
+      height: 240,
+      animations: {
+        enabled: true,
+        speed: 520,
+        animateGradually: { enabled: true, delay: 28 },
+        dynamicAnimation: { enabled: false },
+      },
+      events: {
+        click: (_event: unknown, _ctx: unknown, config: { dataPointIndex?: number; seriesIndex?: number }) => {
+          const index = config.dataPointIndex;
+          if (index === undefined || index < 0 || (config.seriesIndex ?? 0) > 0) return;
+          const day = days[index];
+          if (day) onDay?.(day.day);
+        },
+      },
+    },
+    series: [
+      { name: i18n.t("kpiBalance"), type: "column", data: columns },
+      { name: i18n.t("pulseCumulative"), type: "line", data: cumulative },
+    ],
+    colors: [COLORS.gridOut, COLORS.accent],
+    stroke: { width: [0, 2.4], curve: ["smooth", "stepline"] },
+    plotOptions: {
+      bar: {
+        columnWidth: days.length > 14 ? "58%" : "68%",
+        borderRadius: 5,
+        borderRadiusApplication: "around",
+        borderRadiusWhenStacked: "all",
+      },
+    },
+    fill: { opacity: [0.92, 1] },
+    xaxis: {
+      type: "datetime",
+      labels: {
+        datetimeUTC: false,
+        format: days.length > 14 ? "dd." : "ddd dd.",
+      },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      decimalsInFloat: 1,
+      labels: { formatter: (v: number) => fmt.n(v, 0) },
+      title: { text: "€" },
+    },
+    annotations: {
+      yaxis: [{ y: 0, borderColor: COLORS.muted, strokeDashArray: 0, opacity: 0.45 }],
+      ...(todayTs !== undefined
+        ? {
+            xaxis: [
+              {
+                x: todayTs,
+                borderColor: COLORS.accent,
+                opacity: 0.35,
+                label: {
+                  text: i18n.t("periodToday"),
+                  borderWidth: 0,
+                  style: { background: "transparent", color: COLORS.accent, fontSize: "11px", fontWeight: 700 },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    tooltip: {
+      shared: true,
+      intersect: false,
+      custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        const d = days[dataPointIndex];
+        if (!d) return "";
+        return `<div style="padding:12px 14px;min-width:200px">
+          <div style="font-weight:700;margin-bottom:8px">${fmt.day(d.ts)}</div>
+          ${row(i18n.t("kpiBalance"), `${fmt.n(d.balance, 2)} €`)}
+          ${row(i18n.t("kpiRevenue"), `${fmt.n(d.feedRevenue, 2)} €`)}
+          ${row(i18n.t("kpiSaving", { when: "" }).trim(), `${fmt.n(d.saving, 2)} €`)}
+          ${row(i18n.t("kpiCostGross"), `${fmt.n(d.costToday, 2)} €`)}
+          ${row(i18n.t("kpiWear"), `${fmt.n(d.wear, 2)} €`)}
+          <div style="margin-top:8px;color:${COLORS.muted};font-size:11px">${i18n.t("pulseClickDay")}</div>
+        </div>`;
+      },
+    },
   });
 }

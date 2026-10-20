@@ -5,6 +5,7 @@ import { E, isOn, num, type Hass, type HassEntity } from "./entities";
 const shown = (e: HassEntity | undefined): string =>
   !e || e.state === "unknown" || e.state === "unavailable" ? "–" : e.state;
 import {
+  balancePulseOptions,
   brushOptions,
   COLORS,
   forecastOptions,
@@ -31,9 +32,11 @@ import {
   isCalendarToday,
   parseCalendarDay,
   shiftCalendarDay,
+  type BalanceDay,
   type IstSeries,
   type Period,
   type PeriodKey,
+  type PulseRange,
   type SparkKey,
 } from "./history";
 import { downloadCsv } from "./csv";
@@ -112,6 +115,10 @@ export interface Ctx {
   balanceDay: string;
   daySums?: Partial<Record<PeriodKey, number>>;
   onBalanceDay: (day: string) => void;
+  pulseRange: PulseRange;
+  onPulseRange: (range: PulseRange) => void;
+  pulseDays?: BalanceDay[];
+  pulseState?: "idle" | "loading" | "ready" | "error";
   pending: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onPress: (id: string) => void;
@@ -493,7 +500,14 @@ export function liveView(c: Ctx): TemplateResult {
   const openToday = () => {
     if (c.collapsed.has("today")) c.onToggleGroup("today");
   };
-  const group = (id: string, title: string, summary: TemplateResult, body: TemplateResult, extra?: TemplateResult | typeof nothing) => {
+  const group = (
+    id: string,
+    title: string,
+    summary: TemplateResult,
+    body: TemplateResult,
+    extra?: TemplateResult | typeof nothing,
+    bodyClass = "grid kpis",
+  ) => {
     const open = !c.collapsed.has(id);
     return html`<section class="group">
       <div class="group-bar">
@@ -504,7 +518,7 @@ export function liveView(c: Ctx): TemplateResult {
         </button>
         ${extra ?? nothing}
       </div>
-      ${open ? html`<div class="grid kpis">${body}</div>` : nothing}
+      ${open ? html`<div class=${bodyClass}>${body}</div>` : nothing}
     </section>`;
   };
 
@@ -767,7 +781,55 @@ export function liveView(c: Ctx): TemplateResult {
       </div>
     `,
       dayNav,
-    )}`;
+    )}
+    ${(() => {
+      const days = c.pulseDays ?? [];
+      const defined = days.filter((d) => d.balance !== undefined);
+      const pulseSum = defined.length ? defined.reduce((acc, d) => acc + d.balance!, 0) : undefined;
+      const pulseTone = pulseSum === undefined || pulseSum === 0 ? "" : pulseSum > 0 ? "pos" : "neg";
+      const sparkPts = defined.map((d) => [d.ts, d.balance!] as [number, number]);
+      const sparkColor = pulseTone === "neg" ? COLORS.gridIn : COLORS.gridOut;
+      const pulseState = c.pulseState ?? "idle";
+      const pulseBody =
+        pulseState === "error"
+          ? html`<p class="err">${t("historyFailed")}</p>`
+          : pulseState === "loading" && !days.length
+            ? html`<p class="hint">${t("loading")}</p>`
+            : !defined.length
+              ? html`<p class="hint">${t("pulseEmpty")}</p>`
+              : html`<maestro-chart
+                  class="pulse-chart"
+                  .options=${memo(
+                    `pulse-${c.pulseRange}`,
+                    [c.theme, c.fmt.loc, days],
+                    () =>
+                      balancePulseOptions({
+                        days,
+                        fmt: c.fmt,
+                        i18n: c.i18n,
+                        onDay: (day) => c.onBalanceDay(day),
+                      }),
+                  )}
+                ></maestro-chart>`;
+      return group(
+        "balancePulse",
+        t("pulseTitle"),
+        html`<span class="pulse-sum">
+          ${sparkPts.length
+            ? html`<maestro-chart class="pulse-spark" .options=${memo(`pulse-spark-${c.pulseRange}`, [c.theme, sparkPts], () => sparkOptions(sparkPts, sparkColor))}></maestro-chart>`
+            : nothing}
+          <b class="group-sum ${pulseTone}">${euroOf(pulseSum)}</b>
+        </span>`,
+        pulseBody,
+        html`<div class="seg period" role="group" aria-label=${t("pulseTitle")}>
+          ${(["week", "month"] as const).map(
+            (r) =>
+              html`<button class=${c.pulseRange === r ? "active" : ""} aria-pressed=${c.pulseRange === r} @click=${() => c.onPulseRange(r)}>${t(r === "week" ? "periodWeek" : "periodMonth")}</button>`,
+          )}
+        </div>`,
+        "pulse-body",
+      );
+    })()}`;
 }
 
 const qualityLabel = (t: Ctx["i18n"]["t"], state: string | undefined): string => {

@@ -18,11 +18,11 @@ describe("parseCollapsed", () => {
 
 describe("collapsedFromStorage", () => {
   it("starts with the live number groups closed", () => {
-    expect([...collapsedFromStorage(null, null)].sort()).toEqual(["balance", "today"]);
+    expect([...collapsedFromStorage(null, null)].sort()).toEqual(["balance", "balancePulse", "today"]);
   });
 
   it("keeps a saved choice and a previously closed plant group", () => {
-    expect([...collapsedFromStorage(null, '["plant-phases"]')].sort()).toEqual(["balance", "plant-phases", "today"]);
+    expect([...collapsedFromStorage(null, '["plant-phases"]')].sort()).toEqual(["balance", "balancePulse", "plant-phases", "today"]);
     expect([...collapsedFromStorage("[]", '["today"]')]).toEqual([]);
   });
 });
