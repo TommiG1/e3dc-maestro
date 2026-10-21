@@ -271,11 +271,9 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         native_unit_of_measurement="kWh",
         param_key=CONF_MAX_GRID_CHARGE_KWH,
         min_value=0, max_value=20, step_value=0.5,
-        # Mindestens das Doppelte der Akkukapazität zulassen (z. B. um an
-        # einem Tag sowohl die Notstromreserve zu überbrücken als auch den
-        # nächsten Tag vorzuladen) – 20 bleibt die Untergrenze für kleine
-        # Speicher, damit sich am bisherigen Standardverhalten nichts ändert.
-        dynamic_max_fn=lambda p: max(20.0, getattr(p, "battery_capacity_kwh", 0.0) * 2.0),
+        # Sicherheitsgrenze (0 = keine): bis zum Dreifachen der Akkukapazität,
+        # damit sie im Normalbetrieb mit mehreren günstigen Fenstern nie greift.
+        dynamic_max_fn=lambda p: max(20.0, getattr(p, "battery_capacity_kwh", 0.0) * 3.0),
     ),
     MaestroNumberDescription(
         key=CONF_FIXED_BUY_PRICE,

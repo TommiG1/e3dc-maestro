@@ -103,6 +103,7 @@ from .coordinator_price_plan import CoordinatorPricePlanMixin
 from .coordinator_sensors import CoordinatorSensorsMixin
 from .coordinator_sizing import CoordinatorSizingMixin
 from .forecast import ForecastResult
+from .grid_charge_need import horizon_price_fn as _horizon_price_fn
 from .grid_charge_strategy import strategy_updates
 
 # Re-exports for tests and external imports (public API stability).
@@ -677,8 +678,17 @@ class E3DCMaestroCoordinator(
                 )
             except Exception as err:
                 _LOGGER.debug("PV stats refresh failed: %s", err)
-        await self._async_update_forecast(state_data, now)
-        await self._async_update_price_plan(state_data, now)
+        horizon = (
+            await self._async_price_horizon(now)
+            if self._params.price_plan_enabled or opts.get(CONF_DYNAMIC_TARIFF_ENABLED)
+            else None
+        )
+        price_fn = _horizon_price_fn(horizon)
+        need_fn = self._bridge_need_fn(now, price_fn)
+        if need_fn is not None:
+            state_data = dataclasses.replace(state_data, low_slot_need_kwh=need_fn(now))
+        await self._async_update_forecast(state_data, now, need_fn=need_fn, price_fn=price_fn)
+        await self._async_update_price_plan(state_data, now, horizon)
         await self._async_maybe_run_optimizer(state_data, now)
 
         # Rule engine

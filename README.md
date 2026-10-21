@@ -315,10 +315,10 @@ Charges the battery from the grid when the spot electricity price is cheap.
 | **Dynamic tariffs** | off | Enables cheap grid charging |
 | **Price sensor (€/kWh)** | – | e.g. Tibber or aWATTar price sensor |
 | **Cheap threshold (€/kWh)** | 0.10 | Below this price, grid charging is triggered |
-| **Max. grid charge/day (kWh)** | 3.0 | Daily cap for grid-charged energy |
+| **Max. grid charge/day (kWh)** | 0 | Safety cap: Maestro stops grid charging after this much in one day. Target and forecast decide the amount. 0 = no cap |
 | **Active grid charge in low slot** | off | In a `low` slot, actively charges from the grid up to the target SoC — **regardless of tariff mode** (phase `grid_charge`). For classic off-peak (NT) windows |
-| **Grid charge target in low slot (% SoC)** | 60 | Target SoC charged from the grid inside a `low` slot. Capped by Max. grid charge/day. Acts as upper bound when forecast-based |
-| **Forecast-based grid charge amount** | off | Instead of a fixed target SoC, charges only as much as tomorrow's PV/consumption forecast requires (deficit = consumption − PV). Uses the *tomorrow PV* + *tomorrow consumption* sensors; falls back to the fixed target when no data |
+| **Grid charge target in low slot (% SoC)** | 60 | Target SoC charged from the grid inside a `low` slot. At most the hard SoC limit. Acts as upper bound when forecast-based |
+| **Forecast-based grid charge amount** | off | Instead of a fixed target SoC, charges only what the battery needs from the end of the window until the next cheap window (consumption profile × safety factor − PV forecast, plus reserve). Falls back to the fixed target without consumption profiles |
 
 > **Passive vs. active `low` slot:** Without this option the `low` class is
 > purely passive — it only lifts the PV-surplus ceiling, and only when

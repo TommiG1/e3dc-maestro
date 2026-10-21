@@ -113,13 +113,13 @@ CONF_HT_SUN = "ht_sun"                                # bool
 CONF_DYNAMIC_TARIFF_ENABLED = "dynamic_tariff_enabled"
 CONF_PRICE_SENSOR = "price_sensor"                    # entity_id
 CONF_CHEAP_THRESHOLD = "cheap_threshold"              # €/kWh
-CONF_MAX_GRID_CHARGE_KWH = "max_grid_charge_kwh"      # per day
+CONF_MAX_GRID_CHARGE_KWH = "max_grid_charge_kwh"      # Sicherheitsgrenze pro Tag, 0 = keine
 # Aktive Netzladung im low-Slot (NT-Fenster). Unabhängig vom tariff_mode:
-# lädt AKTIV aus dem Netz bis zum Ziel-SoC, begrenzt durch max_grid_charge_kwh.
+# lädt AKTIV aus dem Netz bis zum Ziel-SoC.
 CONF_LOW_SLOT_GRID_CHARGE_ENABLED = "low_slot_grid_charge_enabled"  # bool
 CONF_LOW_SLOT_TARGET_SOC = "low_slot_target_soc"                    # % SoC-Ziel
 # Prognosebasierte Netzlade-Menge: statt fixem Ziel-SoC wird nur so viel
-# nachgeladen, wie laut morgiger Verbrauchs-/PV-Prognose nötig ist
+# nachgeladen, wie bis zum nächsten günstigen Fenster nötig ist
 # (low_slot_target_soc wirkt dann als Obergrenze).
 CONF_LOW_SLOT_FORECAST_BASED = "low_slot_forecast_based"           # bool
 CONF_LOW_SLOT_HOLD_DISCHARGE = "low_slot_hold_discharge"           # bool
@@ -396,7 +396,7 @@ DEFAULT_HT_OFF = 21
 DEFAULT_HT_MIN = 50
 DEFAULT_HT_SOCKEL = 10
 DEFAULT_CHEAP_THRESHOLD = 0.10
-DEFAULT_MAX_GRID_CHARGE_KWH = 3.0
+DEFAULT_MAX_GRID_CHARGE_KWH = 0.0
 DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED = False
 DEFAULT_LOW_SLOT_TARGET_SOC = 60.0
 DEFAULT_LOW_SLOT_FORECAST_BASED = False

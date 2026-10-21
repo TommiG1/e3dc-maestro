@@ -11,6 +11,23 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1-beta.6] – Netzladung bis zum nächsten günstigen Fenster (2026-10-21)
+
+> **Beta.** Enthält 0.5.1-beta.5. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.6.md](docs/release-notes/v0.5.1-beta.6.md).
+
+### Geändert
+- **Prognosebasierte Netzlademenge** rechnet den Bedarf vom Ende des aktuellen günstigen Fensters bis zum nächsten ([#26](https://github.com/TommiG1/hacs-e3dc-maestro/issues/26)), nicht mehr das Defizit des Kalendertags „morgen“. Live-Steuerung und Prognosekurve nutzen dieselbe Logik.
+- **Max. Netzladung/Tag** ist nur noch eine Sicherheitsgrenze (**0 = keine**); Default und alter 3‑kWh-Standard werden auf 0 migriert. Der Preisplan plant ohne Tagesbudget.
+- **Sicherheitsfaktor Verbrauch** gilt auch für prognosebasierte Netzladung bei Zeitfenster und Preisschwelle.
+
+### Korrekturen
+- **Saisonale Mindestreserve** wird nur noch übersprungen, wenn tatsächlich Netzladung ansteht.
+
+### Hinweise
+- Neustart oder Reload der Integration und hartes Neuladen des Browsers, damit das neue Panel ankommt.
+
+---
+
 ## [0.5.1-beta.5] – Live-Fluss, Zeitraum und Akku-Overlay (2026-10-21)
 
 > **Beta.** Enthält 0.5.1-beta.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.5.md](docs/release-notes/v0.5.1-beta.5.md).

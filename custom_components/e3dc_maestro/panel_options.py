@@ -104,7 +104,7 @@ _SPECS: dict[str, _Spec] = {
     "dynamic_tariff_enabled": ("bool",),
     "price_sensor": _entity(),
     "cheap_threshold": _n(0, 1),
-    "max_grid_charge_kwh": _n(0, 20),
+    "max_grid_charge_kwh": _n(0, 150),
     "low_slot_grid_charge_enabled": ("bool",),
     "low_slot_target_soc": _n(0, 100),
     "low_slot_forecast_based": ("bool",),

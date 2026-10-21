@@ -10,13 +10,8 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_PRICE_SENSOR
 from .grid_charge_strategy import plan_tuning
-from .control_engine import (
-    PricePlanAction,
-    adaptive_emergency_reserve_soc as _adaptive_emergency_reserve_soc,
-    seasonal_reserve_soc as _seasonal_reserve_soc,
-    manual_reserve_soc as _manual_reserve_soc,
-)
-from .price_curve import read_price_horizon
+from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
+from .price_curve import PriceHorizon, read_price_horizon
 from .price_plan_runner import STATUS_OK, PricePlanSnapshot, compute_price_plan
 from .tibber_prices import is_tibber_electricity_price, price_slots_for_home
 
@@ -65,7 +60,25 @@ class CoordinatorPricePlanMixin:
             message=plan.reason,
         )
 
-    async def _async_update_price_plan(self, state: MaestroState, now: datetime) -> None:
+    async def _async_price_horizon(self, now: datetime) -> PriceHorizon | None:
+        """Preiskurve ab jetzt aus dem Preis-Sensor (oder der Tibber-Aktion)."""
+        sensor_id = self.entry.options.get(CONF_PRICE_SENSOR)
+        if not sensor_id:
+            return None
+        attrs: dict = {}
+        st = self.hass.states.get(sensor_id)
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            attrs = dict(st.attributes)
+        horizon = read_price_horizon(attrs, now)
+        if horizon is None:
+            tibber_attrs = await self._async_tibber_curve_attrs(sensor_id, st, now)
+            if tibber_attrs:
+                horizon = read_price_horizon(tibber_attrs, now)
+        return horizon
+
+    async def _async_update_price_plan(
+        self, state: MaestroState, now: datetime, horizon: PriceHorizon | None
+    ) -> None:
         """Compute the plan. Actuation happens in ``decide()`` only when price_plan_active is on."""
         params = self._params
         if not params.price_plan_enabled:
@@ -73,28 +86,7 @@ class CoordinatorPricePlanMixin:
                 self._reset_price_plan()
             return
         try:
-            sensor_id = self.entry.options.get(CONF_PRICE_SENSOR)
-            attrs: dict = {}
-            st = None
-            if sensor_id:
-                st = self.hass.states.get(sensor_id)
-                if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                    attrs = dict(st.attributes)
-            horizon = read_price_horizon(attrs, now)
-            if horizon is None and sensor_id:
-                tibber_attrs = await self._async_tibber_curve_attrs(sensor_id, st, now)
-                if tibber_attrs:
-                    horizon = read_price_horizon(tibber_attrs, now)
-
-            # Floor = max(Ladeschwelle, Notstromreserve)
-            reserve = 0.0
-            manual = _manual_reserve_soc(params)
-            if manual is not None:
-                reserve = manual
-            elif params.seasonal_reserve_enabled:
-                adaptive = _adaptive_emergency_reserve_soc(state, params)
-                reserve = adaptive if adaptive is not None else _seasonal_reserve_soc(now, params)
-            floor_pct = max(float(params.charge_threshold), float(reserve))
+            floor_pct = _reserve_floor_soc(state, params, now)
 
             cons_stats = getattr(self, "_consumption_stats", None)
             pv_stats = getattr(self, "_pv_stats", None)
@@ -111,17 +103,15 @@ class CoordinatorPricePlanMixin:
                 wear = capex / (cycles * 2.0 * cap)
             else:
                 wear = tuning.wear_eur_per_kwh
-            charged_today = float(self.stats.get("grid_to_battery_today_kwh", 0.0))
 
             # Re-plan every 5 min (slot boundaries move "now") or when inputs change.
             fingerprint = (
                 (now.date(), now.hour, now.minute // 5),
                 round(state.soc),
                 tuple(horizon.prices) if horizon else None,
-                round(charged_today, 1),
                 round(floor_pct),
                 params.price_plan_max_soc, tuning, wear,
-                params.max_grid_charge_kwh, params.battery_capacity_kwh,
+                params.battery_capacity_kwh,
             )
             if fingerprint == self._price_plan_fingerprint and self.price_plan is not None:
                 return
@@ -136,8 +126,6 @@ class CoordinatorPricePlanMixin:
                     ceiling_pct=float(params.price_plan_max_soc),
                     max_charge_kw=max(float(params.max_charge_power), 100.0) / 1000.0,
                     max_discharge_kw=max(float(params.inverter_power), 100.0) / 1000.0,
-                    budget_per_day_kwh=float(params.max_grid_charge_kwh),
-                    grid_charged_today_kwh=charged_today,
                     efficiency=tuning.efficiency,
                     min_spread=tuning.min_spread,
                     safety_factor=tuning.safety_factor,

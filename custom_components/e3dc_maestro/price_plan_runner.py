@@ -5,6 +5,7 @@ Pure Python (no Home Assistant imports) so it can be unit-tested.
 from __future__ import annotations
 
 import datetime as _dt
+import math
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -30,7 +31,6 @@ class PricePlanSnapshot:
     plan: PricePlan | None = None
     rows: list[dict[str, Any]] = field(default_factory=list)
     known_until: _dt.datetime | None = None
-    budget_kwh: float | None = None
     floor_pct: float | None = None
     ceiling_pct: float | None = None
     efficiency: float | None = None
@@ -86,8 +86,6 @@ def compute_price_plan(
     ceiling_pct: float,
     max_charge_kw: float,
     max_discharge_kw: float | None,
-    budget_per_day_kwh: float,
-    grid_charged_today_kwh: float,
     efficiency: float,
     min_spread: float,
     safety_factor: float,
@@ -145,11 +143,6 @@ def compute_price_plan(
         pv.append(_slot_kwh(profile, cursor, hours) * factor)
         cursor = cursor + _dt.timedelta(hours=hours)
 
-    crosses_midnight = any(st.date() > local_today for st in starts)
-    budget = max(0.0, budget_per_day_kwh - grid_charged_today_kwh)
-    if crosses_midnight:
-        budget += budget_per_day_kwh
-
     plan = plan_price_charging(
         slot_hours=horizon.slot_hours,
         prices=horizon.prices,
@@ -160,7 +153,7 @@ def compute_price_plan(
         floor_pct=floor_pct,
         ceiling_pct=ceiling_pct,
         max_charge_kw=max_charge_kw,
-        budget_kwh=budget,
+        budget_kwh=math.inf,
         max_discharge_kw=max_discharge_kw,
         efficiency=efficiency,
         min_spread=min_spread,
@@ -192,5 +185,4 @@ def compute_price_plan(
         plan=plan,
         rows=rows,
         known_until=horizon.known_until,
-        budget_kwh=round(budget, 2),
     )

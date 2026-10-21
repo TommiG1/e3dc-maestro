@@ -219,6 +219,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         hass.config_entries.async_update_entry(entry, options=new_options, version=3)
 
+    if entry.version < 4:
+        # Max. Netzladung/Tag ist nur noch eine Sicherheitsgrenze (0 = keine).
+        # Der alte Default von 3 kWh würde die bedarfsbasierte Netzladung
+        # ausbremsen; selbst gewählte Werte bleiben.
+        new_options = dict(entry.options)
+        if new_options.get("max_grid_charge_kwh") == 3.0:
+            new_options["max_grid_charge_kwh"] = 0.0
+            _LOGGER.info(
+                "E3DC Maestro: Max. Netzladung/Tag vom alten Standard 3 kWh auf "
+                "0 (keine Grenze) gesetzt – der Wert ist jetzt nur noch eine "
+                "Sicherheitsgrenze."
+            )
+        hass.config_entries.async_update_entry(entry, options=new_options, version=4)
+
     return True
 
 

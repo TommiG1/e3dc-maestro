@@ -1006,7 +1006,6 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "target_soc_pct": plan.target_soc_pct if plan else None,
                 "total_grid_charge_kwh": round(plan.total_grid_charge_kwh, 2) if plan else None,
                 "expected_saving_eur": round(plan.expected_saving_eur, 2) if plan else None,
-                "budget_kwh": snap.budget_kwh,
                 "floor_pct": snap.floor_pct,
                 "ceiling_pct": snap.ceiling_pct,
                 "efficiency": snap.efficiency,

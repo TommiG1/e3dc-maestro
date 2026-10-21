@@ -1,4 +1,4 @@
-"""Tests für die Verdrahtung Preiskurve → Planer (Profile, Budget, Zusammenfassung)."""
+"""Tests für die Verdrahtung Preiskurve → Planer (Profile, Zusammenfassung)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -36,8 +36,8 @@ def _horizon(today=None, tomorrow=None):
 def _run(horizon, **over):
     kw = dict(
         horizon=horizon, now=NOW, soc_pct=20.0, capacity_kwh=10.0, floor_pct=10.0,
-        ceiling_pct=90.0, max_charge_kw=5.0, max_discharge_kw=5.0, budget_per_day_kwh=10.0,
-        grid_charged_today_kwh=0.0, efficiency=0.85, min_spread=0.08, safety_factor=1.0,
+        ceiling_pct=90.0, max_charge_kw=5.0, max_discharge_kw=5.0,
+        efficiency=0.85, min_spread=0.08, safety_factor=1.0,
         wear_eur_per_kwh=0.0, feed_in_price=0.08, cons_profile_w=[400.0] * 24,
         house_power_w=400.0, pv_today_w=None, pv_tomorrow_w=None, pv_hist_w=None,
     )
@@ -65,7 +65,6 @@ class TestStatus:
         snap = _run(None)
         assert snap.status == STATUS_NO_PRICES
         assert snap.summary == "keine Preise"
-        assert snap.budget_kwh is None
         assert snap.efficiency == 0.85
         assert snap.min_spread == 0.08
         assert snap.floor_pct == 10.0
@@ -85,7 +84,6 @@ class TestStatus:
         assert snap.efficiency == 0.9
         assert snap.min_spread == 0.03
         assert snap.wear_eur_per_kwh == 0.01
-        assert snap.budget_kwh is not None
 
     def test_falls_back_to_house_power(self):
         snap = _run(_horizon(), cons_profile_w=None, house_power_w=500.0)
@@ -114,12 +112,6 @@ class TestPlanFromCurve:
         assert charged, snap.message
         # Geladen wird nur in den günstigen Slots, nie in den 60-ct-Slots
         assert all(r["price"] <= 0.30 for r in charged)
-
-    def test_budget_includes_tomorrow_when_horizon_crosses_midnight(self):
-        crossing = _run(self._curve(), grid_charged_today_kwh=10.0)
-        assert crossing.budget_kwh == 10.0  # heute aufgebraucht, morgen frisch
-        today_only = _run(_horizon(), grid_charged_today_kwh=4.0)
-        assert today_only.budget_kwh == 6.0
 
     def test_pv_falls_back_to_hist_with_discount(self):
         hist = [1000.0] * 24

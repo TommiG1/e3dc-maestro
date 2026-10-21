@@ -50,15 +50,19 @@ def _state():
     )
 
 
+async def _update(c, now=NOW):
+    await c._async_update_price_plan(_state(), now, await c._async_price_horizon(now))
+
+
 def test_disabled_does_nothing():
     c = _Fake(enabled=False, attrs={})
-    asyncio.run(c._async_update_price_plan(_state(), NOW))
+    asyncio.run(_update(c))
     assert c.price_plan is None
 
 
 def test_no_price_sensor_data_gives_status():
     c = _Fake(attrs={})
-    asyncio.run(c._async_update_price_plan(_state(), NOW))
+    asyncio.run(_update(c))
     assert c.price_plan is not None
     assert c.price_plan.status == "no_prices"
     assert c.price_plan.summary == "keine Preise"
@@ -69,23 +73,22 @@ def test_plan_computed_and_cached():
     prices_tomorrow = [0.19] * 6 + [0.30] * 12 + [0.60] * 4 + [0.30] * 2
     attrs = {"raw_today": _raw(9, prices_today), "raw_tomorrow": _raw(10, prices_tomorrow)}
     c = _Fake(attrs=attrs)
-    c._params.max_grid_charge_kwh = 8.0
-    asyncio.run(c._async_update_price_plan(_state(), NOW))
+    asyncio.run(_update(c))
     snap = c.price_plan
     assert snap.status == "ok"
     assert snap.plan.total_grid_charge_kwh > 0
     assert all(r["price"] <= 0.30 for r in snap.rows if r["grid_charge_kwh"] > 0)
     # Zweiter Aufruf im selben 5-Minuten-Fenster liefert dasselbe Objekt (Cache).
-    asyncio.run(c._async_update_price_plan(_state(), NOW + dt.timedelta(minutes=1)))
+    asyncio.run(_update(c, NOW + dt.timedelta(minutes=1)))
     assert c.price_plan is snap
 
 
 def test_disabling_clears_plan():
     c = _Fake(attrs={"raw_today": _raw(9, [0.3] * 24)})
-    asyncio.run(c._async_update_price_plan(_state(), NOW))
+    asyncio.run(_update(c))
     assert c.price_plan is not None
     c._params.price_plan_enabled = False
-    asyncio.run(c._async_update_price_plan(_state(), NOW))
+    asyncio.run(_update(c))
     assert c.price_plan is None
 
 

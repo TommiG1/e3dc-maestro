@@ -209,8 +209,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Up to this price per kWh the electricity counts as cheap.",
   },
   max_grid_charge_kwh: {
-    de: "Höchstens so viele kWh darf Maestro an einem Tag aus dem Netz laden.",
-    en: "Maestro may charge at most this many kWh from the grid in one day.",
+    de: "Sicherheitsgrenze: Nach so vielen kWh aus dem Netz an einem Tag stoppt die Netzladung. Die Menge selbst bestimmen Ziel und Prognose. 0 = keine Grenze.",
+    en: "Safety cap: grid charging stops after this many kWh from the grid in one day. Target and forecast decide the amount. 0 = no cap.",
   },
   low_slot_grid_charge_enabled: {
     de: "Lädt im günstigen Zeitfenster aktiv aus dem Netz, nicht nur per Preisplan.",
@@ -221,8 +221,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "SoC up to which the cheap window charges from the grid.",
   },
   low_slot_forecast_based: {
-    de: "Die Lademenge folgt der Prognose. Das Ziel ist dann nur die Obergrenze.",
-    en: "The amount follows the forecast. The target is then only a cap.",
+    de: "Lädt so viel, wie der Akku bis zum nächsten günstigen Fenster braucht (Verbrauchs- und PV-Prognose, plus Reserve). Das Ziel ist dann nur die Obergrenze.",
+    en: "Charges what the battery needs until the next cheap window (consumption and PV forecast, plus reserve). The target is then only a cap.",
   },
   low_slot_hold_discharge: {
     de: "Sperrt die Entladung, sobald das Ziel im günstigen Fenster erreicht ist.",
@@ -249,8 +249,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Round-trip efficiency. 0.9 means 10 percent is lost.",
   },
   price_plan_safety_factor: {
-    de: "Der Plan rechnet den Verbrauch um diesen Faktor höher, damit der Akku nicht leerläuft.",
-    en: "The plan assumes consumption this much higher so the battery does not run empty.",
+    de: "Maestro rechnet den Verbrauch um diesen Faktor höher, damit der Akku nicht leerläuft. Gilt für den Preisplan (Experte) und für die prognosebasierte Netzladung in Zeitfenstern und unter Preisschwelle.",
+    en: "Maestro assumes consumption this much higher so the battery does not run empty. Applies to the price plan (expert) and to forecast-based grid charging in time windows and below the price threshold.",
   },
   ht_enabled: {
     de: "Schützt den SoC im Hochtarif-Fenster vor Entladung.",

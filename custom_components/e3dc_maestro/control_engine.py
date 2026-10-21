@@ -56,6 +56,9 @@ class MaestroState:
     # F1+: Forward-Looking (vorausschauende Ladung)
     tomorrow_pv_kwh: float | None = None              # morgen erwarteter PV-Ertrag (kWh)
     tomorrow_consumption_kwh: float | None = None     # morgen erwarteter Verbrauch (kWh, wochentagspezifisch)
+    # Energie, die nach dem laufenden günstigen Fenster bis zum nächsten im
+    # Akku sein muss (kWh, siehe grid_charge_need). None = keine Profile.
+    low_slot_need_kwh: float | None = None
     # Schwacher-PV-Tag: Tagesprognose + Referenz-Peak aus PV-Statistik
     pv_forecast_today_kwh: float | None = None        # heute erwarteter Tagesertrag (kWh, Solcast prognose_heute)
     pv_stats_peak_kwh: float | None = None            # historischer Tages-Peak (kWh) aus PV-Statistik
@@ -93,14 +96,15 @@ class MaestroParams:
     # Dynamic tariff
     dynamic_tariff_enabled: bool = False
     cheap_threshold: float = 0.10
-    max_grid_charge_kwh: float = 3.0
+    # Sicherheitsgrenze pro Kalendertag (kWh), 0 = keine. Plant nicht mit,
+    # stoppt nur die Netzladung, wenn sie erreicht ist.
+    max_grid_charge_kwh: float = 0.0
     # Aktive Netzladung im low-Slot (NT-Fenster). Unabhängig vom tariff_mode:
-    # lädt AKTIV aus dem Netz bis low_slot_target_soc, begrenzt durch das
-    # Tagesbudget max_grid_charge_kwh.
+    # lädt AKTIV aus dem Netz bis low_slot_target_soc.
     low_slot_grid_charge_enabled: bool = False
     low_slot_target_soc: float = 60.0
-    # Prognosebasiert: nur so viel nachladen, wie laut morgiger Prognose nötig
-    # (low_slot_target_soc wird dann zur Obergrenze).
+    # Prognosebasiert: nur so viel nachladen, wie bis zum nächsten günstigen
+    # Fenster nötig (low_slot_target_soc wird dann zur Obergrenze).
     low_slot_forecast_based: bool = False
     # Nach Erreichen des Netzlade-Ziels im low-Slot die Entladung sperren
     # (Haus läuft aus dem günstigen Netz), statt den Akku zu entladen und
@@ -515,29 +519,31 @@ def forward_looking_charge_target(
 def low_slot_grid_charge_target(
     state: MaestroState,
     params: MaestroParams,
+    now: datetime,
 ) -> float:
     """Ziel-SoC (%) für die aktive Netzladung im low-Slot.
 
     Zwei Modi:
-      * Fest (Standard): gibt ``params.low_slot_target_soc`` zurück.
-      * Prognosebasiert (``low_slot_forecast_based``): lädt nur so viel, wie
-        laut morgiger Prognose nötig ist, um das PV-Defizit zu überbrücken.
-        Das Defizit (Verbrauch − PV) wird in SoC-Prozent umgerechnet und mit
-        ``low_slot_target_soc`` als **Obergrenze** gedeckelt. Fehlen
-        Prognosedaten, fällt die Funktion auf den festen Ziel-SoC zurück.
-    """
-    fixed_target = params.low_slot_target_soc
-    if not params.low_slot_forecast_based:
-        return fixed_target
-    if state.tomorrow_pv_kwh is None or state.tomorrow_consumption_kwh is None:
-        return fixed_target
-    if params.battery_capacity_kwh <= 0:
-        return fixed_target
+      * Fest (Standard): ``params.low_slot_target_soc``.
+      * Prognosebasiert (``low_slot_forecast_based``): Boden plus der Bedarf
+        bis zum nächsten günstigen Fenster (``state.low_slot_need_kwh``).
+        Ohne Bedarf 0 (weder laden noch halten). Fehlen die Profile, gilt
+        der feste Ziel-SoC.
 
-    deficit_kwh = max(0.0, state.tomorrow_consumption_kwh - state.tomorrow_pv_kwh)
-    needed_pct = deficit_kwh / params.battery_capacity_kwh * 100.0
-    # Nur so viel wie nötig, aber nie mehr als die konfigurierte Obergrenze.
-    return max(0.0, min(fixed_target, needed_pct))
+    Beide Modi sind durch ``low_slot_target_soc`` und den harten SoC-Deckel
+    begrenzt. Ein Ziel über dem Deckel wäre nie erreicht, das Halten griffe
+    nie und der Deckel gäbe die Entladung frei (Schwingen wie in Issue #15).
+    """
+    cap = params.low_slot_target_soc
+    if params.hard_soc_limit_enabled:
+        cap = min(cap, params.hard_soc_limit)
+    need = state.low_slot_need_kwh
+    if not params.low_slot_forecast_based or need is None or params.battery_capacity_kwh <= 0:
+        return cap
+    if need <= 0:
+        return 0.0
+    floor = reserve_floor_soc(state, params, now)
+    return min(cap, floor + need / params.battery_capacity_kwh * 100.0)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1115,6 +1121,22 @@ def manual_reserve_soc(params: MaestroParams) -> float | None:
     return max(0.0, min(100.0, float(params.fixed_reserve_soc)))
 
 
+def reserve_floor_soc(state: MaestroState, params: MaestroParams, now: datetime) -> float:
+    """Boden (%), unter den die Netzladung den Akku nicht einplant: max(Ladeschwelle, Reserve)."""
+    reserve = manual_reserve_soc(params)
+    if reserve is None and params.seasonal_reserve_enabled:
+        adaptive = adaptive_emergency_reserve_soc(state, params)
+        reserve = adaptive if adaptive is not None else seasonal_reserve_soc(now, params)
+    return max(float(params.charge_threshold), float(reserve or 0.0))
+
+
+def grid_budget_left_kwh(params: MaestroParams, grid_charged_today_kwh: float) -> float:
+    """Rest der Sicherheitsgrenze (kWh); ``inf`` ohne Grenze."""
+    if params.max_grid_charge_kwh <= 0:
+        return math.inf
+    return max(0.0, params.max_grid_charge_kwh - grid_charged_today_kwh)
+
+
 def decide(
     state: MaestroState,
     params: MaestroParams,
@@ -1241,15 +1263,29 @@ def _decide_core(
     _hard_cap_reached = (
         params.hard_soc_limit_enabled and state.soc >= params.hard_soc_limit
     )
+    _budget_left_kwh = grid_budget_left_kwh(params, grid_charged_today_kwh)
     _plan_charge = bool(
         _plan_on
         and price_plan.charge_now
         and price_plan.target_soc is not None
         and state.soc < price_plan.target_soc
-        and grid_charged_today_kwh < params.max_grid_charge_kwh
+        and _budget_left_kwh > 0
         and not _hard_cap_reached
     )
     _plan_hold = bool(_plan_on and price_plan.hold_now)
+
+    # Aktive Netzladung im low-Slot (§6.97) würde in diesem Tick laden. Phasen,
+    # die nur PV-Ladung drosseln oder sperren (Reserve-Sperre, Morning-Cap,
+    # Astro-Wait, Schnelllade-Boden, Akku-Priorität), weichen dann – sonst
+    # schalten sie die bewusst angeforderte Netzladung stumm ab (Issue #13, #15).
+    _gc_target = low_slot_grid_charge_target(state, params, now)
+    _grid_charge_pending = (
+        params.low_slot_grid_charge_enabled
+        and tariff_class == TARIFF_LOW
+        and not curtailment_guard_active
+        and state.soc < _gc_target
+        and _budget_left_kwh > 0
+    )
 
     # Schwacher-PV-Tag: einmal pro Tick auswerten und als Flag durchreichen.
     # Bei aktivem Flag wird Spreading übersprungen, die Korridor-Pause umgangen
@@ -1422,10 +1458,10 @@ def _decide_core(
     # (§5) daher NORMAL + discharge_power_limit=0 statt IDLE – das sperrt nur
     # die Entladung, lässt PV-/Netzladung aber durch.
     #
-    # Ausnahme: Ist "Aktive Netzladung im low-Slot" eingeschaltet und gerade
-    # ein low-Slot aktiv, ist das ein bewusster Nutzerwunsch, den Akku gezielt
-    # aus dem Netz über die Reserve hinaus zu heben (Issue #13) – dafür muss
-    # §6.97 weiter unten erreichbar bleiben, statt hier zu enden.
+    # Ausnahme: Lädt die aktive Netzladung im low-Slot gerade über die
+    # Reserve hinaus (Issue #13), muss §6.97 weiter unten erreichbar bleiben.
+    # Ohne anstehende Netzladung (Ziel 0 oder erreicht, Grenze erschöpft)
+    # bleibt die Reserve geschützt.
     manual_reserve = manual_reserve_soc(params)
     if manual_reserve is not None and state.soc < manual_reserve:
         return MaestroDecision(
@@ -1448,9 +1484,7 @@ def _decide_core(
             adaptive_pct = adaptive_emergency_reserve_soc(state, params)
             reserve_soc = adaptive_pct if adaptive_pct is not None else seasonal_reserve_soc(now, params)
             source = "verbrauchsadaptiv" if adaptive_pct is not None else "saisonal"
-        if state.soc <= reserve_soc and not _plan_charge and not (
-            params.low_slot_grid_charge_enabled and tariff_class == TARIFF_LOW
-        ):
+        if state.soc <= reserve_soc and not _plan_charge and not _grid_charge_pending:
             return MaestroDecision(
                 phase=PHASE_RESERVE_PROTECTION,
                 reason=(
@@ -1546,19 +1580,6 @@ def _decide_core(
                 power_mode=POWER_MODE_IDLE,
                 target_soc=target,
             )
-    # Aktive Netzladung im low-Slot (§6.97) würde in diesem Tick laden. Phasen,
-    # die nur PV-Ladung drosseln oder sperren (Morning-Cap, Astro-Wait,
-    # Schnelllade-Boden), weichen dann – sonst schalten sie die bewusst
-    # angeforderte Netzladung stumm ab (Issue #15).
-    _gc_target = low_slot_grid_charge_target(state, params)
-    _grid_charge_pending = (
-        params.low_slot_grid_charge_enabled
-        and tariff_class == TARIFF_LOW
-        and not curtailment_guard_active
-        and state.soc < _gc_target
-        and grid_charged_today_kwh < params.max_grid_charge_kwh
-    )
-
     # ── 6.4 Low-Slot-Halten: Netzlade-Ziel erreicht → Entladung sperren ───────────────
     # Ohne diese Sperre entlädt das Haus den Akku unter das Ziel, die aktive
     # Netzladung (§6.97) lädt kurz darauf wieder nach – Lade-/Entlade-Schwingen
@@ -1571,7 +1592,7 @@ def _decide_core(
         and tariff_class == TARIFF_LOW
         and not curtailment_guard_active
     ):
-        _hold_target = low_slot_grid_charge_target(state, params)
+        _hold_target = _gc_target
         if _hold_target > 0 and state.soc >= _hold_target:
             _hold_cap = (
                 1
@@ -1709,16 +1730,15 @@ def _decide_core(
     # Greift bei schwachem PV-Tag ODER unzureichender Restprognose (P10).
     # NORMAL + max_charge_power: E3DC nutzt PV-Überschuss selbst, kein Netzbezug.
     # Fester Cap statt Momentan-Überschuss → kein ständiges Nachregeln.
-    # Ausnahme: Ist die aktive Netzladung im low-Slot (§6.97) eingeschaltet und
-    # gerade ein low-Slot aktiv, ist das ein bewusster Nutzerwunsch (explizit
-    # zum Überbrücken schwacher PV-Tage gedacht) und muss Vorrang vor dieser
-    # Heuristik haben – sonst verhindert schon minimale Resteinstrahlung
-    # (_pv_now > 0) dauerhaft die gewünschte Netzladung tagsüber.
+    # Ausnahme: Steht die aktive Netzladung im low-Slot (§6.97) an, hat sie als
+    # bewusster Nutzerwunsch (explizit zum Überbrücken schwacher PV-Tage
+    # gedacht) Vorrang vor dieser Heuristik – sonst verhindert schon minimale
+    # Resteinstrahlung (_pv_now > 0) dauerhaft die gewünschte Netzladung tagsüber.
     if (
         _battery_priority
         and state.soc < params.charge_target
         and not curtailment_guard_active
-        and not (params.low_slot_grid_charge_enabled and tariff_class == TARIFF_LOW)
+        and not _grid_charge_pending
     ):
         _pv_now = (
             state.pv_power_instant
@@ -1769,21 +1789,25 @@ def _decide_core(
     # das PV-Ceiling aufhebt) lädt diese Phase AKTIV aus dem Netz, um ein
     # günstiges Fenster zu nutzen und die Zeit bis zur PV-Deckung zu
     # überbrücken. Unabhängig vom tariff_mode, weil hier ein bewusster
-    # Nutzerwunsch vorliegt. Das Tagesbudget max_grid_charge_kwh begrenzt die
-    # aus dem Netz geladene Energie; Curtailment-Guard hat weiterhin Vorrang.
+    # Nutzerwunsch vorliegt. Die Sicherheitsgrenze max_grid_charge_kwh stoppt
+    # nur im Fehlerfall; Curtailment-Guard hat weiterhin Vorrang.
     if _grid_charge_pending:
-        budget_left_kwh = params.max_grid_charge_kwh - grid_charged_today_kwh
-        target_src = (
-            "prognosebasiert"
-            if params.low_slot_forecast_based
-            else "fest"
+        if not params.low_slot_forecast_based:
+            target_src = "fest"
+        elif state.low_slot_need_kwh is None:
+            target_src = "fest, keine Verbrauchsprofile"
+        else:
+            target_src = f"Bedarf {state.low_slot_need_kwh:.1f} kWh bis zum nächsten günstigen Fenster"
+        budget_note = (
+            f", Sicherheitsgrenze noch {_budget_left_kwh:.1f} kWh"
+            if math.isfinite(_budget_left_kwh)
+            else ""
         )
         return MaestroDecision(
             phase=PHASE_GRID_CHARGE,
             reason=(
                 f"Netzladung im günstigen Slot: SoC {state.soc:.0f}% < "
-                f"Ziel {_gc_target:.0f}% ({target_src}), "
-                f"Restbudget {budget_left_kwh:.1f} kWh"
+                f"Ziel {_gc_target:.0f}% ({target_src}){budget_note}"
             ),
             power_mode=POWER_MODE_CHARGE,
             charge_power_limit=params.max_charge_power,

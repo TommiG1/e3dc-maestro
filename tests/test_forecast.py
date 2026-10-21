@@ -494,3 +494,69 @@ class TestBatteryThroughput:
     def test_throughput_tracks_charge_and_discharge(self):
         result = _simulate(soc=50.0, cons=500.0, pv=2000.0)
         assert result.battery_throughput_kwh > 0.0
+
+
+class TestGridChargeLikeLive:
+    """Issue #26: die Prognose rechnet die Netzladung wie die Live-Regelung."""
+
+    def _params(self, **kw):
+        from custom_components.e3dc_maestro.control_tariff import (
+            TARIFF_LOW,
+            TariffSchedule,
+            TariffSlot,
+        )
+
+        base = {
+            **_PARAMS.__dict__,
+            "charge_threshold": 0.0,
+            "seasonal_reserve_enabled": False,
+            "tariff_schedule": TariffSchedule(slots=[
+                TariffSlot(weekdays=frozenset(range(7)), start_h=12, end_h=15, class_=TARIFF_LOW),
+            ]),
+            "low_slot_grid_charge_enabled": True,
+            "low_slot_target_soc": 90.0,
+            "low_slot_forecast_based": True,
+        }
+        base.update(kw)
+        return MaestroParams(**base)
+
+    def _run(self, params, **kw):
+        return simulate_next_24h(
+            soc=20.0, consumption_h=[300.0] * 24, pv_h=[0.0] * 24, params=params,
+            now=_NOW, battery_capacity_kwh=15.0, **kw,
+        )
+
+    def test_without_need_fn_falls_back_to_fixed_target(self):
+        r = self._run(self._params())
+        assert max(r.trajectory_soc) == pytest.approx(90.0, abs=0.5)
+
+    def test_need_fn_sets_target(self):
+        # 3 kWh Bedarf / 15 kWh = 20 % → bis 12 Uhr entladen, dann nur auf 20 %.
+        r = self._run(self._params(), bridge_need_fn=lambda _t: 3.0)
+        assert max(r.trajectory_soc[8:]) == pytest.approx(20.0, abs=0.5)
+        # 6 kWh → Ziel 40 %, Ladung stoppt genau am Ziel.
+        r = self._run(self._params(), bridge_need_fn=lambda _t: 6.0)
+        assert "grid_charge" in r.trajectory_phases
+        assert max(r.trajectory_soc) == pytest.approx(40.0, abs=0.5)
+
+    def test_safety_cap_limits_simulated_grid_charge(self):
+        r = self._run(self._params(max_grid_charge_kwh=3.0, low_slot_forecast_based=False))
+        assert max(r.trajectory_soc) == pytest.approx(40.0, abs=1.5)
+
+    def test_cap_counts_today_already_charged(self):
+        r = self._run(
+            self._params(max_grid_charge_kwh=3.0, low_slot_forecast_based=False),
+            grid_charged_today_kwh=3.0,
+        )
+        assert "grid_charge" not in r.trajectory_phases
+
+    def test_price_fn_drives_threshold_mode(self):
+        from custom_components.e3dc_maestro.control_tariff import TariffSchedule
+
+        params = self._params(
+            tariff_schedule=TariffSchedule(slots=[], cheap_threshold=0.15),
+            low_slot_forecast_based=False,
+        )
+        assert "grid_charge" not in self._run(params).trajectory_phases
+        cheap = self._run(params, price_fn=lambda t: 0.10 if 12 <= t.hour < 15 else 0.30)
+        assert "grid_charge" in cheap.trajectory_phases

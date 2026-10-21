@@ -12,9 +12,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .const import (
+    PHASE_GRID_CHARGE,
     PHASE_MORNING_DISCHARGE,
     PHASE_RESERVE_PROTECTION,
     POWER_MODE_CHARGE,
@@ -91,6 +92,9 @@ def simulate_next_24h(
     anchor_tau_h: float = 2.0,
     battery_anchor_w: float | None = None,
     battery_anchor_tau_h: float = 1.0,
+    bridge_need_fn: Callable[[datetime], float] | None = None,
+    price_fn: Callable[[datetime], float | None] | None = None,
+    grid_charged_today_kwh: float = 0.0,
 ) -> ForecastResult:
     """Simulate the next 24 hours in 15-minute steps (96 quarters) starting from *soc* %.
 
@@ -132,6 +136,10 @@ def simulate_next_24h(
         the simulated first step is carried through the SoC integration and
         decays with ``battery_anchor_tau_h`` hours, so the forecast continues
         the running charge/discharge instead of jumping at "now".
+    bridge_need_fn, price_fn, grid_charged_today_kwh:
+        Same inputs the live loop hands to ``decide()``: grid-charge need until
+        the next cheap window, the buy price per step (dynamic tariff), and
+        today's grid-to-battery energy (reset at each local midnight).
     """
     _STEP_MINUTES = 15
     _STEP_H = _STEP_MINUTES / 60.0  # 0.25 h per step
@@ -184,6 +192,8 @@ def simulate_next_24h(
     fixed_reserve = manual_reserve_soc(params)
     anchor_delta_w = 0.0  # set after _cons_lookup is defined
     battery_anchor_delta_w = 0.0  # set on the first step
+    charged_kwh = float(grid_charged_today_kwh)
+    charged_date = base.date()
 
     def _pv_lookup(arr: list[float], hour: int, minute: int) -> float:
         """Look up PV value at (hour, minute) for variable-resolution arrays.
@@ -278,6 +288,9 @@ def simulate_next_24h(
         # Approximate grid for state construction (grid balances the system)
         pv_surplus_w = pv_w - cons_w  # positive = export without battery
 
+        if sim_now.date() != charged_date:
+            charged_date = sim_now.date()
+            charged_kwh = 0.0
         state = MaestroState(
             soc=current_soc,
             pv_power=pv_w,
@@ -285,10 +298,16 @@ def simulate_next_24h(
             # MaestroState convention: + = feed-in, − = draw. Deficit → negative.
             grid_power=min(0.0, pv_surplus_w),
             battery_power=0.0,
+            low_slot_need_kwh=bridge_need_fn(sim_now) if bridge_need_fn else None,
         )
 
         decision: MaestroDecision = decide(
-            state, params, sim_now, regelung_aktiv=regelung_aktiv
+            state,
+            params,
+            sim_now,
+            regelung_aktiv=regelung_aktiv,
+            current_price=price_fn(sim_now) if price_fn else None,
+            grid_charged_today_kwh=charged_kwh,
         )
         phase = decision.phase
 
@@ -339,12 +358,16 @@ def simulate_next_24h(
         # reserve; one 15-min step at full power would overshoot it by several
         # percent and the forecast would saw up and down around the reserve.
         # Likewise discharge stops at the fixed reserve instead of dipping below.
-        if phase == PHASE_RESERVE_PROTECTION:
-            if decision.discharge_power_limit is not None:
-                bat_net_w = max(-float(decision.discharge_power_limit), bat_net_w)
-            if decision.power_mode == POWER_MODE_CHARGE and decision.target_soc is not None:
-                headroom_wh = (decision.target_soc - current_soc) / 100.0 * capacity_wh
-                bat_net_w = min(bat_net_w, max(0.0, headroom_wh / _STEP_H))
+        # Grid charging in a cheap slot stops at its target the same way.
+        if phase == PHASE_RESERVE_PROTECTION and decision.discharge_power_limit is not None:
+            bat_net_w = max(-float(decision.discharge_power_limit), bat_net_w)
+        if (
+            phase in (PHASE_RESERVE_PROTECTION, PHASE_GRID_CHARGE)
+            and decision.power_mode == POWER_MODE_CHARGE
+            and decision.target_soc is not None
+        ):
+            headroom_wh = (decision.target_soc - current_soc) / 100.0 * capacity_wh
+            bat_net_w = min(bat_net_w, max(0.0, headroom_wh / _STEP_H))
         if fixed_reserve is not None and bat_net_w < 0 and current_soc >= fixed_reserve:
             floor_wh = (current_soc - fixed_reserve) / 100.0 * capacity_wh
             bat_net_w = max(bat_net_w, -floor_wh / _STEP_H)
@@ -373,6 +396,8 @@ def simulate_next_24h(
         # ── Grid accounting with curtailment ────────────────────────────────
         # grid_net > 0 = feed-in, grid_net < 0 = draw
         grid_net_w = pv_w - cons_w - bat_net_w
+        if bat_net_w > 0 and grid_net_w < 0:
+            charged_kwh += min(bat_net_w, -grid_net_w) * _STEP_H / 1000.0
         step_kwh = abs(grid_net_w) * _STEP_H / 1000.0
         if grid_net_w < 0:
             grid_draw_wh += abs(grid_net_w) * _STEP_H

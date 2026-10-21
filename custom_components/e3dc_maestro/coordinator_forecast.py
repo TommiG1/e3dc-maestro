@@ -24,7 +24,16 @@ from .coordinator_helpers import (
     forecast_power_bucket as _forecast_power_bucket,
     quarter_slot as _quarter_slot,
 )
+from .control_tariff import tariff_schedule_from_params
 from .forecast import simulate_next_24h
+from .grid_charge_need import (
+    NeedFn,
+    PriceFn,
+    load_fn as _load_fn,
+    low_fn as _low_fn,
+    need_fn as _need_fn,
+    pv_fn as _pv_fn,
+)
 from .pv_forecast_profile import (
     FORECAST_ATTR_KEYS,
     extract_pv_profile,
@@ -43,8 +52,34 @@ _OPTIMIZER_RETRY_HOURS = 1
 
 
 class CoordinatorForecastMixin:
+    def _bridge_need_fn(self, now: datetime, price_fn: PriceFn | None) -> NeedFn | None:
+        """Bedarf bis zum nächsten günstigen Fenster – dieselbe Funktion für Live und Prognose."""
+        params = self._active_params
+        if not (params.low_slot_grid_charge_enabled and params.low_slot_forecast_based):
+            return None
+        cs = self._consumption_stats
+        if cs is None:
+            return None
+        load = _load_fn(
+            cs.weekday_profile_w, cs.hourly_profile_w, float(params.price_plan_safety_factor)
+        )
+        if load is None:
+            return None
+        pv = _pv_fn(
+            now.date(),
+            self._read_pv_forecast_profile(now, days_ahead=0, ignore_enabled=True),
+            self._read_pv_forecast_profile(now, days_ahead=1, ignore_enabled=True),
+            self._pv_stats.hourly_profile_w if self._pv_stats is not None else None,
+        )
+        return _need_fn(_low_fn(tariff_schedule_from_params(params), price_fn), load, pv)
+
     async def _async_update_forecast(
-        self, state: MaestroState, now: datetime
+        self,
+        state: MaestroState,
+        now: datetime,
+        *,
+        need_fn: NeedFn | None = None,
+        price_fn: PriceFn | None = None,
     ) -> None:
         """F1: Recompute the 24-hour forecast using current stats (cached)."""
         try:
@@ -153,6 +188,9 @@ class CoordinatorForecastMixin:
                     _pv2=pv_day2,
                     _anchor=self._forecast_house_ewma,
                     _batt=self._forecast_battery_ewma,
+                    _need=need_fn,
+                    _price=price_fn,
+                    _charged=float(self.stats.get("grid_to_battery_today_kwh", 0.0)),
                 ):
                     return simulate_next_24h(
                         soc=_soc,
@@ -167,6 +205,9 @@ class CoordinatorForecastMixin:
                         day2_from_calendar=_pv2 is not None,
                         consumption_anchor_w=_anchor,
                         battery_anchor_w=_batt,
+                        bridge_need_fn=_need,
+                        price_fn=_price,
+                        grid_charged_today_kwh=_charged,
                     )
 
                 result = await self.hass.async_add_executor_job(_run_sim)

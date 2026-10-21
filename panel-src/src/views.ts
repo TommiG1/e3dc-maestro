@@ -886,7 +886,6 @@ const planRow = (label: string, value: string, color?: string) =>
 function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | typeof nothing {
   const { t } = c.i18n;
   const { fmt } = c;
-  const budget = n(a.budget_kwh);
   const floor = n(a.floor_pct);
   const ceiling = n(a.ceiling_pct);
   const efficiency = n(a.efficiency);
@@ -894,7 +893,6 @@ function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | type
   const wear = n(a.wear_eur_per_kwh);
   const safety = n(a.safety_factor);
   if (
-    budget === undefined &&
     floor === undefined &&
     ceiling === undefined &&
     efficiency === undefined &&
@@ -904,7 +902,6 @@ function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | type
   }
   return html`<div class="plan-diag">
     <h4>${t("planDiag")}</h4>
-    ${budget !== undefined ? planRow(t("planBudget"), `${fmt.n(budget, 2)} kWh`) : nothing}
     ${floor !== undefined ? planRow(t("planFloor"), `${fmt.n(floor, 0)} %`) : nothing}
     ${ceiling !== undefined ? planRow(t("planCeiling"), `${fmt.n(ceiling, 0)} %`) : nothing}
     ${efficiency !== undefined ? planRow(t("planEfficiency"), fmt.n(efficiency, 2)) : nothing}

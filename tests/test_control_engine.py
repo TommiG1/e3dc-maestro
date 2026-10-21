@@ -2187,7 +2187,7 @@ class TestLowSlotGridCharge:
 
 
 class TestLowSlotGridChargeForecast:
-    """Prognosebasierte Netzlade-Menge im low-Slot."""
+    """Prognosebasierte Netzlade-Menge: Boden + Bedarf bis zum nächsten günstigen Fenster."""
 
     def _params(self, **overrides):
         low_slot = TariffSlot(
@@ -2202,52 +2202,105 @@ class TestLowSlotGridChargeForecast:
             "low_slot_target_soc": 80.0,
             "low_slot_forecast_based": True,
             "battery_capacity_kwh": 10.0,
-            "max_grid_charge_kwh": 10.0,
+            "charge_threshold": 0,
             "tariff_mode": "fixed",
         }
         base.update(overrides)
         return MaestroParams(**base)
 
-    def _state(self, soc=20, tomorrow_pv=None, tomorrow_cons=None):
+    def _state(self, soc=20, need=None):
         return MaestroState(
             soc=soc, pv_power=0, house_power=1000, grid_power=0, battery_power=0,
-            tomorrow_pv_kwh=tomorrow_pv, tomorrow_consumption_kwh=tomorrow_cons,
+            low_slot_need_kwh=need,
         )
 
-    def test_target_scaled_to_deficit(self):
-        # Defizit = 12 - 8 = 4 kWh; /10 kWh = 40 % → unter Obergrenze 80 %.
+    def test_target_is_need_in_percent(self):
+        # 4 kWh Bedarf / 10 kWh = 40 %, Boden 0 → Ziel 40 %.
         p = self._params()
-        assert low_slot_grid_charge_target(
-            self._state(tomorrow_pv=8.0, tomorrow_cons=12.0), p
-        ) == 40.0
+        assert low_slot_grid_charge_target(self._state(need=4.0), p, _now(1, 15, 2)) == 40.0
+
+    def test_target_adds_reserve_floor(self):
+        # Feste Reserve 10 %: der Bedarf liegt über dem Boden → 50 %.
+        p = self._params(fixed_reserve_enabled=True, fixed_reserve_soc=10.0)
+        assert low_slot_grid_charge_target(self._state(need=4.0), p, _now(1, 15, 2)) == 50.0
 
     def test_target_capped_at_configured_upper_bound(self):
-        # Defizit riesig → auf low_slot_target_soc (80 %) gedeckelt.
         p = self._params()
-        assert low_slot_grid_charge_target(
-            self._state(tomorrow_pv=0.0, tomorrow_cons=30.0), p
-        ) == 80.0
+        assert low_slot_grid_charge_target(self._state(need=30.0), p, _now(1, 15, 2)) == 80.0
 
-    def test_no_charge_when_pv_covers_tomorrow(self):
-        # PV deckt morgen alles → Defizit 0 → Ziel 0 → keine Netzladung.
+    def test_target_capped_at_hard_soc_limit(self):
+        # Ziel über dem Deckel würde nie erreicht; Halten griffe nie (Issue #15).
+        p = self._params(hard_soc_limit_enabled=True, hard_soc_limit=70.0)
+        assert low_slot_grid_charge_target(self._state(need=30.0), p, _now(1, 15, 2)) == 70.0
+        d = decide(self._state(soc=70, need=30.0), p, _now(1, 15, 2))
+        assert d.phase == PHASE_GRID_HOLD
+        assert d.discharge_power_limit == 0.0
+
+    def test_fixed_target_capped_at_hard_soc_limit(self):
+        p = self._params(
+            low_slot_forecast_based=False, hard_soc_limit_enabled=True, hard_soc_limit=70.0,
+        )
+        assert low_slot_grid_charge_target(self._state(), p, _now(1, 15, 2)) == 70.0
+
+    def test_no_charge_without_need(self):
         p = self._params()
-        d = decide(self._state(soc=20, tomorrow_pv=20.0, tomorrow_cons=10.0), p, _now(1, 15, 2))
-        assert d.phase != PHASE_GRID_CHARGE
+        d = decide(self._state(soc=20, need=0.0), p, _now(1, 15, 2))
+        assert d.phase not in (PHASE_GRID_CHARGE, PHASE_GRID_HOLD)
 
     def test_charges_only_needed_amount(self):
-        # Defizit 4 kWh → Ziel 40 %; SoC 20 % < 40 % → Netzladung mit Ziel 40 %.
         p = self._params()
-        d = decide(self._state(soc=20, tomorrow_pv=8.0, tomorrow_cons=12.0), p, _now(1, 15, 2))
+        d = decide(self._state(soc=20, need=4.0), p, _now(1, 15, 2))
         assert d.phase == PHASE_GRID_CHARGE
         assert d.target_soc == 40.0
+        assert "Bedarf 4.0 kWh" in d.reason
 
-    def test_fallback_to_fixed_target_without_forecast(self):
-        # Prognose an, aber keine Sensordaten → fester Ziel-SoC 80 %.
+    def test_fallback_to_fixed_target_without_profiles(self):
         p = self._params()
-        assert low_slot_grid_charge_target(self._state(), p) == 80.0
+        assert low_slot_grid_charge_target(self._state(), p, _now(1, 15, 2)) == 80.0
         d = decide(self._state(soc=20), p, _now(1, 15, 2))
         assert d.phase == PHASE_GRID_CHARGE
         assert d.target_soc == 80.0
+        assert "keine Verbrauchsprofile" in d.reason
+
+    def test_reserve_protected_when_nothing_to_charge(self):
+        # Low-Slot ohne Bedarf: die Reserve darf nicht wegfallen.
+        p = self._params(seasonal_reserve_enabled=True)
+        d = decide(self._state(soc=5, need=0.0), p, _now(12, 21, 14))
+        assert d.phase == PHASE_RESERVE_PROTECTION
+        assert d.discharge_power_limit == 0.0
+
+    def test_reserve_bypassed_while_charging_above_it(self):
+        p = self._params(seasonal_reserve_enabled=True)
+        d = decide(self._state(soc=5, need=6.0), p, _now(12, 21, 14))
+        assert d.phase == PHASE_GRID_CHARGE
+
+    def test_reserve_protected_when_cap_exhausted(self):
+        p = self._params(seasonal_reserve_enabled=True, max_grid_charge_kwh=3.0)
+        d = decide(self._state(soc=5, need=6.0), p, _now(12, 21, 14), grid_charged_today_kwh=3.0)
+        assert d.phase == PHASE_RESERVE_PROTECTION
+
+
+class TestGridChargeSafetyCap:
+    """max_grid_charge_kwh ist nur noch eine Sicherheitsgrenze; 0 = keine."""
+
+    _params = TestLowSlotGridChargeForecast._params
+    _state = TestLowSlotGridChargeForecast._state
+
+    def test_zero_means_no_cap(self):
+        p = self._params(low_slot_forecast_based=False)
+        d = decide(self._state(soc=20), p, _now(1, 15, 2), grid_charged_today_kwh=500.0)
+        assert d.phase == PHASE_GRID_CHARGE
+        assert "Sicherheitsgrenze" not in d.reason
+
+    def test_cap_stops_charging(self):
+        p = self._params(low_slot_forecast_based=False, max_grid_charge_kwh=5.0)
+        d = decide(self._state(soc=20), p, _now(1, 15, 2), grid_charged_today_kwh=5.0)
+        assert d.phase != PHASE_GRID_CHARGE
+
+    def test_cap_shown_in_reason(self):
+        p = self._params(low_slot_forecast_based=False, max_grid_charge_kwh=5.0)
+        d = decide(self._state(soc=20), p, _now(1, 15, 2), grid_charged_today_kwh=2.0)
+        assert "Sicherheitsgrenze noch 3.0 kWh" in d.reason
 
 
 # ──────────────────────────────────────────────────────────────────────────────

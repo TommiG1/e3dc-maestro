@@ -761,7 +761,7 @@ STEP_TARIFF_SCHEMA = vol.Schema(
         vol.Required(CONF_DYNAMIC_TARIFF_ENABLED, default=False): selector.BooleanSelector(),
         vol.Optional(CONF_PRICE_SENSOR): _entity_selector(),
         vol.Optional(CONF_CHEAP_THRESHOLD, default=DEFAULT_CHEAP_THRESHOLD): _number_selector(0.0, 1.0, 0.01, "€/kWh"),
-        vol.Optional(CONF_MAX_GRID_CHARGE_KWH, default=DEFAULT_MAX_GRID_CHARGE_KWH): _number_selector(0, 20, 0.5, "kWh"),
+        vol.Optional(CONF_MAX_GRID_CHARGE_KWH, default=DEFAULT_MAX_GRID_CHARGE_KWH): _number_selector(0, 150, 0.5, "kWh"),
         vol.Required(CONF_LOW_SLOT_GRID_CHARGE_ENABLED, default=DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED): selector.BooleanSelector(),
         vol.Optional(CONF_LOW_SLOT_TARGET_SOC, default=DEFAULT_LOW_SLOT_TARGET_SOC): _number_selector(0, 100, 1, "%"),
         vol.Required(CONF_LOW_SLOT_FORECAST_BASED, default=DEFAULT_LOW_SLOT_FORECAST_BASED): selector.BooleanSelector(),
@@ -1176,7 +1176,7 @@ class _TariffSlotsMixin:
 class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
     """Multi-step config flow for E3DC Maestro."""
 
-    VERSION = 3
+    VERSION = 4
     _data: dict[str, Any] = {}
 
     def _slot_state(self) -> dict[str, Any]:

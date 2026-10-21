@@ -91,12 +91,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         "low_slot_target_soc",
         "price_plan_max_soc",
         "low_slot_forecast_based",
+        "price_plan_safety_factor",
         "low_slot_hold_discharge",
       ]),
       sec("secPlanTune", "secPlanTuneHint", [
         "price_plan_min_spread",
         "price_plan_efficiency",
-        "price_plan_safety_factor",
       ]),
       sec("secHt", "secHtHint", ["ht_enabled", "ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"]),
       sec("secCosts", "secCostsHint", ["fixed_buy_price", "feed_in_price", "battery_capex_eur", "battery_total_cycles"]),
@@ -534,7 +534,7 @@ const ROW_WHEN: Record<string, (v: Required<StrategyView>) => boolean> = {
   low_slot_hold_discharge: (v) => ruleRows(v.strategy) && v.expert,
   price_plan_min_spread: (v) => v.strategy === "dynamic_expert",
   price_plan_efficiency: (v) => v.strategy === "dynamic_expert",
-  price_plan_safety_factor: (v) => v.strategy === "dynamic_expert",
+  price_plan_safety_factor: (v) => v.strategy === "dynamic_expert" || (ruleRows(v.strategy) && v.expert),
   tariff_mode: (v) => v.expert,
   dynamic_tariff_enabled: (v) => v.expert,
   low_slot_grid_charge_enabled: (v) => v.expert,
@@ -830,18 +830,22 @@ function pvSections(c: SettingsCtx, sections: readonly SettingsSection[]): Templ
 /** One sentence that says what the chosen strategy does with the current values. */
 function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): TemplateResult {
   const { t } = c.i18n;
-  const kwh = fmt(c.hass, "max_grid_charge_kwh", 1);
+  const capId = S.max_grid_charge_kwh;
+  const cap = capId ? num(c.hass.states[capId]) : undefined;
   const lines: string[] = [];
   if (strategy === "off") lines.push(t("sumOff"));
   if (strategy === "slots") {
-    lines.push(t("sumSlots", { soc: fmt(c.hass, "low_slot_target_soc"), kwh }));
+    lines.push(t("sumSlots", { soc: fmt(c.hass, "low_slot_target_soc") }));
     if (c.lowSlots === 0) lines.push(t("sumSlotsNone"));
   }
   if (strategy === "threshold") {
-    lines.push(t("sumThreshold", { price: fmt(c.hass, "cheap_threshold", 3), soc: fmt(c.hass, "low_slot_target_soc"), kwh }));
+    lines.push(t("sumThreshold", { price: fmt(c.hass, "cheap_threshold", 3), soc: fmt(c.hass, "low_slot_target_soc") }));
+  }
+  if (strategy !== "off" && cap !== undefined && cap > 0) {
+    lines.push(t("sumCap", { kwh: fmt(c.hass, "max_grid_charge_kwh", 1) }));
   }
   if (isPlanStrategy(strategy)) {
-    lines.push(t("sumPlan", { soc: fmt(c.hass, "price_plan_max_soc"), kwh }));
+    lines.push(t("sumPlan", { soc: fmt(c.hass, "price_plan_max_soc") }));
     lines.push(t(strategy === "dynamic_auto" ? "sumAuto" : "sumExpert"));
     const active = S.price_plan_active ? isOn(c.hass.states[S.price_plan_active]) : false;
     lines.push(t(active ? "sumActive" : "sumShadow"));

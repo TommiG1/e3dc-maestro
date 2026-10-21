@@ -40,7 +40,7 @@ async def test_migrate_v1_removes_power_factor():
     entry = SimpleNamespace(version=1, options={"power_factor": 1.2, "spreading_enabled": True})
     hass = _make_hass()
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 3
+    assert entry.version == 4
     assert "power_factor" not in entry.options
 
 
@@ -50,7 +50,21 @@ async def test_migrate_v2_enables_spreading_default():
     hass = _make_hass()
     assert await async_migrate_entry(hass, entry) is True
     assert entry.options["spreading_enabled"] is True
-    assert entry.version == 3
+    assert entry.version == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("stored", "expected"), [(3.0, 0.0), (8.0, 8.0), (None, None)])
+async def test_migrate_v3_grid_charge_cap(stored, expected):
+    """Alter Default 3 kWh wird zu 0 (keine Grenze); eigene Werte bleiben."""
+    options = {"spreading_enabled": True}
+    if stored is not None:
+        options["max_grid_charge_kwh"] = stored
+    entry = SimpleNamespace(version=3, options=options)
+    hass = _make_hass()
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.version == 4
+    assert entry.options.get("max_grid_charge_kwh") == expected
 
 
 def _registry_entry(
