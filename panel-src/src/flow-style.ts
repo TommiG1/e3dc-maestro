@@ -5,6 +5,7 @@ export type FlowStyleId = (typeof FLOW_STYLES)[number];
 const STORAGE_KEY = "e3dc-maestro.flow-style.v1";
 
 export function parseFlowStyle(raw: unknown): FlowStyleId {
+  // Legacy "split" is now automatic in the nodes view when separate loads exist.
   return raw === "blob" || raw === "city" ? raw : "nodes";
 }
 

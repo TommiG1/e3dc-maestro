@@ -1,6 +1,7 @@
 /** Shared consumer dock for the live energy-flow views (nodes / blob / city). */
 
 import type { ConsumerMode } from "./consumers";
+import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 
 /**
  * Free offset from the house/fan origin in SVG units.
@@ -18,6 +19,9 @@ export interface LegacyFanPlace {
 }
 
 export type StoredConsumerPlace = ConsumerPlace | LegacyFanPlace;
+
+/** Per flow-style placements (nodes / blob / city stay independent). */
+export type ConsumerPlacesByStyle = Record<FlowStyleId, Record<string, StoredConsumerPlace>>;
 
 export interface ConsumerPos {
   x: number;
@@ -43,7 +47,8 @@ export interface PlaceBounds {
   maxY: number;
 }
 
-const STORAGE_KEY = "e3dc-maestro.consumer-places.v2";
+const STORAGE_KEY_V3 = "e3dc-maestro.consumer-places.v3";
+const STORAGE_KEY_V2 = "e3dc-maestro.consumer-places.v2";
 const LEGACY_STORAGE_KEY = "e3dc-maestro.consumer-places.v1";
 
 /** Defaults for separately measured loads sit closer to the house. */
@@ -62,6 +67,10 @@ const isFree = (row: Record<string, unknown>): row is { dx: number; dy: number }
 const isLegacy = (row: Record<string, unknown>): row is { t: number; r: number } =>
   typeof row.t === "number" && Number.isFinite(row.t) && typeof row.r === "number" && Number.isFinite(row.r);
 
+export function emptyConsumerPlacesByStyle(): ConsumerPlacesByStyle {
+  return { nodes: {}, blob: {}, city: {} };
+}
+
 export function parseConsumerPlaces(raw: unknown): Record<string, StoredConsumerPlace> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, StoredConsumerPlace> = {};
@@ -79,6 +88,21 @@ export function parseConsumerPlaces(raw: unknown): Record<string, StoredConsumer
   return out;
 }
 
+/** v3 shape: `{ nodes: { id: place }, blob: …, city: … }`. */
+export function parseConsumerPlacesByStyle(raw: unknown): ConsumerPlacesByStyle | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const looksStyled = FLOW_STYLES.some(
+    (style) => style in obj && obj[style] !== null && typeof obj[style] === "object" && !Array.isArray(obj[style]),
+  );
+  if (!looksStyled) return null;
+  const out = emptyConsumerPlacesByStyle();
+  for (const style of FLOW_STYLES) {
+    out[style] = parseConsumerPlaces(obj[style]);
+  }
+  return out;
+}
+
 function readStorage(key: string): unknown {
   try {
     return JSON.parse(localStorage.getItem(key) ?? "null");
@@ -87,23 +111,44 @@ function readStorage(key: string): unknown {
   }
 }
 
-export function loadConsumerPlaces(): Record<string, StoredConsumerPlace> {
-  const v2 = parseConsumerPlaces(readStorage(STORAGE_KEY));
-  if (Object.keys(v2).length) return v2;
-  return parseConsumerPlaces(readStorage(LEGACY_STORAGE_KEY));
+function freeOnly(places: Record<string, StoredConsumerPlace>): Record<string, ConsumerPlace> {
+  const free: Record<string, ConsumerPlace> = {};
+  for (const [key, value] of Object.entries(places)) {
+    if (value && "dx" in value) free[key] = value;
+  }
+  return free;
 }
 
-export function saveConsumerPlaces(places: Record<string, ConsumerPlace>): void {
+/** Load placements per flow style; flat v2/v1 maps are copied into every style once. */
+export function loadConsumerPlacesByStyle(): ConsumerPlacesByStyle {
+  const v3 = parseConsumerPlacesByStyle(readStorage(STORAGE_KEY_V3));
+  if (v3) return v3;
+  const flat = parseConsumerPlaces(readStorage(STORAGE_KEY_V2));
+  const legacy = Object.keys(flat).length ? flat : parseConsumerPlaces(readStorage(LEGACY_STORAGE_KEY));
+  const out = emptyConsumerPlacesByStyle();
+  if (!Object.keys(legacy).length) return out;
+  for (const style of FLOW_STYLES) out[style] = { ...legacy };
+  saveConsumerPlacesByStyle(out);
+  return out;
+}
+
+export function saveConsumerPlacesByStyle(byStyle: ConsumerPlacesByStyle): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(places));
+    const payload: Record<string, Record<string, ConsumerPlace>> = {};
+    for (const style of FLOW_STYLES) {
+      payload[style] = freeOnly(byStyle[style] ?? {});
+    }
+    localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(payload));
   } catch {
     // storage blocked
   }
 }
 
+/** Wipe stored placements (all styles). */
 export function clearConsumerPlaces(): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY_V3);
+    localStorage.removeItem(STORAGE_KEY_V2);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // ignore

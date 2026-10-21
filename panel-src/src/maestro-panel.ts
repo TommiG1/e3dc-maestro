@@ -51,9 +51,8 @@ import { makeI18n, type Key } from "./i18n";
 import { pauseMenu, pauseStatus, pauseUntil } from "./pause";
 import { styles } from "./styles";
 import {
-  clearConsumerPlaces,
-  loadConsumerPlaces,
-  saveConsumerPlaces,
+  loadConsumerPlacesByStyle,
+  saveConsumerPlacesByStyle,
   type ConsumerPlace,
 } from "./consumer-layout";
 import {
@@ -134,7 +133,7 @@ class MaestroPanel extends LitElement {
   private _batteryStyle: BatteryStyleId = loadBatteryStyle();
   private _bannerHidden = loadBannerHidden();
   private _alertDismissed: Set<AlertKey> = loadDismissed();
-  private _consumerPlaces: ReturnType<typeof loadConsumerPlaces> = loadConsumerPlaces();
+  private _consumerPlacesByStyle = loadConsumerPlacesByStyle();
   private _arrangeConsumers = false;
   private _sheet = false;
   private _pauseOpen = false;
@@ -729,20 +728,17 @@ class MaestroPanel extends LitElement {
   }
 
   private _placeConsumer(id: string, place: ConsumerPlace): void {
-    const next = { ...this._consumerPlaces, [id]: place };
-    this._consumerPlaces = next;
-    // Persist only free offsets; legacy fan slots stay in memory until overwritten.
-    const free: Record<string, ConsumerPlace> = {};
-    for (const [key, value] of Object.entries(next)) {
-      if (value && "dx" in value) free[key] = value;
-    }
-    saveConsumerPlaces(free);
+    const style = this._flowStyle;
+    const nextStyle = { ...this._consumerPlacesByStyle[style], [id]: place };
+    this._consumerPlacesByStyle = { ...this._consumerPlacesByStyle, [style]: nextStyle };
+    saveConsumerPlacesByStyle(this._consumerPlacesByStyle);
     this.requestUpdate();
   }
 
   private _resetConsumerPlaces(): void {
-    this._consumerPlaces = {};
-    clearConsumerPlaces();
+    const style = this._flowStyle;
+    this._consumerPlacesByStyle = { ...this._consumerPlacesByStyle, [style]: {} };
+    saveConsumerPlacesByStyle(this._consumerPlacesByStyle);
     this.requestUpdate();
   }
 
@@ -1072,7 +1068,7 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       onResetConsumerPlaces: () => this._resetConsumerPlaces(),
-      consumerPlaces: this._consumerPlaces,
+      consumerPlaces: this._consumerPlacesByStyle[this._flowStyle] ?? {},
       onPlaceConsumer: (id, place) => this._placeConsumer(id, place),
       onFlowNode: (key) => this._openFlow(key),
       motion: this._motion,

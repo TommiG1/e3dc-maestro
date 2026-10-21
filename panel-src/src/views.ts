@@ -21,6 +21,7 @@ import { BATTERY_STYLES, type BatteryStyleId } from "./battery-style";
 import { blobEnergyFlow, blobFlowBoxHeight } from "./flow-blob";
 import { cityEnergyFlow } from "./flow-city";
 import { energyFlow, flowBoxHeight } from "./flow";
+import { splitEnergyFlow, splitFlowBoxHeight } from "./flow-split";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
@@ -404,6 +405,9 @@ export function liveView(c: Ctx): TemplateResult {
     sp(key, color, dayLive ? true : br.grain === "day" ? "day" : false);
   // Idle loads stay in the edit list; the flow only draws those above ~10 W (all while arranging).
   const flowConsumers = visibleInFlow(c.consumers, { arrange: c.arrangeConsumers });
+  // Verbrauch branching appears in every style as soon as a separate consumer is configured.
+  const hasSeparate = c.consumers.some((row) => row.mode === "separate");
+  const useVerbrauchSplit = c.flowStyle === "nodes" && hasSeparate;
   // City: never pin a pixel height. The SVG uses height:auto (viewBox aspect ratio);
   // a fixed wrap height (treated as 1 unit = 1px) undershoots on wider phones and the
   // consumer list paints over the day totals.
@@ -411,9 +415,18 @@ export function liveView(c: Ctx): TemplateResult {
     c.flowStyle === "city"
       ? undefined
       : c.flowStyle === "blob"
-        ? blobFlowBoxHeight(c.mobile, flowConsumers.length)
-        : flowBoxHeight(c.mobile, flowConsumers.length);
-  const renderFlow = c.flowStyle === "blob" ? blobEnergyFlow : c.flowStyle === "city" ? cityEnergyFlow : energyFlow;
+        ? blobFlowBoxHeight(c.mobile, flowConsumers.length, hasSeparate)
+        : useVerbrauchSplit
+          ? splitFlowBoxHeight(c.mobile, flowConsumers.length)
+          : flowBoxHeight(c.mobile, flowConsumers.length);
+  const renderFlow =
+    c.flowStyle === "blob"
+      ? blobEnergyFlow
+      : c.flowStyle === "city"
+        ? cityEnergyFlow
+        : useVerbrauchSplit
+          ? splitEnergyFlow
+          : energyFlow;
   const amount = (key: PeriodKey): number | undefined => (dayLive ? num(st(c, E[key])) : c.rangeSums?.[key]);
   const balanceAmount = amount;
   const balance = dayLive

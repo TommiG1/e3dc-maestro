@@ -7,6 +7,7 @@ import {
   onConsumerDrag,
   placeBoundsForFan,
   resolveConsumerPositions,
+  type ConsumerPlace,
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH } from "./consumers";
 import {
@@ -18,6 +19,7 @@ import {
   nodeIconFit,
   type FlowInput,
 } from "./flow";
+import { splitByMode, totalConsumptionW } from "./flow-split";
 import maestroLogo from "./maestro-logo.png";
 
 const ICONS = {
@@ -25,12 +27,14 @@ const ICONS = {
   grid: "M12 2 7 22M12 2l5 20M5 9h14M4 15h16",
   house: "M3 11 12 3l9 8M5 9.5V21h14V9.5M10 21v-6h4v6",
   bat: "M7 6h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM10 3h4",
+  load: "M4 12h16M12 4v16M7 7l10 10M17 7 7 17",
 };
 
 const ICON_BOX = 24;
 const ICON_STROKE = 2.15;
 const ACTIVE_W = 30;
 const NODE_R = 42;
+const HOUSE_R = 30;
 const CONSUMER_R = 26;
 const COMPACT_LIST_R = 16;
 const PULL_W = 5500;
@@ -173,12 +177,15 @@ function blobCompactConsumerPlaces(count: number, width: number): { x: number; y
   }));
 }
 
-export function blobFlowBoxHeight(compact: boolean, count: number): number | undefined {
+export function blobFlowBoxHeight(compact: boolean, count: number, split = false): number | undefined {
   if (!compact) {
-    if (!count) return undefined;
+    if (!count && !split) return undefined;
     const L = LAYOUTS.wide;
-    const fan = houseFan(L.house, count);
-    return Math.round(fanBoxHeight(L.house.y, fan, L.box[1]) * 0.95);
+    const origin = split
+      ? { x: L.house.x + 140, y: L.house.y - 70 }
+      : { x: L.house.x, y: L.house.y };
+    const fan = houseFan(origin, Math.max(1, count));
+    return Math.round(fanBoxHeight(origin.y, fan, L.box[1]) * 0.95);
   }
   const L = LAYOUTS.compact;
   if (!count) return Math.round(L.box[1] * 0.94);
@@ -188,46 +195,112 @@ export function blobFlowBoxHeight(compact: boolean, count: number): number | und
 
 export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
+  const { included, separate } = splitByMode(consumers);
+  const hasSplit = separate.length > 0;
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
-  const fan = houseFan(L.house, consumers.length);
-  const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
-  const fanPlaces = i.compact
+  const loadPos = { x: L.house.x, y: L.house.y };
+  const placesStore = i.consumerPlaces ?? {};
+  const houseDefault = i.compact
+    ? { x: loadPos.x, y: loadPos.y + 78 }
+    : { x: loadPos.x + 140, y: loadPos.y - 70 };
+  const housePos =
+    hasSplit && placesStore["__house__"] && "dx" in placesStore["__house__"]
+      ? {
+          x: loadPos.x + (placesStore["__house__"] as ConsumerPlace).dx,
+          y: loadPos.y + (placesStore["__house__"] as ConsumerPlace).dy,
+        }
+      : houseDefault;
+  const loadFan = houseFan(loadPos, hasSplit ? separate.length : consumers.length);
+  const houseFanOpts = houseFan(housePos, included.length);
+  const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length + (hasSplit ? 1 : 0)));
+  const separatePlaces = i.compact
     ? []
     : resolveConsumerPositions(
-        consumers.map((c) => c.id),
-        i.consumerPlaces ?? {},
-        fan,
-        consumers.map((c) => c.mode),
+        (hasSplit ? separate : consumers).map((c) => c.id),
+        placesStore,
+        loadFan,
+        (hasSplit ? separate : consumers).map((c) => c.mode),
       );
+  const includedPlaces =
+    i.compact || !hasSplit
+      ? []
+      : resolveConsumerPositions(
+          included.map((c) => c.id),
+          placesStore,
+          houseFanOpts,
+          included.map((c) => c.mode),
+        );
   const baseH = i.compact
     ? consumers.length
       ? blobCompactConsumerPlaces(consumers.length, baseW).at(-1)!.y + 36
       : L.box[1]
-    : fanBoxHeight(L.house.y, fan, L.box[1]);
-  const extent = i.compact ? { w: baseW, h: baseH } : freePlaceExtent(fanPlaces, baseW, baseH);
+    : hasSplit
+      ? Math.max(fanBoxHeight(loadPos.y, loadFan, L.box[1]), fanBoxHeight(housePos.y, houseFanOpts, L.box[1]))
+      : fanBoxHeight(loadPos.y, loadFan, L.box[1]);
+  const extentPositions = i.compact
+    ? []
+    : hasSplit
+      ? [housePos, ...separatePlaces, ...includedPlaces]
+      : separatePlaces;
+  const extent = i.compact ? { w: baseW, h: baseH } : freePlaceExtent(extentPositions, baseW, baseH);
   const boxW = extent.w;
   const boxH = extent.h;
-  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, 920), Math.max(boxH, 640));
+  const dragBoundsLoad = placeBoundsForFan(loadFan, Math.max(boxW, 920), Math.max(boxH, 640));
+  const dragBoundsHouse = placeBoundsForFan(houseFanOpts, Math.max(boxW, 920), Math.max(boxH, 640));
   const compactPlaces = i.compact ? blobCompactConsumerPlaces(consumers.length, boxW) : [];
-  const consumerAt = (index: number): Pos =>
-    i.compact ? compactPlaces[index] : { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const houseW = Math.max(0, house);
+  const loadW = hasSplit ? totalConsumptionW(house, consumers) : houseW;
   const outline = i.outline === true;
   const motion = i.motion !== false;
   const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
-  const places = consumers.map((c, index) => ({ c, p: consumerAt(index) }));
-  const total = Math.abs(pv) + Math.abs(house) + Math.abs(grid) + Math.abs(battery);
-  const base = blobBaseRadius(total, i.compact);
+
+  const places = hasSplit
+    ? [
+        ...separate.map((c, index) => ({
+          c,
+          p: i.compact
+            ? compactPlaces[consumers.indexOf(c)]
+            : { x: separatePlaces[index].x, y: separatePlaces[index].y, labelDy: 0 },
+          from: loadPos,
+          fromR: 36 as number,
+          dragOrigin: loadPos,
+          bounds: dragBoundsLoad,
+        })),
+        ...included.map((c, index) => ({
+          c,
+          p: i.compact
+            ? compactPlaces[consumers.indexOf(c)]
+            : { x: includedPlaces[index].x, y: includedPlaces[index].y, labelDy: 0 },
+          from: housePos,
+          fromR: HOUSE_R,
+          dragOrigin: housePos,
+          bounds: dragBoundsHouse,
+        })),
+      ]
+    : consumers.map((c, index) => ({
+        c,
+        p: i.compact
+          ? compactPlaces[index]
+          : { x: separatePlaces[index].x, y: separatePlaces[index].y, labelDy: 0 },
+        from: c.mode === "included" ? loadPos : L.hub,
+        fromR: c.mode === "included" ? 36 : (i.compact ? 22 : 28),
+        dragOrigin: loadFan.origin,
+        bounds: dragBoundsLoad,
+      }));
+
+  const traffic = Math.abs(pv) + Math.abs(loadW) + Math.abs(grid) + Math.abs(battery);
+  const base = blobBaseRadius(traffic, i.compact);
   const pulls = blobPulls({
     pv,
-    house,
+    house: loadW,
     grid,
     battery,
     consumers: places.map(({ c, p }) => ({ angle: angleOf(L.hub, p), watts: c.watts })),
   });
   const path = blobPath(base, pulls);
-  const auto = autonomyTone(house, grid);
+  const auto = autonomyTone(loadW, grid);
   const hubR = i.compact ? 22 : 28;
   const soc = typeof i.soc === "number" && Number.isFinite(i.soc) ? Math.min(100, Math.max(0, i.soc)) : undefined;
   const coreR = soc === undefined ? hubR * 0.9 : hubR * 0.55 + hubR * 0.55 * (soc / 100);
@@ -240,7 +313,12 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       value: grid,
       icon: ICONS.grid,
     },
-    house: { color: "var(--house)", label: t("nodeHouse"), value: house, icon: ICONS.house },
+    house: {
+      color: "var(--house)",
+      label: hasSplit ? t("nodeLoad") : t("nodeHouse"),
+      value: loadW,
+      icon: hasSplit ? ICONS.load : ICONS.house,
+    },
     bat: {
       color: "var(--bat)",
       label: battery < 0 ? t("nodeBatDischarge") : t("nodeBatCharge"),
@@ -251,13 +329,14 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const keys: NodeKey[] = ["pv", "grid", "house", "bat"];
   const aria = [
     ...keys.map((k) => `${nodes[k].label} ${i.fmt.w(nodes[k].value)}`),
+    ...(hasSplit ? [`${t("nodeHouse")} ${i.fmt.w(houseW)}`] : []),
     ...places.map(({ c }) => `${c.name} ${i.fmt.w(c.watts)}`),
   ].join(", ");
 
   // Warm self-supply → cool grid dependence (theme tokens, not a fixed palette).
   const fillA = auto > 0.55 ? "var(--pv)" : auto > 0.25 ? "var(--bat)" : "var(--grid-in)";
   const fillB = auto > 0.55 ? "var(--bat)" : auto > 0.25 ? "var(--house)" : "var(--grid-in)";
-  const busy = Math.min(1, total / PULL_W);
+  const busy = Math.min(1, traffic / PULL_W);
   const blobPeriod = `${(3.2 - 1.4 * busy).toFixed(2)}s`;
   const nodeR = 36;
   const flows: { node: NodeKey; toHub: boolean }[] = [];
@@ -266,7 +345,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   if (battery > ACTIVE_W) flows.push({ node: "bat", toHub: false });
   if (grid < -ACTIVE_W) flows.push({ node: "grid", toHub: true });
   if (grid > ACTIVE_W) flows.push({ node: "grid", toHub: false });
-  if (house > ACTIVE_W) flows.push({ node: "house", toHub: false });
+  if (loadW > ACTIVE_W) flows.push({ node: "house", toHub: false });
   const haloR = base * (0.72 + 0.18 * busy);
 
   return svg`<svg viewBox="0 0 ${boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
@@ -283,6 +362,10 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       </radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, nodeR, hubR)} stroke=${nodes[k].color} opacity=${Math.abs(nodes[k].value) > ACTIVE_W ? 0.4 : 0.16}/>`)}
+    ${hasSplit
+      ? svg`<path class="flow-line" d=${flowSegment(loadPos, housePos, nodeR, HOUSE_R)} stroke="var(--house)" opacity=${houseW > ACTIVE_W ? 0.4 : 0.16}/>
+          ${electrons(loadPos, housePos, nodeR, HOUSE_R, houseW, "var(--house)", motion)}`
+      : svg``}
     ${flows.map((f) => {
       const a = f.toHub ? L[f.node] : L.hub;
       const b = f.toHub ? L.hub : L[f.node];
@@ -302,7 +385,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       const idle = Math.abs(n.value) < ACTIVE_W;
       const above = p.labelDy < 0;
       const ly = p.y + p.labelDy;
-      return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${n.label} @click=${() => i.onSelect?.(k)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(k); } }}>
+      return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${n.label} @click=${() => i.onSelect?.(k === "house" && hasSplit ? "load" : k)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(k === "house" && hasSplit ? "load" : k); } }}>
         <circle cx=${p.x} cy=${p.y} r=${nodeR} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf(n.color)} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#blob-glow)"}/>
         <g transform=${iconTransform(p.x, p.y, nodeIconFit(nodeR))} fill="none" stroke=${strokeOf(n.color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
           ${k === "bat" ? batteryGlyph(i.soc, strokeOf(n.color)) : svg`<path d=${n.icon} vector-effect="non-scaling-stroke"/>`}
@@ -311,23 +394,49 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
         <text class="node-lbl" x=${p.x} y=${ly + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
       </g>`;
     })}
+    ${hasSplit
+      ? svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${houseW < ACTIVE_W ? 0.55 : 1} role="button" tabindex="0" aria-label=${t("nodeHouse")}
+          @click=${() => { if (!i.arrange) i.onSelect?.("house"); }}
+          @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!i.arrange) i.onSelect?.("house"); } }}
+          @pointerdown=${(e: PointerEvent) => onConsumerDrag(e, "__house__", loadPos, i.arrange, i.onPlaceConsumer, dragBoundsLoad)}
+        >
+          <circle cx=${housePos.x} cy=${housePos.y} r=${HOUSE_R} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf("var(--house)")} stroke-width=${outline ? "2.4" : "2"} filter=${houseW < ACTIVE_W || outline ? "none" : "url(#blob-glow)"}/>
+          <g transform=${iconTransform(housePos.x, housePos.y, nodeIconFit(HOUSE_R))} fill="none" stroke=${strokeOf("var(--house)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
+            <path d=${ICONS.house} vector-effect="non-scaling-stroke"/>
+          </g>
+          <text class="node-val-sm" x=${housePos.x} y=${housePos.y + 52} text-anchor="middle">${i.fmt.w(houseW)}</text>
+          <text class="node-lbl-sm" x=${housePos.x} y=${housePos.y + 68} text-anchor="middle">${t("nodeHouse")}</text>
+        </g>`
+      : svg``}
     ${i.compact
-      ? compactBuses(places, L.house, boxW, motion, nodeR)
-      : places.map(({ c, p }) => {
-          const from = c.mode === "included" ? L.house : L.hub;
-          const fromR = c.mode === "included" ? nodeR : hubR;
+      ? hasSplit
+        ? svg`${compactBuses(
+            places.filter(({ c }) => c.mode === "separate"),
+            loadPos,
+            boxW,
+            motion,
+            nodeR,
+          )}${compactBuses(
+            places.filter(({ c }) => c.mode === "included"),
+            housePos,
+            boxW,
+            motion,
+            HOUSE_R,
+          )}`
+        : compactBuses(places, loadPos, boxW, motion, nodeR)
+      : places.map(({ c, p, from, fromR }) => {
           const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
           return svg`<path class="flow-line" d=${flowSegment(from, p, fromR, CONSUMER_R)} stroke=${color} opacity=${Math.abs(c.watts) > ACTIVE_W ? 0.4 : 0.16}/>
             ${electrons(from, p, fromR, CONSUMER_R, c.watts, color, motion)}`;
         })}
-    ${places.map(({ c, p }) => {
+    ${places.map(({ c, p, dragOrigin, bounds }) => {
       const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
       const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
       const open = () => {
         if (!i.arrange) i.onSelect?.(c.id);
       };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
-      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
+      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, dragOrigin, i.arrange, i.onPlaceConsumer, bounds);
       if (i.compact) {
         return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>

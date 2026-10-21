@@ -5,6 +5,7 @@ import {
   freePlaceExtent,
   houseFan,
   parseConsumerPlaces,
+  parseConsumerPlacesByStyle,
   placeFromPoint,
   R_DEFAULT_SEPARATE,
   resolveConsumerPositions,
@@ -63,6 +64,23 @@ describe("parseConsumerPlaces", () => {
     expect(parseConsumerPlaces({ x: { dx: 12, dy: -8 } })).toEqual({ x: { dx: 12, dy: -8 } });
     expect(parseConsumerPlaces({ x: { t: 0.4, r: 1.1 } })).toEqual({ x: { t: 0.4, r: 1.1 } });
     expect(parseConsumerPlaces({ x: { t: "no" } })).toEqual({});
+  });
+});
+
+describe("parseConsumerPlacesByStyle", () => {
+  it("reads per-style maps and rejects flat legacy payloads", () => {
+    expect(
+      parseConsumerPlacesByStyle({
+        nodes: { a: { dx: 1, dy: 2 } },
+        blob: { b: { dx: 3, dy: 4 } },
+        city: {},
+      }),
+    ).toEqual({
+      nodes: { a: { dx: 1, dy: 2 } },
+      blob: { b: { dx: 3, dy: 4 } },
+      city: {},
+    });
+    expect(parseConsumerPlacesByStyle({ a: { dx: 1, dy: 2 } })).toBeNull();
   });
 });
 
