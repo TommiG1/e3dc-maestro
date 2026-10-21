@@ -176,6 +176,12 @@ export const HELP: readonly HelpChapter[] = [
       section("faq-plan-hold", "helpFaqPlanHold", "helpFaqPlanHoldBody", {
         links: [{ id: "faq-plan", label: "helpFaqPlan" }],
       }),
+      section("faq-plan-pv", "helpFaqPlanPv", "helpFaqPlanPvBody", {
+        links: [
+          { id: "faq-plan", label: "helpFaqPlan" },
+          { id: "set-tariff", label: "helpSetTariff" },
+        ],
+      }),
       section("faq-old", "helpFaqOld", "helpFaqOldBody"),
       section("faq-balance-stats", "helpFaqBalanceStats", "helpFaqBalanceStatsBody", {
         links: [{ id: "trouble-history", label: "helpTroubleHistory" }],

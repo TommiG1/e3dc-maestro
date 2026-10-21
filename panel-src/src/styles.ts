@@ -753,6 +753,7 @@ export const styles = css`
   .soc-head {
     width: 100%;
     flex: none;
+    align-items: center;
   }
   .soc-head h3 {
     margin: 0;
@@ -841,16 +842,30 @@ export const styles = css`
     min-height: 0;
   }
   .soc-pack {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
     align-items: center;
-    gap: 18px;
+    column-gap: 18px;
+    row-gap: 10px;
+  }
+  .soc-pack .batt {
+    grid-column: 1;
+    grid-row: 1;
   }
   .soc-pack-readout {
+    grid-column: 2;
+    grid-row: 1;
     display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+  }
+  .soc-pack .reserve-hint {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: center;
+    margin: 0;
   }
   .soc-pack-readout b {
     color: var(--text);

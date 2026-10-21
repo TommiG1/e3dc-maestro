@@ -218,10 +218,16 @@ export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i
   let actualFrom = -1;
   if (showIst && ist && (ist.pv.length > 1 || ist.house.length > 1)) {
     actualFrom = series.length;
+    // Close the gap at "now": extend each actual line to the first forecast point.
+    const bridge = (actual: Point[], forecast: Point[]): Point[] => {
+      const last = actual[actual.length - 1];
+      const first = forecast[0];
+      return last && first && first[0] > last[0] ? [...actual, first] : actual;
+    };
     series.push(
-      { name: `${i18n.t("legendPv")} ${i18n.t("legendActual")}`, type: "line", data: toKw(ist.pv) },
-      { name: `${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, type: "line", data: toKw(ist.house) },
-      { name: `${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, type: "line", data: ist.soc },
+      { name: `${i18n.t("legendPv")} ${i18n.t("legendActual")}`, type: "line", data: toKw(bridge(ist.pv, traj.pv_points)) },
+      { name: `${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, type: "line", data: toKw(bridge(ist.house, traj.house_points)) },
+      { name: `${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, type: "line", data: bridge(ist.soc, socSeries) },
     );
     colors.push(COLORS.pv, COLORS.house, COLORS.bat);
     widths.push(1.5, 1.5, 1.5);

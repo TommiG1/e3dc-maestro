@@ -38,6 +38,7 @@ export class MaestroChart extends LitElement {
   private _chart?: ChartApi;
   private _zoom?: [number, number];
   private _run = 0;
+  private _shape = "";
 
   createRenderRoot(): HTMLElement {
     return this;
@@ -63,10 +64,25 @@ export class MaestroChart extends LitElement {
     apexModule?.claimSVG();
     // Re-attached (e.g. after switching dashboards): the chart was destroyed on disconnect.
     if (this.hasUpdated && this.options && !this._chart) this.requestUpdate("options");
+    window.addEventListener("maestro-chart-rebuilt", this._onRebuilt);
   }
+
+  private _onRebuilt = (e: Event): void => {
+    const target = this.options?.chart?.brush?.target;
+    if (!target || (e as CustomEvent).detail !== target || !this._chart) return;
+    try {
+      this._chart.destroy();
+    } catch {
+      /* chart already torn down */
+    }
+    this._chart = undefined;
+    this.replaceChildren();
+    this.requestUpdate("options");
+  };
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener("maestro-chart-rebuilt", this._onRebuilt);
     if (--connected === 0) apexModule?.releaseSVG();
     this._run++;
     try {
@@ -119,6 +135,23 @@ export class MaestroChart extends LitElement {
         if (run !== this._run) return;
       }
     }
+
+    // Apex keeps per-series state (axis mapping, hidden/collapsed flags, stroke and color arrays) across
+    // updateOptions. When the series set changes (e.g. Ist-Verlauf toggled) that state goes stale and
+    // lines vanish or are skipped, so rebuild the chart instead of patching it.
+    const shape = `${Array.isArray(opts.series) ? opts.series.length : 0}|${Array.isArray(opts.yaxis) ? opts.yaxis.length : 1}|${opts.chart?.type}`;
+    if (this._chart && shape !== this._shape) {
+      try {
+        this._chart.destroy();
+      } catch {
+        /* chart already torn down */
+      }
+      this._chart = undefined;
+      this.replaceChildren();
+      // Brush charts are bound to this chart's instance; tell them to rebind.
+      if (opts.chart?.id) window.dispatchEvent(new CustomEvent("maestro-chart-rebuilt", { detail: raw.chart?.id }));
+    }
+    this._shape = shape;
 
     if (this._chart) {
       await this._chart.updateOptions(opts, false, false);

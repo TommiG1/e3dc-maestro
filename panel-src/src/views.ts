@@ -221,11 +221,16 @@ function socRing(soc: number, label: string, reserve?: number): TemplateResult {
   </div>`;
 }
 
+function reserveHint(text: string): TemplateResult {
+  return html`<p class="reserve-hint"><i></i>${text}</p>`;
+}
+
 function socPack(
   soc: number,
   label: string,
   watts: number | undefined,
   reserve?: number,
+  reserveLabel?: string,
 ): TemplateResult {
   const flow = batteryFlowFromWatts(watts);
   return html`<div class="soc-pack">
@@ -234,6 +239,7 @@ function socPack(
       <b>${Math.round(soc)}%</b>
       <span>${label}</span>
     </div>
+    ${reserveLabel ? reserveHint(reserveLabel) : nothing}
   </div>`;
 }
 
@@ -507,6 +513,10 @@ export function liveView(c: Ctx): TemplateResult {
     </div>`;
   const powerValue = c.forcePowerDraft ?? num(st(c, E.forceDischargePower)) ?? 100;
   const reserveValue = c.reserveDraft ?? num(st(c, E.fixedReserveSoc)) ?? 0;
+  const reserveOn = on(E.fixedReserve);
+  const reserveLabel = reserveOn
+    ? `${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}`
+    : undefined;
   const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
     .filter(Boolean)
     .join(" · ");
@@ -625,29 +635,38 @@ export function liveView(c: Ctx): TemplateResult {
       <div class="card soc-card">
         <div class="card-head soc-head">
           <h3>${t("battery")}</h3>
-          <div class="flow-style" role="radiogroup" aria-label=${t("batteryStyleLabel")}>
-            ${BATTERY_STYLES.map(
-              (id) => html`<button
-                type="button"
-                class="flow-style-btn ${c.batteryStyle === id ? "on" : ""}"
-                role="radio"
-                aria-checked=${c.batteryStyle === id}
-                @click=${() => c.onBatteryStyle(id)}
-              >${t(id === "pack" ? "batteryStylePack" : "batteryStyleRing")}</button>`,
-            )}
+          <div class="flow-head-actions">
+            <button
+              type="button"
+              class="icon-btn"
+              aria-label=${t("batteryPlantDetails")}
+              title=${t("batteryPlantDetails")}
+              @click=${() => c.onOpenRoom("battery")}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="6" width="10" height="15" rx="2"/><path d="M10 4h4"/></svg>
+            </button>
+            <div class="flow-style" role="radiogroup" aria-label=${t("batteryStyleLabel")}>
+              ${BATTERY_STYLES.map(
+                (id) => html`<button
+                  type="button"
+                  class="flow-style-btn ${c.batteryStyle === id ? "on" : ""}"
+                  role="radio"
+                  aria-checked=${c.batteryStyle === id}
+                  @click=${() => c.onBatteryStyle(id)}
+                >${t(id === "pack" ? "batteryStylePack" : "batteryStyleRing")}</button>`,
+              )}
+            </div>
           </div>
         </div>
         <div class="soc-visual">
-          ${soc !== undefined
-            ? c.batteryStyle === "pack"
-              ? socPack(soc, t("stateOfCharge"), bat, on(E.fixedReserve) ? reserveValue : undefined)
-              : socRing(soc, t("stateOfCharge"), on(E.fixedReserve) ? reserveValue : undefined)
-            : html`<p class="empty">${t("unavailable")}</p>`}
-          ${on(E.fixedReserve)
-            ? html`<p class="reserve-hint"><i></i>${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}</p>`
-            : nothing}
+          ${soc === undefined
+            ? html`<p class="empty">${t("unavailable")}</p>`
+            : c.batteryStyle === "pack"
+              ? socPack(soc, t("stateOfCharge"), bat, reserveOn ? reserveValue : undefined, reserveLabel)
+              : html`${socRing(soc, t("stateOfCharge"), reserveOn ? reserveValue : undefined)}
+                ${reserveLabel ? reserveHint(reserveLabel) : nothing}`}
         </div>
-        ${socMetrics(c, soc, target, on(E.fixedReserve) ? reserveValue : undefined)}
+        ${socMetrics(c, soc, target, reserveOn ? reserveValue : undefined)}
         <button type="button" class="soc-ctrl-btn" @click=${() => c.onOpenBatteryCtrl()}>
           <span class="soc-ctrl-copy">
             <span class="soc-ctrl-label">${t("batteryCtrl")}</span>

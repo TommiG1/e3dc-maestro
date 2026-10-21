@@ -1,3 +1,5 @@
 # Entwurf – noch kein Release
 
-> Noch keine Änderungen seit 0.5.1-beta.6.
+## Hilfe
+
+- **FAQ: Netzladung trotz guter PV-Prognose.** Erklärt die konservative Rechnung (PV 80 %, Verbrauchs-Sicherheitsfaktor), den Unterschied zur Diagramm-PV und dass der Preisplan sich etwa alle fünf Minuten neu rechnet.
