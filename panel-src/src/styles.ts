@@ -2843,15 +2843,41 @@ export const styles = css`
     font-size: 12px;
     color: var(--muted);
   }
+  .phase-ladder-link {
+    margin-top: 12px;
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
   .ladder {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-bottom: 18px;
+    margin: 0 0 18px;
     padding: 16px 16px 8px;
     border: 1px solid var(--stroke);
     border-radius: var(--radius);
     background: var(--glass);
+    scroll-margin-top: 12px;
+  }
+  .ladder.ladder-flash {
+    animation: ladder-flash 1.1s ease;
+  }
+  @keyframes ladder-flash {
+    0%,
+    100% {
+      box-shadow: none;
+    }
+    35% {
+      box-shadow: 0 0 0 2px var(--accent-glow), 0 0 24px var(--accent-wash);
+    }
   }
   .ladder-head h3 {
     margin: 0;
@@ -3126,21 +3152,82 @@ export const styles = css`
     border-color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--accent), var(--card-shadow);
   }
+  .theme-preview-banner {
+    color: var(--accent);
+    font-weight: 600;
+  }
   .theme-choice .swatch {
-    width: 64px;
-    height: 44px;
+    width: 72px;
+    height: 48px;
     border-radius: 12px;
     flex: none;
     border: 1px solid rgba(21, 36, 56, 0.12);
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+  .theme-choice .swatch-rail {
+    width: 14px;
+    flex: none;
+  }
+  .theme-choice .swatch-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 6px 6px 5px;
+  }
+  .theme-choice .swatch-card {
+    flex: 1;
+    border-radius: 5px;
+    min-height: 0;
+  }
+  .theme-choice .swatch-bar {
+    height: 5px;
+    border-radius: 999px;
+    width: 62%;
   }
   .theme-choice .swatch.dark {
-    background: linear-gradient(145deg, #070b14, #1a3a52 70%, #38bdf8);
+    background: #070b14;
+    border-color: rgba(148, 163, 184, 0.2);
+  }
+  .theme-choice .swatch.dark .swatch-rail {
+    background: linear-gradient(180deg, #0f172a, #1e293b);
+  }
+  .theme-choice .swatch.dark .swatch-card {
+    background: linear-gradient(180deg, #152033, #0f172a);
+    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18);
+  }
+  .theme-choice .swatch.dark .swatch-bar {
+    background: #38bdf8;
   }
   .theme-choice .swatch.classic {
-    background: linear-gradient(145deg, #f7fbff, #d5e4f2 68%, #0284c7);
+    background: #e7eef5;
+    border-color: rgba(21, 36, 56, 0.12);
+  }
+  .theme-choice .swatch.classic .swatch-rail {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .theme-choice .swatch.classic .swatch-card {
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(21, 32, 51, 0.08);
+  }
+  .theme-choice .swatch.classic .swatch-bar {
+    background: #0284c7;
   }
   .theme-choice .swatch.e3dc {
-    background: linear-gradient(145deg, #1e252b 0 38%, #f7f7f7 38% 72%, #5cc244 72%);
+    background: #f7f7f7;
+    border-color: rgba(30, 37, 43, 0.12);
+  }
+  .theme-choice .swatch.e3dc .swatch-rail {
+    background: #1e252b;
+  }
+  .theme-choice .swatch.e3dc .swatch-card {
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(30, 37, 43, 0.08);
+  }
+  .theme-choice .swatch.e3dc .swatch-bar {
+    background: #5cc244;
   }
   .theme-choice .txt {
     display: flex;

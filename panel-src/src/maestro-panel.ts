@@ -107,6 +107,11 @@ const SCREENS: { id: Screen; label: Key; sub: Key; icon: string }[] = [
 ];
 const SLIDERS_ICON = '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>';
 const HELP_ICON = '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1-1.3 1.8V14"/><path d="M12 17h.01"/>';
+/** Shown while dark — tap switches to myE3DC (light). */
+const SUN_ICON =
+  '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6"/>';
+/** Shown while light — tap switches to dark. */
+const MOON_ICON = '<path d="M20.2 14.2A7.5 7.5 0 0 1 9.8 3.8 8.5 8.5 0 1 0 20.2 14.2z"/>';
 const MOBILE = "(max-width: 960px)";
 const HISTORY_TTL = 5 * 60e3;
 const HISTORY_RETRY = 60e3;
@@ -136,6 +141,9 @@ class MaestroPanel extends LitElement {
   private _settingsGroup?: string = initialLocation.settingsGroup;
   private _plantGroup?: string = initialLocation.plantGroup;
   private _theme: ThemeId = loadTheme();
+  /** Hover preview on the look page; does not persist until `_setTheme`. */
+  private _themePreview?: ThemeId;
+  private _scrollToLadder = false;
   private _flowStyle: FlowStyleId = loadFlowStyle();
   private _batteryStyle: BatteryStyleId = loadBatteryStyle();
   private _bannerHidden = loadBannerHidden();
@@ -720,8 +728,28 @@ class MaestroPanel extends LitElement {
 
   private _setTheme(theme: ThemeId): void {
     this._theme = theme;
+    this._themePreview = undefined;
     useChartTheme(theme);
     saveTheme(theme);
+    this.requestUpdate();
+  }
+
+  /** Quick toggle in the top bar: dark ↔ myE3DC (classic counts as light). */
+  private _toggleLightDark(): void {
+    this._setTheme(this._theme === "dark" ? "e3dc" : "dark");
+  }
+
+  private _previewTheme(theme: ThemeId | undefined): void {
+    if (theme === this._themePreview) return;
+    this._themePreview = theme;
+    this.requestUpdate();
+  }
+
+  private _showLadder(): void {
+    if (this._screen !== "decision") {
+      this._go("decision");
+    }
+    this._scrollToLadder = true;
     this.requestUpdate();
   }
 
@@ -1200,6 +1228,9 @@ class MaestroPanel extends LitElement {
       },
       theme: this._theme,
       onTheme: (theme) => this._setTheme(theme),
+      onThemePreview: (theme) => this._previewTheme(theme),
+      themePreviewing: this._themePreview !== undefined && this._themePreview !== this._theme,
+      onShowLadder: () => this._showLadder(),
       flowStyle: this._flowStyle,
       onFlowStyle: (style) => this._setFlowStyle(style),
       alertBannerHidden: this._bannerHidden,
@@ -1283,6 +1314,13 @@ class MaestroPanel extends LitElement {
               ${pauseText ? html`<p class="sub">${pauseText}</p>` : nothing}
               ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
+            <button
+              type="button"
+              class="menu theme-toggle"
+              aria-label=${this._theme === "dark" ? t("themeToggleToLight") : t("themeToggleToDark")}
+              title=${this._theme === "dark" ? t("themeToggleToLight") : t("themeToggleToDark")}
+              @click=${() => this._toggleLightDark()}
+            >${icon(this._theme === "dark" ? SUN_ICON : MOON_ICON)}</button>
             <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
             <button type="button" class="pill hide-sm" @click=${() => this._openPause()}>
               <span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}
@@ -1422,7 +1460,8 @@ class MaestroPanel extends LitElement {
   private _scrollKey = "";
 
   protected willUpdate(): void {
-    if (this.getAttribute("theme") !== this._theme) this.setAttribute("theme", this._theme);
+    const theme = this._themePreview ?? this._theme;
+    if (this.getAttribute("theme") !== theme) this.setAttribute("theme", theme);
     if (this._hass) {
       // Drop confirmed keys that cleared so the same alarm can show again later.
       this._syncAlertDismissed(activeAlertKeys(this._hass));
@@ -1434,7 +1473,18 @@ class MaestroPanel extends LitElement {
     if (scrollKey !== this._scrollKey) {
       this._scrollKey = scrollKey;
       const main = this.renderRoot.querySelector("main");
-      if (main && !this._focusConsumers) main.scrollTop = 0;
+      if (main && !this._focusConsumers && !this._scrollToLadder) main.scrollTop = 0;
+    }
+    if (this._scrollToLadder) {
+      this._scrollToLadder = false;
+      const ladder = this.renderRoot.querySelector<HTMLElement>("#regelleiter");
+      if (ladder) {
+        ladder.scrollIntoView({ behavior: "smooth", block: "start" });
+        ladder.classList.remove("ladder-flash");
+        // Restart CSS animation if the user taps the link again.
+        void ladder.offsetWidth;
+        ladder.classList.add("ladder-flash");
+      }
     }
     void this._loadOptions();
     if (this._screen === "settings" && this._settingsGroup === CLASSIC_DASHBOARD.id && !this._classic) {

@@ -404,6 +404,10 @@ export interface SettingsCtx {
   onPress: (entityId: string) => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  /** Hover preview; pass undefined to restore the saved theme. */
+  onThemePreview: (theme: ThemeId | undefined) => void;
+  /** True while a hover preview is active (not yet saved). */
+  themePreviewing: boolean;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
   /** When true the live alert banner stays hidden; chips still show the same info. */
@@ -1040,16 +1044,28 @@ function lookView(c: SettingsCtx): TemplateResult {
     city: { title: "flowStyleCity", hint: "flowStyleCityHint" },
   };
   const showBanner = !c.alertBannerHidden;
-  return html`<div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
+  return html`<p class="hint">${t("setLookHint")}</p>
+  ${c.themePreviewing ? html`<p class="hint theme-preview-banner">${t("themePreviewHint")}</p>` : nothing}
+  <div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
     ${THEMES.map(
       (id) => html`<button
         type="button"
         class="theme-choice ${c.theme === id ? "on" : ""}"
         role="radio"
         aria-checked=${c.theme === id}
+        @pointerenter=${() => c.onThemePreview(id)}
+        @pointerleave=${() => c.onThemePreview(undefined)}
+        @focus=${() => c.onThemePreview(id)}
+        @blur=${() => c.onThemePreview(undefined)}
         @click=${() => c.onTheme(id)}
       >
-        <span class="swatch ${id}" aria-hidden="true"></span>
+        <span class="swatch ${id}" aria-hidden="true">
+          <span class="swatch-rail"></span>
+          <span class="swatch-stage">
+            <span class="swatch-card"></span>
+            <span class="swatch-bar"></span>
+          </span>
+        </span>
         <span class="txt"><b>${t(copy[id].title)}</b><span>${t(copy[id].hint)}</span></span>
       </button>`,
     )}

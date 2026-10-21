@@ -82,7 +82,7 @@ export function ladderView(
 ): TemplateResult {
   const { t } = i18n;
   const active = ladderActive(phase, planActive, lowYield);
-  return html`<section class="ladder" aria-label=${t("ladderTitle")}>
+  return html`<section id="regelleiter" class="ladder" aria-label=${t("ladderTitle")}>
     <div class="ladder-head">
       <h3>${t("ladderTitle")}</h3>
       <p>${t("ladderHint")}</p>

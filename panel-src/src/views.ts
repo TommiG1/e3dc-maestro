@@ -26,6 +26,7 @@ import { splitEnergyFlow, splitFlowBoxHeight } from "./flow-split";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
+import { ladderView } from "./ladder";
 import type { ThemeId } from "./theme";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
@@ -148,8 +149,13 @@ export interface Ctx {
   onReserveCommit: (percent: number) => void;
   debugOpen: boolean;
   onToggleDebug: () => void;
+  /** Scroll to the control ladder on this screen (decision). */
+  onShowLadder: () => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  /** Temporary look while hovering a theme swatch; undefined clears. */
+  onThemePreview: (theme: ThemeId | undefined) => void;
+  themePreviewing: boolean;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
   alertBannerHidden: boolean;
@@ -1389,6 +1395,7 @@ export function decisionView(c: Ctx): TemplateResult {
         <div class="phase-name">${phase(d.phase)}</div>
         <div class="phase-reason">${typeof d.reason === "string" ? d.reason : ""}</div>
         <div class="chips">${tags.map((tag) => html`<span class="chip on"><i></i>${tag}</span>`)}</div>
+        <button type="button" class="linkish phase-ladder-link" @click=${c.onShowLadder}>${t("showInLadder")}</button>
       </div>
       <div class="card">
         <h3>${t("limitsTitle")}</h3>
@@ -1408,6 +1415,13 @@ export function decisionView(c: Ctx): TemplateResult {
         </div>
       </div>
     </div>
+    ${ladderView(
+      c.i18n,
+      d.phase,
+      isOn(st(c, E.ctrlPlanControls)),
+      isOn(st(c, E.lowYield)),
+      c.onOpenGroup,
+    )}
     <div class="card tl-card">
       <div class="card-head">
         <h3>${t("timelineTitle")}</h3>
