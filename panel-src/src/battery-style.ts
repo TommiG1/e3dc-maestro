@@ -5,14 +5,14 @@ export type BatteryStyleId = (typeof BATTERY_STYLES)[number];
 const STORAGE_KEY = "e3dc-maestro.battery-style.v1";
 
 export function parseBatteryStyle(raw: unknown): BatteryStyleId {
-  return raw === "pack" ? "pack" : "ring";
+  return raw === "ring" ? "ring" : "pack";
 }
 
 export function loadBatteryStyle(): BatteryStyleId {
   try {
     return parseBatteryStyle(localStorage.getItem(STORAGE_KEY));
   } catch {
-    return "ring";
+    return "pack";
   }
 }
 

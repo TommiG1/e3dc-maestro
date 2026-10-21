@@ -809,6 +809,86 @@ export const styles = css`
     width: min(440px, calc(100% - 24px));
     max-height: min(720px, calc(100% - 24px));
   }
+  .flow-opts-wrap {
+    position: relative;
+    flex: none;
+  }
+  .flow-opts-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: transparent;
+  }
+  .flow-opts-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 31;
+    width: min(340px, calc(100vw - 28px));
+    max-height: min(70vh, 520px);
+    overflow: auto;
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid var(--stroke-strong);
+    /* Solid panel — --card-bg is translucent and lets the flow bleed through. */
+    background: var(--bg);
+    box-shadow: var(--card-shadow), 0 0 0 1px color-mix(in srgb, var(--bg) 80%, transparent);
+  }
+  .flow-opts-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .flow-opts-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .flow-opts-section {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .flow-opts-choices {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .flow-opts-choices .theme-choice {
+    padding: 10px;
+    gap: 12px;
+  }
+  .flow-opts-choices .theme-choice .swatch {
+    width: 48px;
+    height: 34px;
+  }
+  .flow-opts-action {
+    width: 100%;
+    justify-content: center;
+  }
+  .flow-opts-action + .flow-opts-action {
+    margin-top: 6px;
+  }
+  .flow-arrange-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+  }
+  .flow-arrange-bar .flow-arrange-hint {
+    margin: 0;
+  }
+  .flow-consumers-done {
+    width: 100%;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .icon-btn.on {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--stroke-strong));
+  }
   .battery-ctrl-body {
     display: flex;
     flex-direction: column;

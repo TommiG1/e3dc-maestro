@@ -2,10 +2,13 @@ import { svg, type TemplateResult } from "lit";
 import {
   fanBoxHeight,
   fanBoxPad,
+  freePlaceExtent,
   houseFan,
   onConsumerDrag,
+  placeBoundsForFan,
   resolveConsumerPositions,
   type ConsumerPlace,
+  type StoredConsumerPlace,
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH, type FlowConsumer } from "./consumers";
 import maestroLogo from "./maestro-logo.png";
@@ -22,9 +25,9 @@ export interface FlowInput {
   /** State of charge, 0–100. Draws the level inside the battery outline. */
   soc?: number;
   consumers?: FlowConsumer[];
-  /** Saved fan slots (id → t/r). */
-  consumerPlaces?: Record<string, ConsumerPlace>;
-  /** Drag consumers on the fan instead of opening history. */
+  /** Saved free offsets from the house (id → dx/dy). */
+  consumerPlaces?: Record<string, StoredConsumerPlace>;
+  /** Drag consumers freely instead of opening history. */
   arrange?: boolean;
   onPlaceConsumer?: (id: string, place: ConsumerPlace) => void;
   /** False when the user prefers reduced motion: the soft line stays, particles do not. */
@@ -266,18 +269,23 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
   const fan = houseFan(L.house, consumers.length);
-  const boxW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
-  const boxH = i.compact
+  const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
+  const baseH = i.compact
     ? compactFlowHeight(consumers.length)
     : fanBoxHeight(L.house.y, fan, L.box[1]);
-  const compactPlaces = i.compact ? compactConsumerPositions(consumers.length, boxW) : [];
   const fanPlaces = i.compact
     ? []
     : resolveConsumerPositions(
         consumers.map((c) => c.id),
         i.consumerPlaces ?? {},
         fan,
+        consumers.map((c) => c.mode),
       );
+  const extent = i.compact ? { w: baseW, h: baseH } : freePlaceExtent(fanPlaces, baseW, baseH);
+  const boxW = extent.w;
+  const boxH = extent.h;
+  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, 920), Math.max(boxH, 640));
+  const compactPlaces = i.compact ? compactConsumerPositions(consumers.length, boxW) : [];
   const consumerAt = (index: number): Pos =>
     i.compact ? compactPlaces[index] : { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
@@ -358,7 +366,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
         if (!i.arrange) i.onSelect?.(c.id);
       };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
-      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan, i.arrange, i.onPlaceConsumer);
+      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
       if (i.compact) {
         return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>

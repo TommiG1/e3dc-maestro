@@ -1,11 +1,23 @@
 /** Shared consumer dock for the live energy-flow views (nodes / blob / city). */
 
+import type { ConsumerMode } from "./consumers";
+
+/**
+ * Free offset from the house/fan origin in SVG units.
+ * Legacy fan slots `{ t, r }` are accepted when reading older storage and converted on resolve.
+ */
 export interface ConsumerPlace {
-  /** 0–1 along the fan (top → bottom). */
+  dx: number;
+  dy: number;
+}
+
+/** Old fan slot (angle + radius). Still read from localStorage, converted on resolve. */
+export interface LegacyFanPlace {
   t: number;
-  /** Radius scale, 0.75–1.35. */
   r: number;
 }
+
+export type StoredConsumerPlace = ConsumerPlace | LegacyFanPlace;
 
 export interface ConsumerPos {
   x: number;
@@ -17,36 +29,68 @@ export interface ConsumerPos {
 
 export interface FanOpts {
   origin: { x: number; y: number };
-  /** Base radius in SVG units. */
+  /** Base radius in SVG units (defaults only). */
   radius: number;
   /** Start/end angle in radians (0 = east, positive clockwise in SVG y-down). */
   startAngle: number;
   endAngle: number;
 }
 
-const STORAGE_KEY = "e3dc-maestro.consumer-places.v1";
+export interface PlaceBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
 
-export function parseConsumerPlaces(raw: unknown): Record<string, ConsumerPlace> {
+const STORAGE_KEY = "e3dc-maestro.consumer-places.v2";
+const LEGACY_STORAGE_KEY = "e3dc-maestro.consumer-places.v1";
+
+/** Defaults for separately measured loads sit closer to the house. */
+export const R_DEFAULT_SEPARATE = 0.55;
+export const R_DEFAULT_INCLUDED = 1;
+/** Soft drag envelope around the house origin (SVG units). */
+const DRAG_PAD = 36;
+const LABEL_W = 160;
+
+const isFree = (row: Record<string, unknown>): row is { dx: number; dy: number } =>
+  typeof row.dx === "number" &&
+  Number.isFinite(row.dx) &&
+  typeof row.dy === "number" &&
+  Number.isFinite(row.dy);
+
+const isLegacy = (row: Record<string, unknown>): row is { t: number; r: number } =>
+  typeof row.t === "number" && Number.isFinite(row.t) && typeof row.r === "number" && Number.isFinite(row.r);
+
+export function parseConsumerPlaces(raw: unknown): Record<string, StoredConsumerPlace> {
   if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, ConsumerPlace> = {};
+  const out: Record<string, StoredConsumerPlace> = {};
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!id || !value || typeof value !== "object") continue;
     const row = value as Record<string, unknown>;
-    const t = typeof row.t === "number" && Number.isFinite(row.t) ? Math.min(1, Math.max(0, row.t)) : undefined;
-    const r =
-      typeof row.r === "number" && Number.isFinite(row.r) ? Math.min(1.35, Math.max(0.75, row.r)) : 1;
-    if (t === undefined) continue;
-    out[id] = { t, r };
+    if (isFree(row)) {
+      out[id] = { dx: row.dx, dy: row.dy };
+      continue;
+    }
+    if (isLegacy(row)) {
+      out[id] = { t: Math.min(1, Math.max(0, row.t)), r: Math.min(1.35, Math.max(0.35, row.r)) };
+    }
   }
   return out;
 }
 
-export function loadConsumerPlaces(): Record<string, ConsumerPlace> {
+function readStorage(key: string): unknown {
   try {
-    return parseConsumerPlaces(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
+    return JSON.parse(localStorage.getItem(key) ?? "null");
   } catch {
-    return {};
+    return null;
   }
+}
+
+export function loadConsumerPlaces(): Record<string, StoredConsumerPlace> {
+  const v2 = parseConsumerPlaces(readStorage(STORAGE_KEY));
+  if (Object.keys(v2).length) return v2;
+  return parseConsumerPlaces(readStorage(LEGACY_STORAGE_KEY));
 }
 
 export function saveConsumerPlaces(places: Record<string, ConsumerPlace>): void {
@@ -60,6 +104,7 @@ export function saveConsumerPlaces(places: Record<string, ConsumerPlace>): void 
 export function clearConsumerPlaces(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // ignore
   }
@@ -73,7 +118,7 @@ export function defaultFanT(index: number, count: number): number {
 
 export function fanPoint(t: number, rScale: number, fan: FanOpts): { x: number; y: number } {
   const tClamped = Math.min(1, Math.max(0, t));
-  const r = fan.radius * Math.min(1.35, Math.max(0.75, rScale));
+  const r = fan.radius * Math.min(1.35, Math.max(0.35, rScale));
   const angle = fan.startAngle + tClamped * (fan.endAngle - fan.startAngle);
   return {
     x: fan.origin.x + Math.cos(angle) * r,
@@ -81,28 +126,9 @@ export function fanPoint(t: number, rScale: number, fan: FanOpts): { x: number; 
   };
 }
 
-/** Map a point back onto the fan (for drag). */
-export function placeFromPoint(x: number, y: number, fan: FanOpts): ConsumerPlace {
-  const dx = x - fan.origin.x;
-  const dy = y - fan.origin.y;
-  let angle = Math.atan2(dy, dx);
-  const a0 = fan.startAngle;
-  const a1 = fan.endAngle;
-  const lo = Math.min(a0, a1);
-  const hi = Math.max(a0, a1);
-  if (angle < lo) angle = lo;
-  if (angle > hi) angle = hi;
-  const span = a1 - a0 || 1;
-  const t = Math.min(1, Math.max(0, (angle - a0) / span));
-  const dist = Math.hypot(dx, dy);
-  const r = fan.radius > 0 ? dist / fan.radius : 1;
-  return { t, r: Math.min(1.35, Math.max(0.75, r)) };
-}
-
 /** Default east-facing fan used by nodes and blob (house on the right of the hub). */
 export function houseFan(origin: { x: number; y: number }, count: number): FanOpts {
   const radius = 112 + Math.min(count, 6) * 8;
-  // SVG y grows downward: negative angle = up.
   return {
     origin,
     radius,
@@ -111,35 +137,105 @@ export function houseFan(origin: { x: number; y: number }, count: number): FanOp
   };
 }
 
+function defaultOffset(
+  index: number,
+  count: number,
+  fan: FanOpts,
+  mode: ConsumerMode | undefined,
+): ConsumerPlace {
+  const r = mode === "separate" ? R_DEFAULT_SEPARATE : R_DEFAULT_INCLUDED;
+  const pt = fanPoint(defaultFanT(index, count), r, fan);
+  return { dx: pt.x - fan.origin.x, dy: pt.y - fan.origin.y };
+}
+
+function asOffset(
+  raw: StoredConsumerPlace | undefined,
+  index: number,
+  count: number,
+  fan: FanOpts,
+  mode: ConsumerMode | undefined,
+): ConsumerPlace {
+  if (!raw) return defaultOffset(index, count, fan, mode);
+  if ("dx" in raw) return raw;
+  const pt = fanPoint(raw.t, raw.r, fan);
+  return { dx: pt.x - fan.origin.x, dy: pt.y - fan.origin.y };
+}
+
 /** Resolve pixel positions for the current consumer list. */
 export function resolveConsumerPositions(
   ids: string[],
-  places: Record<string, ConsumerPlace>,
+  places: Record<string, StoredConsumerPlace>,
   fan: FanOpts,
+  modes?: readonly ConsumerMode[],
 ): ConsumerPos[] {
   return ids.map((id, index) => {
-    const custom = places[id];
-    const t = custom?.t ?? defaultFanT(index, ids.length);
-    const r = custom?.r ?? 1;
-    const pt = fanPoint(t, r, fan);
-    return { x: pt.x, y: pt.y, labelSide: "right" as const, labelDy: 0 };
+    const mode = modes?.[index];
+    const offset = asOffset(places[id], index, ids.length, fan, mode);
+    return {
+      x: fan.origin.x + offset.dx,
+      y: fan.origin.y + offset.dy,
+      labelSide: "right" as const,
+      labelDy: 0,
+    };
   });
 }
 
-/** Extra width so right-side captions fit. */
+/** Map a pointer to a free offset from the house origin. */
+export function placeFromPoint(
+  x: number,
+  y: number,
+  origin: { x: number; y: number },
+  bounds?: PlaceBounds,
+): ConsumerPlace {
+  let px = x;
+  let py = y;
+  if (bounds) {
+    px = Math.min(bounds.maxX, Math.max(bounds.minX, px));
+    py = Math.min(bounds.maxY, Math.max(bounds.minY, py));
+  }
+  return { dx: px - origin.x, dy: py - origin.y };
+}
+
+/** Extra width so right-side captions fit (defaults / empty places). */
 export function fanBoxPad(count: number): number {
   if (!count) return 0;
   return 200;
 }
 
-/** ViewBox height so the fan and captions stay inside. */
+/** ViewBox height so a default fan and captions stay inside. */
 export function fanBoxHeight(originY: number, fan: FanOpts, baseH: number): number {
   const top = fanPoint(0, 1.35, fan).y - 36;
   const bottom = fanPoint(1, 1.35, fan).y + 36;
-  // Mirror top overhang below the origin only when that top space is inside the viewBox.
-  // When the fan already clips above y=0, mirroring would invent empty space under the house.
   const mirrored = top >= 0 ? originY + (originY - top) + 24 : bottom + 24;
   return Math.max(baseH, Math.ceil(bottom + 24), Math.ceil(mirrored));
+}
+
+/** Grow the viewBox so free-placed consumers and labels stay inside. */
+export function freePlaceExtent(
+  positions: readonly { x: number; y: number }[],
+  baseW: number,
+  baseH: number,
+): { w: number; h: number } {
+  if (!positions.length) return { w: baseW, h: baseH };
+  let maxX = baseW;
+  let maxY = baseH;
+  let minY = 0;
+  for (const p of positions) {
+    maxX = Math.max(maxX, p.x + LABEL_W);
+    maxY = Math.max(maxY, p.y + 44);
+    minY = Math.min(minY, p.y - 36);
+  }
+  return { w: Math.ceil(maxX + 16), h: Math.ceil(maxY - Math.min(0, minY) + 16) };
+}
+
+/** Drag bounds covering the flow card plus room left of the house. */
+export function placeBoundsForFan(fan: FanOpts, boxW: number, boxH: number): PlaceBounds {
+  return {
+    minX: Math.min(fan.origin.x - 120, DRAG_PAD),
+    maxX: Math.max(boxW - DRAG_PAD, fan.origin.x + fan.radius * 1.5),
+    minY: DRAG_PAD,
+    maxY: Math.max(boxH - DRAG_PAD, fan.origin.y + fan.radius * 1.5),
+  };
 }
 
 /** Client coordinates → SVG user space. */
@@ -153,13 +249,14 @@ export function svgPoint(svg: SVGSVGElement, clientX: number, clientY: number): 
   return { x: local.x, y: local.y };
 }
 
-/** Pointer-drag a consumer onto a new fan slot. No-op when arrange is off. */
+/** Pointer-drag a consumer freely. No-op when arrange is off. */
 export function onConsumerDrag(
   e: PointerEvent,
   id: string,
-  fan: FanOpts,
+  origin: { x: number; y: number },
   arrange: boolean | undefined,
   onPlace: ((id: string, place: ConsumerPlace) => void) | undefined,
+  bounds?: PlaceBounds,
 ): void {
   if (!arrange || !onPlace) return;
   const target = e.currentTarget;
@@ -172,7 +269,7 @@ export function onConsumerDrag(
   const move = (ev: PointerEvent) => {
     const p = svgPoint(svg, ev.clientX, ev.clientY);
     if (!p) return;
-    onPlace(id, placeFromPoint(p.x, p.y, fan));
+    onPlace(id, placeFromPoint(p.x, p.y, origin, bounds));
   };
   const up = (ev: PointerEvent) => {
     try {

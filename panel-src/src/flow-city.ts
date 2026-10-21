@@ -2,8 +2,10 @@ import { svg, type TemplateResult } from "lit";
 import {
   fanBoxHeight,
   fanBoxPad,
+  freePlaceExtent,
   houseFan,
   onConsumerDrag,
+  placeBoundsForFan,
   resolveConsumerPositions,
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH } from "./consumers";
@@ -262,6 +264,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
         consumers.map((row) => row.id),
         i.consumerPlaces ?? {},
         fan,
+        consumers.map((row) => row.mode),
       );
 
   // Compact: captions under the plinth, then the consumer list (clear of the mast).
@@ -287,18 +290,24 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
       },
     };
   });
-  const fanH = consumers.length ? fanBoxHeight(midFacade.y, fan, g.boxH) : g.boxH;
-  // Idle: crop to the real fan slots. Arrange keeps the wider r=1.35 envelope for dragging.
+  const baseFanH = consumers.length ? fanBoxHeight(midFacade.y, fan, g.boxH) : g.boxH;
+  const freeExtent = i.compact
+    ? { w: g.boxW, h: baseFanH }
+    : freePlaceExtent(
+        places.map(({ p }) => p),
+        g.boxW + (consumers.length ? fanBoxPad(consumers.length) : 0),
+        baseFanH,
+      );
   const contentBottom = places.length
     ? Math.max(g.groundY + 20, ...places.map(({ p }) => p.y + 44))
     : g.boxH;
+  const boxW = i.compact ? g.boxW : freeExtent.w;
   const boxH = i.compact
     ? places.length
       ? places.at(-1)!.p.y + 40
       : g.mast.y + 56
-    : i.arrange
-      ? fanH
-      : Math.max(g.boxH, contentBottom);
+    : Math.max(g.boxH, contentBottom, freeExtent.h);
+  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, 920), Math.max(boxH, 640));
 
   const aria = [
     `${t("nodePv")} ${i.fmt.w(pv)}`,
@@ -313,7 +322,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const cols = 5;
   const rows = 2;
 
-  return svg`<svg viewBox="0 0 ${g.boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
+  return svg`<svg viewBox="0 0 ${boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
     <defs>
       <filter id="city-glow"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <filter id="city-soft"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/></feMerge></filter>
@@ -459,7 +468,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
           open();
         }
       };
-      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan, i.arrange, i.onPlaceConsumer);
+      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
       const join = { x: g.facade.x + g.facade.w, y: Math.min(Math.max(p.y, g.facade.y + 24), g.facade.y + g.facade.h - 24) };
       if (i.compact) {
         return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>

@@ -146,6 +146,18 @@ export function toFlow(list: Consumer[], hass: Hass): FlowConsumer[] {
   });
 }
 
+/** Hide idle loads in the live flow. Edit and arrange still see every consumer. */
+export const FLOW_CONSUMER_MIN_W = 10;
+
+export function visibleInFlow(
+  items: FlowConsumer[],
+  opts?: { arrange?: boolean; minW?: number },
+): FlowConsumer[] {
+  if (opts?.arrange) return items;
+  const min = opts?.minW ?? FLOW_CONSUMER_MIN_W;
+  return items.filter((c) => Math.abs(c.watts) > min);
+}
+
 /** Separate loads with a day counter. Only the Maestro wallbox sensor has one today. */
 export function separateDayEnergy(
   items: Pick<FlowConsumer, "name" | "mode" | "entityId">[],

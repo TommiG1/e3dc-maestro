@@ -2,8 +2,10 @@ import { svg, type TemplateResult } from "lit";
 import {
   fanBoxHeight,
   fanBoxPad,
+  freePlaceExtent,
   houseFan,
   onConsumerDrag,
+  placeBoundsForFan,
   resolveConsumerPositions,
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH } from "./consumers";
@@ -188,20 +190,25 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
   const fan = houseFan(L.house, consumers.length);
-  const boxW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
-  const boxH = i.compact
-    ? consumers.length
-      ? blobCompactConsumerPlaces(consumers.length, boxW).at(-1)!.y + 36
-      : L.box[1]
-    : fanBoxHeight(L.house.y, fan, L.box[1]);
-  const compactPlaces = i.compact ? blobCompactConsumerPlaces(consumers.length, boxW) : [];
+  const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
   const fanPlaces = i.compact
     ? []
     : resolveConsumerPositions(
         consumers.map((c) => c.id),
         i.consumerPlaces ?? {},
         fan,
+        consumers.map((c) => c.mode),
       );
+  const baseH = i.compact
+    ? consumers.length
+      ? blobCompactConsumerPlaces(consumers.length, baseW).at(-1)!.y + 36
+      : L.box[1]
+    : fanBoxHeight(L.house.y, fan, L.box[1]);
+  const extent = i.compact ? { w: baseW, h: baseH } : freePlaceExtent(fanPlaces, baseW, baseH);
+  const boxW = extent.w;
+  const boxH = extent.h;
+  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, 920), Math.max(boxH, 640));
+  const compactPlaces = i.compact ? blobCompactConsumerPlaces(consumers.length, boxW) : [];
   const consumerAt = (index: number): Pos =>
     i.compact ? compactPlaces[index] : { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
@@ -320,7 +327,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
         if (!i.arrange) i.onSelect?.(c.id);
       };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
-      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan, i.arrange, i.onPlaceConsumer);
+      const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
       if (i.compact) {
         return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>

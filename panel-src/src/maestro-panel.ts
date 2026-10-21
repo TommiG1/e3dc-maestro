@@ -134,7 +134,7 @@ class MaestroPanel extends LitElement {
   private _batteryStyle: BatteryStyleId = loadBatteryStyle();
   private _bannerHidden = loadBannerHidden();
   private _alertDismissed: Set<AlertKey> = loadDismissed();
-  private _consumerPlaces: Record<string, ConsumerPlace> = loadConsumerPlaces();
+  private _consumerPlaces: ReturnType<typeof loadConsumerPlaces> = loadConsumerPlaces();
   private _arrangeConsumers = false;
   private _sheet = false;
   private _pauseOpen = false;
@@ -170,6 +170,7 @@ class MaestroPanel extends LitElement {
   private _consumers: Consumer[] = loadConsumers();
   private _collapsed = loadCollapsed();
   private _batteryCtrlOpen = false;
+  private _flowOptsOpen = false;
   private _expert = loadExpert();
   private _planTuneOpen = loadPlanTuneOpen();
   private _pvOpen = loadPvOpen();
@@ -192,6 +193,7 @@ class MaestroPanel extends LitElement {
   private _picking = false;
   private _pickQuery = "";
   private _focusConsumers = false;
+  private _consumersSheet = false;
   private _classic?: ClassicStatus;
   private _storedOptions: Record<string, unknown> = {};
   private _optionsLoaded = false;
@@ -307,6 +309,9 @@ class MaestroPanel extends LitElement {
       } else if (this._help) this._closeHelp();
       else if (this._batteryCtrlOpen) {
         this._batteryCtrlOpen = false;
+        this.requestUpdate();
+      } else if (this._flowOptsOpen) {
+        this._flowOptsOpen = false;
         this.requestUpdate();
       } else if (this._hist) this._closeHistory();
       else if (this._sheet) this._setSheet(false);
@@ -724,8 +729,14 @@ class MaestroPanel extends LitElement {
   }
 
   private _placeConsumer(id: string, place: ConsumerPlace): void {
-    this._consumerPlaces = { ...this._consumerPlaces, [id]: place };
-    saveConsumerPlaces(this._consumerPlaces);
+    const next = { ...this._consumerPlaces, [id]: place };
+    this._consumerPlaces = next;
+    // Persist only free offsets; legacy fan slots stay in memory until overwritten.
+    const free: Record<string, ConsumerPlace> = {};
+    for (const [key, value] of Object.entries(next)) {
+      if (value && "dx" in value) free[key] = value;
+    }
+    saveConsumerPlaces(free);
     this.requestUpdate();
   }
 
@@ -783,6 +794,7 @@ class MaestroPanel extends LitElement {
     if (!open) {
       this._error = undefined;
       this._picking = false;
+      this._consumersSheet = false;
     }
     this.requestUpdate();
   }
@@ -790,6 +802,7 @@ class MaestroPanel extends LitElement {
   private _openConsumers(): void {
     this._sheet = true;
     this._focusConsumers = true;
+    this._consumersSheet = true;
     this.requestUpdate();
   }
 
@@ -1081,6 +1094,15 @@ class MaestroPanel extends LitElement {
         this._batteryCtrlOpen = false;
         this.requestUpdate();
       },
+      flowOptsOpen: this._flowOptsOpen,
+      onOpenFlowOpts: () => {
+        this._flowOptsOpen = !this._flowOptsOpen;
+        this.requestUpdate();
+      },
+      onCloseFlowOpts: () => {
+        this._flowOptsOpen = false;
+        this.requestUpdate();
+      },
       balanceRange: this._balanceRange(),
       rangeSums: this._rangeSums,
       onBalanceSelect: (grain, anchor) => {
@@ -1282,6 +1304,7 @@ class MaestroPanel extends LitElement {
           this._go("settings");
         },
         consumers: this._consumers,
+        consumersSheet: this._consumersSheet,
         picking: this._picking,
         pickQuery: this._pickQuery,
         choices: powerSensorChoices(hass, new Set(this._consumers.map((c) => c.entityId)), this._pickQuery),

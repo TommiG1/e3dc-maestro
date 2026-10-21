@@ -24,6 +24,8 @@ export interface ControlsInput {
   onReserveCommit: (percent: number) => void;
   onAllSettings: () => void;
   consumers: Consumer[];
+  /** Opened from the live flow "edit consumers" action — show Fertig and focus that section. */
+  consumersSheet?: boolean;
   picking: boolean;
   pickQuery: string;
   choices: { id: string; name: string }[];
@@ -95,11 +97,14 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
     <div class="scrim ${c.open ? "open" : ""}" @click=${c.onClose}></div>
     <aside class="sheet ${c.open ? "open" : ""}" role="dialog" aria-modal="true" aria-label=${t("controlsTitle")} ?inert=${!c.open}>
       <div class="sheet-head">
-        <div class="grow"><h2>${t("controlsTitle")}</h2><div class="sub">${t("controlsSub")}</div></div>
-        <button class="btn" @click=${c.onClose}>${t("close")}</button>
+        <div class="grow">
+          <h2>${c.consumersSheet ? t("editConsumers") : t("controlsTitle")}</h2>
+          <div class="sub">${c.consumersSheet ? t("consumersSub") : t("controlsSub")}</div>
+        </div>
+        <button class="btn ${c.consumersSheet ? "primary" : ""}" @click=${c.onClose}>${c.consumersSheet ? t("arrangeDone") : t("close")}</button>
       </div>
       ${c.error ? html`<p class="err">${c.error}</p>` : nothing}
-      <div class="release">
+      ${c.consumersSheet ? nothing : html`      <div class="release">
         <button
           class="btn action"
           ?disabled=${!c.hass.states[E.btnClear] || c.pending.has(E.btnClear)}
@@ -170,7 +175,7 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
             }}
           >${t(key)}</button>`;
         })}
-      </div>
+      </div>`}
       <div class="sheet-section" id="display-consumers">
         <h3>${t("displayTitle")}</h3>
         <div class="sub">${t("consumersSub")}</div>
@@ -234,7 +239,10 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
                 : html`<p class="hint">${t("noPowerSensors")}</p>`}
             </div>`
           : nothing}
+        ${c.consumersSheet
+          ? html`<button type="button" class="btn primary flow-consumers-done" @click=${c.onClose}>${t("arrangeDone")}</button>`
+          : nothing}
       </div>
-      <a class="link" href="#settings" @click=${(e: Event) => { e.preventDefault(); c.onAllSettings(); }}>${t("allSettings")}</a>
+      ${c.consumersSheet ? nothing : html`<a class="link" href="#settings" @click=${(e: Event) => { e.preventDefault(); c.onAllSettings(); }}>${t("allSettings")}</a>`}
     </aside>`;
 }

@@ -7,6 +7,7 @@ import {
   overflowHeld,
   parseConsumers,
   separateDayEnergy,
+  visibleInFlow,
   WALLBOX_ENTITY,
   wattsOf,
   type Consumer,
@@ -113,6 +114,15 @@ describe("overflowHeld", () => {
     expect(overflowHeld(true, 1_000, 10_999)).toEqual({ show: false, since: 1_000 });
     expect(overflowHeld(true, 1_000, 11_000)).toEqual({ show: true, since: 1_000 });
     expect(overflowHeld(false, 1_000, 12_000)).toEqual({ show: false, since: undefined });
+  });
+});
+
+describe("visibleInFlow", () => {
+  it("hides loads at or below 10 W unless arranging", () => {
+    const items = [flow(0, "included"), flow(10, "included"), flow(11, "separate"), flow(458, "included")];
+    expect(visibleInFlow(items).map((c) => c.watts)).toEqual([11, 458]);
+    expect(visibleInFlow(items, { arrange: true })).toHaveLength(4);
+    expect(visibleInFlow([flow(-50, "included")]).map((c) => c.watts)).toEqual([-50]);
   });
 });
 
