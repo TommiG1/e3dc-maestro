@@ -79,3 +79,4 @@ archive/
 
 # Panel build toolchain (the built bundle in frontend/panel is committed)
 panel-src/node_modules/
+panel-src/src/node_modules/
