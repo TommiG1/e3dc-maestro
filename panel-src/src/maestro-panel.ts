@@ -85,10 +85,17 @@ const NODE_META = {
   bat: { entity: "battery" as const, color: "#22d3ee", label: "nodeBatCharge" as const },
 };
 import { checkClassic, classicErrorText, createClassic, type ClassicStatus } from "./classic";
+import {
+  applyEnergyDashboard,
+  checkEnergyDashboard,
+  energyErrorText,
+  type EnergyApplyMode,
+  type EnergyDashboardStatus,
+} from "./energy-dashboard";
 import { loadSetupAck, saveSetupAck } from "./onboarding";
 import { slotsFrom, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
-import { CLASSIC_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
+import { CLASSIC_DASHBOARD, ENERGY_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
 import { batteryControlOverlay, decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 import { helpAnchor, type HelpAction } from "./help-content";
@@ -212,6 +219,7 @@ class MaestroPanel extends LitElement {
   private _focusConsumers = false;
   private _consumersSheet = false;
   private _classic?: ClassicStatus;
+  private _energy?: EnergyDashboardStatus;
   private _storedOptions: Record<string, unknown> = {};
   private _optionsLoaded = false;
   private _optionsReady = false;
@@ -796,6 +804,7 @@ class MaestroPanel extends LitElement {
     this._settingsGroup = id;
     this._settingsQuery = "";
     if (id === CLASSIC_DASHBOARD.id) this._classic = undefined;
+    if (id === ENERGY_DASHBOARD.id) this._energy = undefined;
     history.pushState({ maestroGroup: true }, "", `#settings/${id}`);
     this.requestUpdate();
   }
@@ -981,6 +990,34 @@ class MaestroPanel extends LitElement {
 
   private _openClassic(): void {
     history.pushState(null, "", "/e3dc-maestro");
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  }
+
+  private async _checkEnergy(): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    this._energy = { ...this._energy, state: "checking" };
+    this.requestUpdate();
+    this._energy = await checkEnergyDashboard(hass);
+    this.requestUpdate();
+  }
+
+  private async _applyEnergy(mode: EnergyApplyMode): Promise<void> {
+    const hass = this._hass;
+    const current = this._energy;
+    if (!hass || !current) return;
+    this._energy = { ...current, state: "applying" };
+    this.requestUpdate();
+    try {
+      this._energy = await applyEnergyDashboard(hass, mode);
+    } catch (err) {
+      this._energy = { ...current, state: "error", error: energyErrorText(err) };
+    }
+    this.requestUpdate();
+  }
+
+  private _openEnergy(): void {
+    history.pushState(null, "", "/config/energy");
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
   }
 
@@ -1202,9 +1239,13 @@ class MaestroPanel extends LitElement {
       onOpenRoom: (id: string) => this._openPlantRoom(id),
       onOpenClassic: () => this._openClassic(),
       classic: this._classic,
+      energy: this._energy,
       isAdmin: hass.user?.is_admin === true,
       onCreateClassic: () => void this._createClassic(),
       onCheckClassic: () => void this._checkClassic(),
+      onCheckEnergy: () => void this._checkEnergy(),
+      onApplyEnergy: (mode) => void this._applyEnergy(mode),
+      onOpenEnergy: () => this._openEnergy(),
       onToggle: (id) => this._toggle(id),
       onPress: (id) => this._press(id),
       onSelect: (id, option) => this._select(id, option),
@@ -1489,6 +1530,9 @@ class MaestroPanel extends LitElement {
     void this._loadOptions();
     if (this._screen === "settings" && this._settingsGroup === CLASSIC_DASHBOARD.id && !this._classic) {
       void this._checkClassic();
+    }
+    if (this._screen === "settings" && this._settingsGroup === ENERGY_DASHBOARD.id && !this._energy) {
+      void this._checkEnergy();
     }
     if (this._focusConsumers) {
       this._focusConsumers = false;

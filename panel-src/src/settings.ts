@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { E, S, isOn, isSettingDisabled, num, type Hass, type HassEntity } from "./entities";
 import type { ClassicStatus } from "./classic";
+import type { EnergyDashboardStatus, EnergyApplyMode, EnergyOrigin, EnergyRole } from "./energy-dashboard";
 import type { I18n, Key, Translate } from "./i18n";
 import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
@@ -224,6 +225,14 @@ export const CLASSIC_DASHBOARD = {
   icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
 };
 
+/** One-click HA Energy Dashboard sources from Maestro / RSCP meters. */
+export const ENERGY_DASHBOARD = {
+  id: "energy",
+  title: "setEnergy" as const,
+  hint: "setEnergyHint" as const,
+  icon: '<path d="M13 2 4 14h7l-1 8 10-14h-7l1-6z"/>',
+};
+
 /** Look of the cockpit. Not an entity group, so more themes can be added here. */
 export const LOOK = {
   id: "look",
@@ -253,6 +262,7 @@ const SIZING_PRICES = ["sizing_price_battery_kwh", "sizing_price_pv_kwp", "sizin
 
 export const isSettingsArea = (id: string | undefined): boolean =>
   id === CLASSIC_DASHBOARD.id ||
+  id === ENERGY_DASHBOARD.id ||
   id === LOOK.id ||
   id === SIZING.id ||
   id === SETUP.id ||
@@ -267,6 +277,7 @@ export function resolveSettingsArea(id: string | undefined): string | undefined 
 
 export const settingsHeading = (id: string | undefined): { title: Key; hint: Key } | undefined => {
   if (id === CLASSIC_DASHBOARD.id) return CLASSIC_DASHBOARD;
+  if (id === ENERGY_DASHBOARD.id) return ENERGY_DASHBOARD;
   if (id === LOOK.id) return LOOK;
   if (id === SIZING.id) return SIZING;
   if (id === SETUP.id) return SETUP;
@@ -305,6 +316,7 @@ export function matchingSettings(
     { id: LOOK.id, title: LOOK.title, hint: LOOK.hint },
     { id: SIZING.id, title: "setSizingTile", hint: "setSizingTileHint" },
     { id: CLASSIC_DASHBOARD.id, title: CLASSIC_DASHBOARD.title, hint: CLASSIC_DASHBOARD.hint },
+    { id: ENERGY_DASHBOARD.id, title: ENERGY_DASHBOARD.title, hint: ENERGY_DASHBOARD.hint },
   ];
   for (const extra of extras) {
     const title = t(extra.title);
@@ -395,9 +407,13 @@ export interface SettingsCtx {
   onOpenGroup: (id: string) => void;
   onOpenClassic: () => void;
   classic?: ClassicStatus;
+  energy?: EnergyDashboardStatus;
   isAdmin: boolean;
   onCreateClassic: () => void;
   onCheckClassic: () => void;
+  onCheckEnergy: () => void;
+  onApplyEnergy: (mode: EnergyApplyMode) => void;
+  onOpenEnergy: () => void;
   onToggle: (entityId: string) => void;
   onSelect: (entityId: string, option: string) => void;
   onNumber: (entityId: string, value: number) => void;
@@ -621,6 +637,109 @@ function classicGuide(c: SettingsCtx): TemplateResult {
       <p>${t("classicPath")}</p>
       <p>${t("classicTimeout")}</p>
     </details>
+  </div>`;
+}
+
+const ENERGY_ROLES: { role: EnergyRole; label: Key }[] = [
+  { role: "solar", label: "energyRoleSolar" },
+  { role: "grid_from", label: "energyRoleGridFrom" },
+  { role: "grid_to", label: "energyRoleGridTo" },
+  { role: "battery_from", label: "energyRoleBatteryFrom" },
+  { role: "battery_to", label: "energyRoleBatteryTo" },
+  { role: "wallbox", label: "energyRoleWallbox" },
+];
+
+const ENERGY_ORIGIN: Record<EnergyOrigin, Key> = {
+  options: "energyOriginOptions",
+  rscp: "energyOriginRscp",
+  maestro: "energyOriginMaestro",
+};
+
+function energyStatusCopy(state: EnergyDashboardStatus["state"]): Key | undefined {
+  if (state === "ours") return "energyReady";
+  if (state === "empty") return "energyEmpty";
+  if (state === "partial") return "energyPartial";
+  if (state === "foreign") return "energyForeign";
+  if (state === "unavailable") return "energyUnavailable";
+  return undefined;
+}
+
+function energyAction(c: SettingsCtx): TemplateResult {
+  const { t } = c.i18n;
+  const status = c.energy;
+  const state = status?.state ?? "checking";
+  const open = html`<button type="button" class="btn primary" @click=${() => c.onOpenEnergy()}>${t("energyOpen")}</button>`;
+  if (state === "checking") return html`<p>${t("energyChecking")}</p>`;
+  if (state === "applying") return html`<p>${t("energyApplying")}</p>`;
+  if (state === "error") {
+    return html`<p class="bad">${t("energyFailed", { err: status?.error ?? "" })}</p>
+      <button type="button" class="btn" @click=${() => c.onCheckEnergy()}>${t("energyRetry")}</button>`;
+  }
+  if (status?.energyReady === false) return html`<p class="bad">${t("energyNoComponent")}</p>`;
+  if (state === "ours") return html`<p class="ok">${t("energyReady")}</p>${open}`;
+  if (state === "unavailable" || !status?.ready) {
+    return html`<p class="bad">${t("energyUnavailable")}</p>
+      <button type="button" class="btn" @click=${() => c.onCheckEnergy()}>${t("energyRetry")}</button>`;
+  }
+  if (!c.isAdmin) return html`<p>${t("energyAdminOnly")}</p>`;
+  const copy = energyStatusCopy(state);
+  if (state === "empty") {
+    return html`${copy ? html`<p>${t(copy)}</p>` : nothing}
+      <button type="button" class="btn primary" @click=${() => c.onApplyEnergy("fill")}>${t("energyApply")}</button>`;
+  }
+  if (state === "partial") {
+    return html`${copy ? html`<p>${t(copy)}</p>` : nothing}
+      <div class="classic-action">
+        <button type="button" class="btn primary" @click=${() => c.onApplyEnergy("fill")}>${t("energyFill")}</button>
+        <button type="button" class="btn" @click=${() => c.onApplyEnergy("replace")}>${t("energyReplace")}</button>
+      </div>`;
+  }
+  return html`${copy ? html`<p>${t(copy)}</p>` : nothing}
+    <button type="button" class="btn primary" @click=${() => c.onApplyEnergy("replace")}>${t("energyReplace")}</button>`;
+}
+
+function energyGuide(c: SettingsCtx): TemplateResult {
+  const { t } = c.i18n;
+  const sensors = c.energy?.sensors ?? {};
+  const missing = c.energy?.missing ?? [];
+  const extraSolar = c.energy?.extraSolar ?? [];
+  const usesMaestro = Object.values(sensors).some((item) => item.origin === "maestro");
+  return html`<div class="guide">
+    <p>${t("energyLead")}</p>
+    <h3>${t("energySensorsTitle")}</h3>
+    ${ENERGY_ROLES.map(({ role, label }) => {
+      const info = sensors[role];
+      if (!info) {
+        return missing.includes(role)
+          ? html`<div class="dep"><b>${t(label)}</b><span class="bad">${t("energyMissing")}</span></div>`
+          : nothing;
+      }
+      return html`<div class="dep"><b>${t(label)}</b><span class="ok">${info.entity_id} · ${t(ENERGY_ORIGIN[info.origin])}</span></div>`;
+    })}
+    ${usesMaestro ? html`<p class="hint">${t("energyMaestroNote")}</p>` : nothing}
+    <h3>${t("energyExtraTitle")}</h3>
+    <p class="hint">${t("energyFremdHint")}</p>
+    ${extraSolar.length
+      ? html`<p>${t("energyExtraKeep")}</p>
+          ${extraSolar.map((id) => html`<div class="dep"><b>Solar</b><span class="ok">${id}</span></div>`)}`
+      : nothing}
+    <h3>${t("energyDevicesTitle")}</h3>
+    <p class="hint">${t("energyDevicesHint")}</p>
+    ${c.energy?.wallboxPower
+      ? html`<p class=${c.energy.wallboxPower.available ? "hint" : "bad"}>${t(
+          c.energy.wallboxPower.available ? "energyWallboxPowerOk" : "energyWallboxPowerMissing",
+        )}
+          <span class="ok"> ${c.energy.wallboxPower.entity_id}</span></p>`
+      : nothing}
+    ${(c.energy?.extraDevices ?? []).length
+      ? html`<p>${t("energyExtraDevicesKeep")}</p>
+          ${(c.energy?.extraDevices ?? []).map(
+            (id) => html`<div class="dep"><b>${t("energyDeviceRow")}</b><span class="ok">${id}</span></div>`,
+          )}`
+      : nothing}
+    <h3>${t("energyActionTitle")}</h3>
+    <div class="classic-action">${energyAction(c)}</div>
+    <p>${t("energyAfter")}</p>
   </div>`;
 }
 
@@ -1103,6 +1222,7 @@ export function settingsView(c: SettingsCtx): TemplateResult {
   if (c.groupId === SETUP.id) return setupPage(c);
   if (c.groupId === LOOK.id) return lookView(c);
   if (c.groupId === CLASSIC_DASHBOARD.id) return classicGuide(c);
+  if (c.groupId === ENERGY_DASHBOARD.id) return energyGuide(c);
   if (c.groupId === SIZING.id) {
     return sizingPage(
       c.options,
@@ -1182,6 +1302,7 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     ${tile(c, LOOK.id, LOOK.icon, LOOK.title, LOOK.hint)}
     ${tile(c, SIZING.id, SIZING.icon, "setSizingTile", "setSizingTileHint")}
     ${tile(c, CLASSIC_DASHBOARD.id, CLASSIC_DASHBOARD.icon, CLASSIC_DASHBOARD.title, CLASSIC_DASHBOARD.hint)}
+    ${tile(c, ENERGY_DASHBOARD.id, ENERGY_DASHBOARD.icon, ENERGY_DASHBOARD.title, ENERGY_DASHBOARD.hint)}
     ${ready
       ? SETTINGS_GROUPS.map((group) => (groupHasRows(c, group) ? tile(c, group.id, group.icon, group.title, group.hint) : nothing))
       : html`<p class="hint">${t("settingsPending")}</p>`}

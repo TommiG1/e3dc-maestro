@@ -46,6 +46,8 @@ _PANEL_FLAG = f"{DOMAIN}_panel_registered"
 _WS_FLAG = f"{DOMAIN}_panel_ws_registered"
 WS_PANEL_PAUSE = f"{DOMAIN}/pause"
 WS_PANEL_ENTITIES = f"{DOMAIN}/panel_entities"
+WS_ENERGY_PREVIEW = f"{DOMAIN}/energy_dashboard/preview"
+WS_ENERGY_APPLY = f"{DOMAIN}/energy_dashboard/apply"
 
 # Panel key -> (platform, entity description key). unique_id is "<entry_id>_<key>", so
 # the panel finds its entities even after the user renamed them. Keys must match
@@ -544,6 +546,28 @@ def _ws_panel_pause(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -
     connection.send_result(msg["id"], {"hours": msg["hours"]})
 
 
+@websocket_api.websocket_command({vol.Required("type"): WS_ENERGY_PREVIEW})
+@websocket_api.async_response
+async def _ws_energy_preview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    from .energy_dashboard import async_energy_dashboard_preview
+
+    connection.send_result(msg["id"], await async_energy_dashboard_preview(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_ENERGY_APPLY,
+        vol.Optional("mode", default="fill"): vol.In(["fill", "replace"]),
+    }
+)
+@websocket_api.async_response
+async def _ws_energy_apply(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    from .energy_dashboard import async_energy_dashboard_apply
+
+    connection.send_result(msg["id"], await async_energy_dashboard_apply(hass, msg["mode"]))
+
+
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Add the Maestro panel to the sidebar (for all users).
 
@@ -558,6 +582,8 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_options)
         websocket_api.async_register_command(hass, _ws_panel_options_set)
         websocket_api.async_register_command(hass, _ws_panel_pause)
+        websocket_api.async_register_command(hass, _ws_energy_preview)
+        websocket_api.async_register_command(hass, _ws_energy_apply)
         hass.data[_WS_FLAG] = True
     module_url = panel_module_url()
     registered = hass.data.get(_PANEL_FLAG)

@@ -15,6 +15,7 @@ import {
   type ForecastPowerKey,
 } from "./charts";
 import type { ClassicStatus } from "./classic";
+import type { EnergyApplyMode, EnergyDashboardStatus } from "./energy-dashboard";
 import { separateDayEnergy, visibleInFlow, type FlowConsumer } from "./consumers";
 import type { ConsumerPlace, StoredConsumerPlace } from "./consumer-layout";
 import { batteryFlowFromWatts, batteryGlyph } from "./battery-glyph";
@@ -122,9 +123,13 @@ export interface Ctx {
   onOpenRoom: (id: string) => void;
   onOpenClassic: () => void;
   classic?: ClassicStatus;
+  energy?: EnergyDashboardStatus;
   isAdmin: boolean;
   onCreateClassic: () => void;
   onCheckClassic: () => void;
+  onCheckEnergy: () => void;
+  onApplyEnergy: (mode: EnergyApplyMode) => void;
+  onOpenEnergy: () => void;
   balanceRange: BalanceRange;
   rangeSums?: Partial<Record<PeriodKey, number>>;
   onBalanceSelect: (grain: BalanceGrain, anchor: string) => void;

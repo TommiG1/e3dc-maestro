@@ -121,6 +121,7 @@ export const HELP: readonly HelpChapter[] = [
       section("set-system", "helpSetSystem", "helpSetSystemBody"),
       section("set-look", "helpSetLook", "helpSetLookBody"),
       section("set-classic", "helpSetClassic", "helpSetClassicBody"),
+      section("set-energy", "helpSetEnergy", "helpSetEnergyBody"),
       section("set-sizing", "helpSetSizing", "helpSetSizingBody"),
     ],
   },
