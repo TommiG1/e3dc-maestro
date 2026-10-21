@@ -17,7 +17,10 @@ import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 
 export interface FlowInput {
+  /** Haupt-PV (W). Wenn `pvExtra` gesetzt ist, ohne Zusatzanteil. */
   pv?: number;
+  /** Zusatz-PV / Fremd-WR (W). Eigener Knoten, wenn über der Aktivschwelle. */
+  pvExtra?: number;
   house?: number;
   grid?: number; // negative = import
   battery?: number; // negative = discharging
@@ -39,6 +42,14 @@ export interface FlowInput {
   outline?: boolean;
   fmt: Fmt;
   i18n: I18n;
+}
+
+/** Split total PV (Haupt + Zusatz) into display parts for the energy flow. */
+export function splitFlowPv(total?: number, extra?: number): { pv: number; pvExtra: number } {
+  const e = Math.max(0, extra ?? 0);
+  const t = Math.max(0, total ?? 0);
+  if (e <= 0) return { pv: t, pvExtra: 0 };
+  return { pv: Math.max(0, t - e), pvExtra: e };
 }
 
 const ICONS = {
@@ -109,8 +120,23 @@ const LAYOUTS = {
   },
 } satisfies Record<string, { box: readonly [number, number]; hub: { x: number; y: number } } & Record<NodeKey, Pos>>;
 
-const ACTIVE_W = 30;
+export const ACTIVE_W = 30;
 const NODE_R = 42;
+const PV_EXTRA_R = 32;
+
+/** TEMP: Zusatz-Knoten auch bei 0 W zeichnen (Layout-Check). */
+export const TEMP_SHOW_PV_EXTRA_IDLE = false;
+
+export function showPvExtraNode(watts: number): boolean {
+  return watts > ACTIVE_W || TEMP_SHOW_PV_EXTRA_IDLE;
+}
+
+/** Satellite position next to Haupt-PV when Zusatz-PV is active. */
+export function pvExtraPos(pv: { x: number; y: number }, compact: boolean): Pos {
+  return compact
+    ? { x: pv.x - 72, y: pv.y + 12, labelDy: -52 }
+    : { x: pv.x - 105, y: pv.y + 8, labelDy: -56 };
+}
 const CONSUMER_R = 26;
 /** Phone: one row per consumer, icon on the right, caption beside it. */
 const COMPACT_ROW = 46;
@@ -195,6 +221,7 @@ function batteryGlyph(level: number | undefined, color: string): TemplateResult 
 /** Darker than the night-theme inks, so a stroke still reads on the light Classic surface. */
 const OUTLINE: Record<string, string> = {
   "var(--pv)": "#9a3412",
+  "var(--pv-extra)": "#b45309",
   "var(--house)": "#5b21b6",
   "var(--grid-in)": "#b91c1c",
   "var(--grid-out)": "#047857",
@@ -303,6 +330,9 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const dragBounds = placeBoundsForFan(fan, Math.max(boxW, i.compact ? 420 : 920), Math.max(boxH, i.compact ? 720 : 640));
   const consumerAt = (index: number): Pos => resolved[index]!;
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvExtra = Math.max(0, i.pvExtra ?? 0);
+  const showPvExtra = showPvExtraNode(pvExtra);
+  const extraPos = pvExtraPos(L.pv, i.compact);
   const motion = i.motion !== false;
   const outline = i.outline === true;
   const strokeOf = (color: string) => tone(color, outline);
@@ -336,6 +366,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const places = consumers.map((c, index) => ({ c, p: consumerAt(index) }));
   const aria = [
     ...keys.map((k) => `${nodes[k].label} ${i.fmt.w(nodes[k].value)}`),
+    ...(showPvExtra ? [`${t("nodePvExtra")} ${i.fmt.w(pvExtra)}`] : []),
     ...places.map(({ c }) => `${c.name} ${i.fmt.w(c.watts)}`),
   ].join(", ");
   return svg`<svg viewBox="0 0 ${boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
@@ -344,6 +375,9 @@ export function energyFlow(i: FlowInput): TemplateResult {
       <radialGradient id="hubg"><stop offset="0" stop-color="rgba(56,189,248,.5)"/><stop offset="1" stop-color="rgba(56,189,248,0)"/></radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, NODE_R, hubR)} stroke=${nodes[k].color}/>`)}
+    ${showPvExtra
+      ? svg`<path class="flow-line" d=${flowSegment(extraPos, L.hub, PV_EXTRA_R, hubR)} stroke="var(--pv-extra)"/>`
+      : svg``}
     ${useCompactList
       ? compactBuses(places, L.house, boxW, motion, NODE_R)
       : places.map(({ c, p }) => {
@@ -361,6 +395,9 @@ export function energyFlow(i: FlowInput): TemplateResult {
       const toR = f.toHub ? hubR : NODE_R;
       return electrons(a, b, fromR, toR, nodes[f.node].value, nodes[f.node].color, motion);
     })}
+    ${showPvExtra
+      ? electrons(extraPos, L.hub, PV_EXTRA_R, hubR, pvExtra, "var(--pv-extra)", motion)
+      : svg``}
     <image href=${maestroLogo} x=${L.hub.x - hubR} y=${L.hub.y - hubR} width=${hubR * 2} height=${hubR * 2} aria-label="Maestro"/>
     ${keys.map((k) => {
       const n = nodes[k];
@@ -376,6 +413,16 @@ export function energyFlow(i: FlowInput): TemplateResult {
         <text class="node-lbl" x=${p.x} y=${p.y + p.labelDy + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
       </g>`;
     })}
+    ${showPvExtra
+      ? svg`<g class="flow-node" opacity=${pvExtra > ACTIVE_W ? 1 : 0.55} role="button" tabindex="0" aria-label=${t("nodePvExtra")} @click=${() => i.onSelect?.("pvExtra")} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.("pvExtra"); } }}>
+          <circle cx=${extraPos.x} cy=${extraPos.y} r=${PV_EXTRA_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf("var(--pv-extra)")} stroke-width=${outline ? "2.4" : "2"} filter=${pvExtra > ACTIVE_W && !outline ? "url(#glow)" : "none"}/>
+          <g transform=${iconTransform(extraPos.x, extraPos.y, nodeIconFit(PV_EXTRA_R))} fill="none" stroke=${strokeOf("var(--pv-extra)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
+            <path d=${ICONS.pv} vector-effect="non-scaling-stroke"/>
+          </g>
+          <text class="node-val" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy} text-anchor="middle">${i.fmt.w(pvExtra)}</text>
+          <text class="node-lbl" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy + 19} text-anchor="middle">${t("nodePvExtra")}</text>
+        </g>`
+      : svg``}
     ${places.map(({ c, p }) => {
       const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
       const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;

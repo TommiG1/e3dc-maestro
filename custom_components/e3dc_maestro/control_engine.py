@@ -34,10 +34,13 @@ _LOGGER = logging.getLogger(__name__)
 class MaestroState:
     """Current measured values, read from HA sensor entities."""
     soc: float               # % 0-100
-    pv_power: float          # W, positive = generating
+    pv_power: float          # W, positive = generating (Haupt-PV + Zusatz)
     house_power: float       # W, positive = consuming (PURE Haushalt OHNE Wallbox)
     grid_power: float        # W, positive = feed-in to grid
     battery_power: float     # W, positive = charging
+    # Fremd-WR / Additional Production (W). 0 wenn nicht konfiguriert.
+    # pv_power enthält diesen Anteil bereits — Panel zeigt ihn als eigenen Knoten.
+    additional_pv_power: float = 0.0
     pv_forecast_remaining_kwh: float | None = None  # remaining PV today (kWh, P50)
     # Konservative P10-Restprognose (kWh) für das Spreading-Gate. None → Fallback
     # auf pv_forecast_remaining_kwh (P50).

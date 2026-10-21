@@ -22,7 +22,7 @@ import { batteryFlowFromWatts, batteryGlyph } from "./battery-glyph";
 import { BATTERY_STYLES, type BatteryStyleId } from "./battery-style";
 import { blobEnergyFlow, blobFlowBoxHeight } from "./flow-blob";
 import { cityEnergyFlow } from "./flow-city";
-import { energyFlow, flowBoxHeight } from "./flow";
+import { energyFlow, flowBoxHeight, splitFlowPv } from "./flow";
 import { splitEnergyFlow, splitFlowBoxHeight } from "./flow-split";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
@@ -558,7 +558,13 @@ export function liveView(c: Ctx): TemplateResult {
   const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
     .filter(Boolean)
     .join(" · ");
-  const dayKwh = (key: "pvToday" | "houseToday" | "importToday" | "feedToday") => c.fmt.n(num(st(c, E[key])));
+  const dayKwh = (key: "pvToday" | "pvExtraToday" | "houseToday" | "importToday" | "feedToday") =>
+    c.fmt.n(num(st(c, E[key])));
+  const pvDayTotal = num(st(c, E.pvToday));
+  const pvExtraDay = Math.max(0, num(st(c, E.pvExtraToday)) ?? 0);
+  const showPvExtraDay = pvExtraDay >= 0.05;
+  const pvMainDay = showPvExtraDay && pvDayTotal !== undefined ? Math.max(0, pvDayTotal - pvExtraDay) : pvDayTotal;
+  const flowPv = splitFlowPv(num(st(c, E.pv)), num(st(c, E.additionalPv)));
   const separateDay = separateDayEnergy(c.consumers, num(st(c, E.wallboxEnergy)));
   const openToday = () => {
     if (c.collapsed.has("today")) c.onToggleGroup("today");
@@ -640,7 +646,8 @@ export function liveView(c: Ctx): TemplateResult {
           : nothing}
         <div class="flow-wrap ${c.flowStyle} ${c.arrangeConsumers ? "arrange" : ""}" style=${flowH ? `height:${flowH}px` : nothing}>
           ${renderFlow({
-            pv: num(st(c, E.pv)),
+            pv: flowPv.pv,
+            pvExtra: flowPv.pvExtra,
             house: num(st(c, E.house)),
             grid: num(st(c, E.grid)),
             battery: bat,
@@ -660,7 +667,11 @@ export function liveView(c: Ctx): TemplateResult {
         </div>
         <button type="button" class="flow-day" @click=${openToday} aria-label=${t("flowDayOpen")}>
           <span class="flow-day-label">${t("flowDay")}</span>
-          <span>${t("nodePv")} ${dayKwh("pvToday")}</span>
+          <span>${t("nodePv")} ${c.fmt.n(pvMainDay)}</span>
+          ${showPvExtraDay
+            ? html`<span class="flow-day-sep" aria-hidden="true">·</span>
+                <span>${t("nodePvExtra")} ${c.fmt.n(pvExtraDay)}</span>`
+            : nothing}
           <span class="flow-day-sep" aria-hidden="true">·</span>
           <span>${t("nodeHouse")} ${dayKwh("houseToday")}</span>
           <span class="flow-day-sep" aria-hidden="true">·</span>

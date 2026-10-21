@@ -39,6 +39,7 @@ import {
   loadIst,
   loadPowerSeries,
   loadPowerSeriesMany,
+  loadPowerSeriesSum,
   loadRangeSums,
   loadSparks,
   loadTimeline,
@@ -80,6 +81,7 @@ import { parseTrajectory, type Point, type TimelineItem } from "./transform";
 
 const NODE_META = {
   pv: { entity: "pv" as const, color: "#fbbf24", label: "nodePv" as const },
+  pvExtra: { entity: "additionalPv" as const, color: "#f59e0b", label: "nodePvExtra" as const },
   grid: { entity: "grid" as const, color: "#f87171", label: "nodeImport" as const },
   house: { entity: "house" as const, color: "#a78bfa", label: "nodeHouse" as const },
   bat: { entity: "battery" as const, color: "#22d3ee", label: "nodeBatCharge" as const },
@@ -433,6 +435,20 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
+  /** Recorder sources for Zusatz-PV (options / RSCP), not the young Maestro mirror. */
+  private _additionalPvHistoryIds(): string[] {
+    const raw = this._storedOptions.additional_generation_sensor;
+    const fromOpts = Array.isArray(raw)
+      ? raw.filter((id): id is string => typeof id === "string" && !!id)
+      : typeof raw === "string" && raw
+        ? [raw]
+        : [];
+    if (fromOpts.length) return fromOpts;
+    const plantExtra = plant.entities.extraProduction;
+    if (plantExtra) return [plantExtra];
+    return E.additionalPv ? [E.additionalPv] : [];
+  }
+
   private _openFlow(key: string): void {
     const hass = this._hass;
     if (!hass) return;
@@ -447,19 +463,24 @@ class MaestroPanel extends LitElement {
     const name = key === "grid" ? i18n.t(feeding ? "nodeFeed" : "nodeImport") : main ? i18n.t(main.label) : (consumer?.name ?? entityId);
     const color = feeding ? "#34d399" : (main?.color ?? "#38bdf8");
     const unit = entity?.attributes.unit_of_measurement;
-    this._hist = { name, color, entityId };
+    const histKey = key === "pvExtra" ? `pvExtra:${this._additionalPvHistoryIds().join(",")}` : entityId;
+    this._hist = { name, color, entityId: histKey };
     this._histPoints = undefined;
     this._histState = "loading";
     this.requestUpdate();
-    void loadPowerSeries(hass, entityId, unit === "kW" ? 1000 : 1)
+    const series =
+      key === "pvExtra"
+        ? loadPowerSeriesSum(hass, this._additionalPvHistoryIds())
+        : loadPowerSeries(hass, entityId, unit === "kW" ? 1000 : 1);
+    void series
       .then((points) => {
-        if (this._hist?.entityId !== entityId) return;
+        if (this._hist?.entityId !== histKey) return;
         this._histPoints = points;
         this._histState = points.length ? "ready" : "empty";
         this.requestUpdate();
       })
       .catch(() => {
-        if (this._hist?.entityId !== entityId) return;
+        if (this._hist?.entityId !== histKey) return;
         this._histState = "error";
         this.requestUpdate();
       });

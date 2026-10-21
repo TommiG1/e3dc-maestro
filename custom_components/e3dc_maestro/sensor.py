@@ -148,6 +148,20 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         ),
     ),
     MaestroSensorDescription(
+        key="additional_pv_power",
+        name="Zusatz-PV-Leistung",
+        icon="mdi:solar-panel-large",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        stable_object_id="e3dc_maestro_additional_pv_power",
+        value_fn=lambda coord: (
+            round(coord.data["state"].additional_pv_power, 1)
+            if coord.data and "state" in coord.data
+            else None
+        ),
+    ),
+    MaestroSensorDescription(
         key="house_power",
         name="Hausleistung",
         icon="mdi:home-lightning-bolt",
@@ -279,6 +293,16 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("pv_production_today_kwh", 0), 3),
+    ),
+    MaestroSensorDescription(
+        key="pv_additional_today",
+        name="Zusatz-PV heute",
+        icon="mdi:solar-panel-large",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        stable_object_id="e3dc_maestro_pv_zusatz_heute",
+        value_fn=lambda coord: round(coord.stats.get("pv_additional_today_kwh", 0), 3),
     ),
     MaestroSensorDescription(
         key="house_consumption_today",

@@ -123,6 +123,7 @@ class CoordinatorSensorsMixin:
         return MaestroState(
             soc=soc,
             pv_power=pv + additional_generation,
+            additional_pv_power=additional_generation,
             house_power=house,
             grid_power=grid,
             battery_power=batt,

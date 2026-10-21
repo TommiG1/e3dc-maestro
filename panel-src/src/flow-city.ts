@@ -11,7 +11,17 @@ import {
   type ConsumerPlace,
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH } from "./consumers";
-import { compactBuses, electronCount, electronSpeed, flowEnds, flowSegment, iconFit, type FlowInput } from "./flow";
+import {
+  ACTIVE_W,
+  compactBuses,
+  electronCount,
+  electronSpeed,
+  flowEnds,
+  flowSegment,
+  iconFit,
+  showPvExtraNode,
+  type FlowInput,
+} from "./flow";
 import {
   HOUSE_R_COMPACT,
   compactSplitForkLinks,
@@ -21,8 +31,8 @@ import {
 } from "./flow-split";
 import maestroLogo from "./maestro-logo.png";
 
-const ACTIVE_W = 30;
 const HOUSE_R = 30;
+const PV_EXTRA_R = 26;
 const CONSUMER_R = 26;
 const COMPACT_LIST_R = 16;
 const HOUSE_ICON = "M3 11 12 3l9 8M5 9.5V21h14V9.5M10 21v-6h4v6";
@@ -35,6 +45,7 @@ const PV_W = 6000;
 
 const OUTLINE: Record<string, string> = {
   "var(--pv)": "#9a3412",
+  "var(--pv-extra)": "#b45309",
   "var(--house)": "#5b21b6",
   "var(--grid-in)": "#b91c1c",
   "var(--grid-out)": "#047857",
@@ -236,13 +247,15 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const hasSplit = separate.length > 0;
   const g = layout(i.compact, consumers.length + (hasSplit && !i.compact ? 1 : 0));
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvExtra = Math.max(0, i.pvExtra ?? 0);
+  const showPvExtra = showPvExtraNode(pvExtra);
   const houseW = Math.max(0, house);
   const loadW = hasSplit ? totalConsumptionW(house, consumers) : houseW;
   const motion = i.motion !== false;
   const outline = i.outline === true;
   const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
-  const roofGlow = cityRoofGlow(pv);
+  const roofGlow = cityRoofGlow(pv + pvExtra);
   const fills = cityLoadFills(loadW, i.loadMax ?? DEFAULT_LOAD_MAX_W);
   const bars = lightBars(g.facade);
   const fillW = cityBasementFill(i.soc, g.plinth.w - 6);
@@ -375,7 +388,20 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
         ...places.map(({ p }) => p.y + 44),
       )
     : g.boxH;
-  const boxW = useFork || useCompactList ? g.boxW : i.compact ? Math.max(g.boxW, freeExtent.w) : freeExtent.w;
+  // Clear of the roof slab; caption sits to the right (not above, where it collides with PV).
+  const extraGap = i.compact ? 24 : 36;
+  const extraNode = showPvExtra
+    ? {
+        x: g.roof.x + g.roof.w + PV_EXTRA_R + extraGap,
+        y: g.roof.y + g.roof.h / 2,
+      }
+    : { x: 0, y: 0 };
+  const extraElbow = { x: extraNode.x, y: pvTie.y };
+  const extraPad = showPvExtra ? extraNode.x + PV_EXTRA_R + 78 : 0;
+  const boxW = Math.max(
+    useFork || useCompactList ? g.boxW : i.compact ? Math.max(g.boxW, freeExtent.w) : freeExtent.w,
+    extraPad,
+  );
   const boxH = useFork
     ? Math.max(g.mast.y + 56, phone!.boxBottom)
     : useCompactList
@@ -402,6 +428,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const loadCapLblY = i.compact ? midFacade.y + 14 : bars[0].y + bars[0].h + 50;
   const aria = [
     `${t("nodePv")} ${i.fmt.w(pv)}`,
+    ...(showPvExtra ? [`${t("nodePvExtra")} ${i.fmt.w(pvExtra)}`] : []),
     `${facadeLabel} ${i.fmt.w(loadW)}`,
     ...(hasSplit ? [`${t("nodeHouse")} ${i.fmt.w(houseW)}`] : []),
     `${gridLabel} ${i.fmt.w(grid)}`,
@@ -475,6 +502,21 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
         <text class="node-val" x=${midRoof.x} y=${g.roof.y - 18} text-anchor="middle">${i.fmt.w(pv)}</text>
         <text class="node-lbl" x=${midRoof.x} y=${g.roof.y - 2} text-anchor="middle">${t("nodePv")}</text>`,
     )}
+    ${showPvExtra
+      ? svg`<path class="flow-line" d=${`M${extraNode.x} ${extraNode.y} L${extraElbow.x} ${extraElbow.y} L${pvTie.x} ${pvTie.y}`} stroke="var(--pv-extra)" opacity=${pvExtra > ACTIVE_W ? 0.45 : 0.22} fill="none"/>
+        ${electrons(extraNode, extraElbow, PV_EXTRA_R, 0, pvExtra, "var(--pv-extra)", motion)}
+        ${electrons(extraElbow, pvTie, 0, 4, pvExtra, "var(--pv-extra)", motion)}
+        ${hit(
+          "pvExtra",
+          t("nodePvExtra"),
+          i.onSelect,
+          svg`<g opacity=${pvExtra > ACTIVE_W ? 1 : 0.55}>
+            <circle cx=${extraNode.x} cy=${extraNode.y} r=${PV_EXTRA_R} fill=${outline ? "none" : "rgba(10,16,28,.92)"} stroke=${strokeOf("var(--pv-extra)")} stroke-width=${shellStroke} filter=${pvExtra > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
+            <text class="node-val" x=${extraNode.x + PV_EXTRA_R + 10} y=${extraNode.y - 4} text-anchor="start">${i.fmt.w(pvExtra)}</text>
+            <text class="node-lbl" x=${extraNode.x + PV_EXTRA_R + 10} y=${extraNode.y + 14} text-anchor="start">${t("nodePvExtra")}</text>
+          </g>`,
+        )}`
+      : svg``}
     <circle cx=${houseTie.x} cy=${houseTie.y} r="3" fill=${strokeOf(gridColor)} opacity=${Math.abs(grid) > ACTIVE_W ? 0.9 : 0.45}/>
 
     ${hit(

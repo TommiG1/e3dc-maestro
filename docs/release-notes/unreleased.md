@@ -14,6 +14,7 @@
 - **Theme-Vorschau.** Über die Look-Kacheln fahren zeigt den Look sofort; Antippen speichert. Swatches wirken wie Mini-Cockpits.
 - **Hell/Dunkel in der Kopfzeile.** Sonnen-/Mond-Taste wechselt direkt zwischen Dunkel und myE3DC, ohne das Einstellungsmenü.
 - **Energie-Dashboard-Assistent.** Unter Einstellungen Quellen für PV, Netz und Akku mit einem Klick setzen (RSCP-Lebensdauerzähler bevorzugt, sonst Maestro-Tageszähler); Gas/Wasser bleiben, Wallbox optional als Gerät. Hinweise zu Fremd-WR (Fronius vs. Additional) und zu Geräten/Wallbox (kWh statt W; E3DC-Wallbox oft nur Leistung). Zusätzliche Solar-Quellen und andere Geräte bleiben erhalten.
+- **Zusatz-PV im Energiefluss.** Fremd-WR / Additional Production als eigener Knoten (Haupt-PV und Zusatz getrennt); Tageschips zeigen PV und Zusatz-kWh ohne Doppelzählung.
 
 ## Hilfe
 

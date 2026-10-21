@@ -471,6 +471,25 @@ export async function loadPowerSeriesMany(hass: Hass, entityIds: string[]): Prom
   return out;
 }
 
+/** Sum of several power entities (e.g. multiple Fremd-WR), 5-minute means in watts. */
+export async function loadPowerSeriesSum(hass: Hass, entityIds: string[]): Promise<Point[]> {
+  const ids = [...new Set(entityIds.filter(Boolean))];
+  if (!ids.length) return [];
+  if (ids.length === 1) {
+    const id = ids[0]!;
+    const unit = hass.states[id]?.attributes.unit_of_measurement;
+    return loadPowerSeries(hass, id, unit === "kW" ? 1000 : 1);
+  }
+  const many = await loadPowerSeriesMany(hass, ids);
+  const byTs = new Map<number, number>();
+  for (const id of ids) {
+    for (const [ts, value] of many[id] ?? []) {
+      byTs.set(ts, (byTs.get(ts) ?? 0) + value);
+    }
+  }
+  return [...byTs.entries()].sort((a, b) => a[0] - b[0]);
+}
+
 /** Actual power/SoC of the last `hours` hours on a 5-minute grid (W / %). */
 export async function loadIst(hass: Hass, hours = 6): Promise<IstSeries> {
   const raw = await fetchRaw(hass, [E.pv, E.house, E.soc], Date.now() - hours * 3600e3, {

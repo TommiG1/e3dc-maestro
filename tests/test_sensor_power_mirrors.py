@@ -19,6 +19,7 @@ from custom_components.e3dc_maestro.sensor import SENSOR_DESCRIPTIONS, MaestroSe
 
 _MIRROR_KEYS = {
     "pv_power": "e3dc_maestro_pv_power",
+    "additional_pv_power": "e3dc_maestro_additional_pv_power",
     "house_power": "e3dc_maestro_house_power",
     "grid_power": "e3dc_maestro_grid_power",
     "battery_power": "e3dc_maestro_battery_power",
@@ -67,9 +68,10 @@ def test_mirror_sensor_entity_id_is_pinned_on_init():
 
 
 def test_mirror_sensor_value_fn_reads_normalised_state():
-    state = _make_state()
+    state = _make_state(additional_pv_power=400.0)
     coord = _make_coord(state)
     assert _description("pv_power").value_fn(coord) == state.pv_power
+    assert _description("additional_pv_power").value_fn(coord) == state.additional_pv_power
     assert _description("house_power").value_fn(coord) == state.house_power
     assert _description("grid_power").value_fn(coord) == state.grid_power
     assert _description("battery_power").value_fn(coord) == state.battery_power

@@ -11,6 +11,7 @@ export const styles = css`
     --muted: #8b96ad;
     --faint: #5a6580;
     --pv: #fbbf24;
+    --pv-extra: #f59e0b;
     --house: #a78bfa;
     --grid-in: #f87171;
     --grid-out: #34d399;

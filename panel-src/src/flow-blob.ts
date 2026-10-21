@@ -12,12 +12,15 @@ import {
 } from "./consumer-layout";
 import { CONSUMER_ICON_PATH } from "./consumers";
 import {
+  ACTIVE_W,
   batteryFill,
   compactBuses,
   electrons,
   flowSegment,
   iconFit,
   nodeIconFit,
+  pvExtraPos,
+  showPvExtraNode,
   type FlowInput,
 } from "./flow";
 import {
@@ -39,7 +42,6 @@ const ICONS = {
 
 const ICON_BOX = 24;
 const ICON_STROKE = 2.15;
-const ACTIVE_W = 30;
 const NODE_R = 42;
 const HOUSE_R = 30;
 const CONSUMER_R = 26;
@@ -81,6 +83,7 @@ const LAYOUTS = {
 
 const OUTLINE: Record<string, string> = {
   "var(--pv)": "#9a3412",
+  "var(--pv-extra)": "#b45309",
   "var(--house)": "#5b21b6",
   "var(--grid-in)": "#b91c1c",
   "var(--grid-out)": "#047857",
@@ -124,6 +127,7 @@ export function blobBaseRadius(totalWatts: number, compact: boolean): number {
 
 export function blobPulls(input: {
   pv: number;
+  pvExtra?: number;
   house: number;
   grid: number;
   battery: number;
@@ -131,7 +135,7 @@ export function blobPulls(input: {
 }): BlobPull[] {
   const strength = (watts: number) => Math.min(1, Math.abs(watts) / PULL_W);
   const pulls: BlobPull[] = [
-    { angle: -Math.PI / 2, strength: strength(input.pv) },
+    { angle: -Math.PI / 2, strength: strength(input.pv + Math.max(0, input.pvExtra ?? 0)) },
     { angle: Math.PI, strength: strength(input.grid) },
     { angle: 0, strength: strength(input.house) },
     { angle: Math.PI / 2, strength: strength(input.battery) },
@@ -330,6 +334,9 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
     row.bounds = row.dragOrigin === housePos ? dragBoundsHouse : dragBoundsLoad;
   }
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvExtra = Math.max(0, i.pvExtra ?? 0);
+  const showPvExtra = showPvExtraNode(pvExtra);
+  const extraPos = pvExtraPos(L.pv, i.compact);
   const houseW = Math.max(0, house);
   const loadW = hasSplit ? totalConsumptionW(house, consumers) : houseW;
   const outline = i.outline === true;
@@ -337,10 +344,11 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
 
-  const traffic = Math.abs(pv) + Math.abs(loadW) + Math.abs(grid) + Math.abs(battery);
+  const traffic = Math.abs(pv) + Math.abs(pvExtra) + Math.abs(loadW) + Math.abs(grid) + Math.abs(battery);
   const base = blobBaseRadius(traffic, i.compact);
   const pulls = blobPulls({
     pv,
+    pvExtra,
     house: loadW,
     grid,
     battery,
@@ -376,6 +384,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const keys: NodeKey[] = ["pv", "grid", "house", "bat"];
   const aria = [
     ...keys.map((k) => `${nodes[k].label} ${i.fmt.w(nodes[k].value)}`),
+    ...(showPvExtra ? [`${t("nodePvExtra")} ${i.fmt.w(pvExtra)}`] : []),
     ...(hasSplit ? [`${t("nodeHouse")} ${i.fmt.w(houseW)}`] : []),
     ...places.map(({ c }) => `${c.name} ${i.fmt.w(c.watts)}`),
   ].join(", ");
@@ -386,6 +395,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const busy = Math.min(1, traffic / PULL_W);
   const blobPeriod = `${(3.2 - 1.4 * busy).toFixed(2)}s`;
   const nodeR = i.compact ? 32 : 36;
+  const pvExtraR = i.compact ? 26 : 28;
   const houseDrawR = useFork ? HOUSE_R_COMPACT : i.compact ? COMPACT_LIST_R : HOUSE_R;
   const separatePlaces = places.filter(({ c }) => c.mode === "separate");
   const includedPlaces = places.filter(({ c }) => c.mode === "included");
@@ -412,6 +422,9 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       </radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, nodeR, hubR)} stroke=${nodes[k].color} opacity=${Math.abs(nodes[k].value) > ACTIVE_W ? 0.4 : 0.16}/>`)}
+    ${showPvExtra
+      ? svg`<path class="flow-line" d=${flowSegment(extraPos, L.hub, pvExtraR, hubR)} stroke="var(--pv-extra)" opacity="0.4"/>`
+      : svg``}
     ${useFork && phone
       ? compactSplitForkLinks({
           load: loadPos,
@@ -438,6 +451,7 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       const toR = f.toHub ? hubR : nodeR;
       return electrons(a, b, fromR, toR, nodes[f.node].value, nodes[f.node].color, motion);
     })}
+    ${showPvExtra ? electrons(extraPos, L.hub, pvExtraR, hubR, pvExtra, "var(--pv-extra)", motion) : svg``}
     <g class="flow-blob ${motion ? "motion" : ""}" style=${`--blob-period:${blobPeriod}`} transform=${`translate(${L.hub.x} ${L.hub.y})`}>
       <ellipse class="flow-blob-halo" cx="0" cy="0" rx=${(haloR * 1.15).toFixed(1)} ry=${(haloR * 0.92).toFixed(1)} fill="none" stroke=${strokeOf(fillA)} stroke-width="1.2" stroke-dasharray="6 10" opacity=${(0.2 + 0.35 * busy).toFixed(2)}/>
       <path class="flow-blob-shape" d=${path} fill="url(#blob-fill)" stroke=${strokeOf(fillA)} stroke-width=${outline ? "2.2" : "1.4"} filter=${outline ? "none" : "url(#blob-glow)"} opacity="0.95"/>
@@ -459,6 +473,16 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
         <text class="node-lbl" x=${p.x} y=${ly + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
       </g>`;
     })}
+    ${showPvExtra
+      ? svg`<g class="flow-node" opacity=${pvExtra > ACTIVE_W ? 1 : 0.55} role="button" tabindex="0" aria-label=${t("nodePvExtra")} @click=${() => i.onSelect?.("pvExtra")} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.("pvExtra"); } }}>
+          <circle cx=${extraPos.x} cy=${extraPos.y} r=${pvExtraR} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf("var(--pv-extra)")} stroke-width=${outline ? "2.4" : "2"} filter=${pvExtra > ACTIVE_W && !outline ? "url(#blob-glow)" : "none"}/>
+          <g transform=${iconTransform(extraPos.x, extraPos.y, nodeIconFit(pvExtraR))} fill="none" stroke=${strokeOf("var(--pv-extra)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
+            <path d=${ICONS.pv} vector-effect="non-scaling-stroke"/>
+          </g>
+          <text class="node-val" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy} text-anchor="middle">${i.fmt.w(pvExtra)}</text>
+          <text class="node-lbl" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy + 19} text-anchor="middle">${t("nodePvExtra")}</text>
+        </g>`
+      : svg``}
     ${hasSplit
       ? svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${houseW < ACTIVE_W ? 0.55 : 1} role="button" tabindex="0" aria-label=${t("nodeHouse")}
           @click=${() => { if (!i.arrange) i.onSelect?.("house"); }}
