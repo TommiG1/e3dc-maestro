@@ -34,10 +34,10 @@ const LOAD_R_COMPACT = NODE_R_COMPACT;
 /** Haus matches the previous Verbrauch size (wide); phone uses list size. */
 const HOUSE_R = 34;
 /** Phone: Haus is a real branch node, not a flat list row. */
-const HOUSE_R_COMPACT = 26;
+export const HOUSE_R_COMPACT = 26;
 const CONSUMER_R = 26;
-const COMPACT_LIST_R = 16;
-const COMPACT_ROW = 46;
+export const COMPACT_LIST_R = 16;
+export const COMPACT_ROW = 46;
 const ICON_STROKE = 2.15;
 
 const ICONS = {
@@ -108,16 +108,28 @@ function resolveAt(
   return fallback[index] ?? { x: origin.x + 120, y: origin.y };
 }
 
+export type CompactSplitPt = { x: number; y: number };
+
 /**
- * Phone split: Verbrauch drops to a junction, then forks —
+ * Phone split relative to Verbrauch/load: junction, then forks —
  * left/down to Haus, right rail to separately metered loads.
+ * Shared by nodes, blob and city.
  */
-function compactSplitGeom(separateCount: number, includedCount: number) {
-  const load = { x: 248, y: 160 };
-  const fork = { x: load.x, y: 248 };
-  const house = { x: 150, y: 355 };
-  const listX = 318;
-  const sepY0 = 318;
+export function compactSplitGeomFromLoad(
+  load: CompactSplitPt,
+  separateCount: number,
+  includedCount: number,
+): {
+  fork: CompactSplitPt;
+  house: CompactSplitPt;
+  separate: CompactSplitPt[];
+  included: CompactSplitPt[];
+  boxBottom: number;
+} {
+  const fork = { x: load.x, y: load.y + 88 };
+  const house = { x: load.x - 98, y: load.y + 195 };
+  const listX = Math.min(318, load.x + 70);
+  const sepY0 = load.y + 158;
   const separate = Array.from({ length: separateCount }, (_, i) => ({
     x: listX,
     y: sepY0 + i * COMPACT_ROW,
@@ -127,12 +139,66 @@ function compactSplitGeom(separateCount: number, includedCount: number) {
     x: listX,
     y: incY0 + i * COMPACT_ROW,
   }));
-  const bottom = Math.max(
-    house.y + HOUSE_R_COMPACT + 56,
-    separate.at(-1)?.y ?? 0,
-    included.at(-1)?.y ?? 0,
-  );
-  return { load, fork, house, separate, included, boxH: bottom + 36 };
+  const boxBottom =
+    Math.max(
+      house.y + HOUSE_R_COMPACT + 56,
+      separate.at(-1)?.y ?? 0,
+      included.at(-1)?.y ?? 0,
+    ) + 36;
+  return { fork, house, separate, included, boxBottom };
+}
+
+/** Default phone load position for the nodes cross. */
+function compactSplitGeom(separateCount: number, includedCount: number) {
+  const load = { x: 248, y: 160 };
+  const g = compactSplitGeomFromLoad(load, separateCount, includedCount);
+  return { load, ...g, boxH: g.boxBottom };
+}
+
+/** Stem + junction + Haus branch + accent rail for separate loads + included under Haus. */
+export function compactSplitForkLinks(input: {
+  load: CompactSplitPt;
+  loadR: number;
+  fork: CompactSplitPt;
+  house: CompactSplitPt;
+  houseR: number;
+  houseW: number;
+  total: number;
+  separate: { c: FlowConsumer; p: CompactSplitPt }[];
+  included: { c: FlowConsumer; p: CompactSplitPt }[];
+  boxW: number;
+  motion: boolean;
+  strokeOf: (color: string) => string;
+}): TemplateResult {
+  const {
+    load,
+    loadR,
+    fork,
+    house,
+    houseR,
+    houseW,
+    total,
+    separate,
+    included,
+    boxW,
+    motion,
+    strokeOf,
+  } = input;
+  const railX = boxW - 14;
+  return svg`<path class="flow-line" d=${flowSegment(load, fork, loadR, 4)} stroke="var(--house)"/>
+    ${electrons(load, fork, loadR, 4, total, "var(--house)", motion)}
+    <circle cx=${fork.x} cy=${fork.y} r="4" fill=${strokeOf("var(--house)")} opacity="0.9"/>
+    <path class="flow-line" d=${flowSegment(fork, house, 4, houseR)} stroke="var(--house)"/>
+    ${electrons(fork, house, 4, houseR, houseW, "var(--house)", motion)}
+    ${separate.length
+      ? svg`<path class="flow-line" d="M${fork.x} ${fork.y} L${railX} ${fork.y} L${railX} ${separate.at(-1)!.p.y}" stroke="var(--accent)"/>
+        ${separate.map(({ c, p }) => {
+          const end = { x: p.x - COMPACT_LIST_R, y: p.y };
+          return svg`<path class="flow-line" d="M${railX} ${p.y} L${end.x} ${end.y}" stroke="var(--accent)"/>
+            ${electrons({ x: railX, y: p.y }, p, 0, COMPACT_LIST_R, c.watts, "var(--accent)", motion)}`;
+        })}`
+      : svg``}
+    ${compactBuses(included, house, boxW, motion, houseR)}`;
 }
 
 export function splitFlowBoxHeight(compact: boolean, leafCount: number): number | undefined {
@@ -352,29 +418,22 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
     ? (e: PointerEvent) => onConsumerDrag(e, "__house__", loadPos, i.arrange, i.onPlaceConsumer, dragBoundsLoad)
     : undefined;
 
-  const railX = boxW - 14;
   const forkSvg =
     useFork && forkPos
-      ? svg`<path class="flow-line" d=${flowSegment(loadPos, forkPos, loadR, 4)} stroke="var(--house)"/>
-        ${electrons(loadPos, forkPos, loadR, 4, total, "var(--house)", motion)}
-        <circle cx=${forkPos.x} cy=${forkPos.y} r="4" fill=${strokeOf("var(--house)")} opacity="0.9"/>
-        <path class="flow-line" d=${flowSegment(forkPos, housePos, 4, houseR)} stroke="var(--house)"/>
-        ${electrons(forkPos, housePos, 4, houseR, houseW, "var(--house)", motion)}
-        ${separateNodes.length
-          ? svg`<path class="flow-line" d="M${forkPos.x} ${forkPos.y} L${railX} ${forkPos.y} L${railX} ${separateNodes.at(-1)!.p.y}" stroke="var(--accent)"/>
-            ${separateNodes.map(({ c, p }) => {
-              const end = { x: p.x - COMPACT_LIST_R, y: p.y };
-              return svg`<path class="flow-line" d="M${railX} ${p.y} L${end.x} ${end.y}" stroke="var(--accent)"/>
-                ${electrons({ x: railX, y: p.y }, p, 0, COMPACT_LIST_R, c.watts, "var(--accent)", motion)}`;
-            })}`
-          : svg``}
-        ${compactBuses(
-          includedNodes.map(({ c, p }) => ({ c, p })),
-          housePos,
+      ? compactSplitForkLinks({
+          load: loadPos,
+          loadR,
+          fork: forkPos,
+          house: housePos,
+          houseR,
+          houseW,
+          total,
+          separate: separateNodes,
+          included: includedNodes,
           boxW,
           motion,
-          houseR,
-        )}`
+          strokeOf,
+        })
       : svg``;
 
   const freeLinks = svg`<path class="flow-line" d=${flowSegment(loadPos, housePos, loadR, houseR)} stroke="var(--house)"/>

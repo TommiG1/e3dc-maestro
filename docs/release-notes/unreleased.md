@@ -8,7 +8,7 @@
 - **Phasen-Gantt auf Entscheidung.** 24-Stunden-Leiste der Regelphasen über dem Textverlauf; Farblegende und farbige Punkte in der Liste.
 - **Einstellungs-Suche.** Auf der Übersicht nach Name, Tipp oder Optionsfeld suchen; Treffer öffnen den Bereich.
 - **Bilanzpuls Jahr.** Dritter Zeitraum mit Monatsbalken und laufender Summe; Tippen öffnet den Monat in der Bilanz.
-- **Energiefluss Aufteilung auf dem Handy.** Bei separat gemessenen Verbrauchern kein Überlapp mehr; in der Knoten-Ansicht klare Gabelung Verbrauch → Haus (links) und separate Lasten (rechts, Akzentfarbe).
+- **Energiefluss Aufteilung auf dem Handy.** Bei separat gemessenen Verbrauchern kein Überlapp mehr; in Knoten-, Blob- und Haus-Ansicht klare Gabelung Verbrauch → Haus (links) und separate Lasten (rechts, Akzentfarbe).
 - **Anordnen auf dem Handy.** Verbraucher (und Haus bei Aufteilung) per Finger verschieben; Positionen bleiben gespeichert.
 - **Regelungsleiter auf Entscheidung.** Leiter unter der Phase, Link „In der Regelungsleiter zeigen“ scrollt und hebt sie hervor; Klick auf eine Stufe öffnet die Einstellungen.
 - **Theme-Vorschau.** Über die Look-Kacheln fahren zeigt den Look sofort; Antippen speichert. Swatches wirken wie Mini-Cockpits.

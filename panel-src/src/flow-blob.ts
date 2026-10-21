@@ -20,7 +20,13 @@ import {
   nodeIconFit,
   type FlowInput,
 } from "./flow";
-import { splitByMode, totalConsumptionW } from "./flow-split";
+import {
+  HOUSE_R_COMPACT,
+  compactSplitForkLinks,
+  compactSplitGeomFromLoad,
+  splitByMode,
+  totalConsumptionW,
+} from "./flow-split";
 import maestroLogo from "./maestro-logo.png";
 
 const ICONS = {
@@ -188,37 +194,48 @@ export function blobFlowBoxHeight(compact: boolean, count: number, split = false
     const fan = houseFan(origin, Math.max(1, count));
     return Math.round(fanBoxHeight(origin.y, fan, L.box[1]) * 0.95);
   }
+  if (split) {
+    return Math.round(compactSplitGeomFromLoad({ x: 255, y: 165 }, 0, count).boxBottom * 0.94);
+  }
   const L = LAYOUTS.compact;
-  // Phone + Aufteilung: Haus is list row 0, then the consumers.
-  const rows = count + (split ? 1 : 0);
-  if (!rows) return Math.round(L.box[1] * 0.94);
-  const last = blobCompactConsumerPlaces(rows, L.box[0]).at(-1)!;
+  if (!count) return Math.round(L.box[1] * 0.94);
+  const last = blobCompactConsumerPlaces(count, L.box[0]).at(-1)!;
   return Math.round((last.y + 36) * 0.94);
 }
+
+/** Tighter phone cross when Aufteilung needs room for the fork. */
+const SPLIT_COMPACT_LAYOUT = {
+  hub: { x: 140, y: 165 },
+  pv: { x: 140, y: 60, labelDy: -52 },
+  grid: { x: 48, y: 165, labelDy: 48 },
+  house: { x: 255, y: 165, labelDy: -52 },
+  bat: { x: 140, y: 285, labelDy: 48 },
+} as const;
 
 export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const { included, separate } = splitByMode(consumers);
   const hasSplit = separate.length > 0;
-  const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
-  const loadPos = { x: L.house.x, y: L.house.y };
   const placesStore = i.consumerPlaces ?? {};
   const customPlaces = hasFreePlaces(placesStore, [
     ...(hasSplit ? ["__house__"] : []),
     ...consumers.map((c) => c.id),
   ]);
-  const useCompactList = i.compact && !customPlaces && !i.arrange;
+  const useFork = Boolean(i.compact && hasSplit && !customPlaces && !i.arrange);
+  const useCompactList = i.compact && !hasSplit && !customPlaces && !i.arrange;
+  const baseL = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
+  const L = useFork
+    ? { ...baseL, ...SPLIT_COMPACT_LAYOUT, box: baseL.box }
+    : baseL;
+  const loadPos = { x: L.house.x, y: L.house.y };
+  const phone = useFork ? compactSplitGeomFromLoad(loadPos, separate.length, included.length) : null;
   const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length + (hasSplit ? 1 : 0)));
-  const compactRows = consumers.length + (i.compact && hasSplit ? 1 : 0);
-  const compactPlaces = i.compact ? blobCompactConsumerPlaces(Math.max(compactRows, 1), baseW) : [];
-  const compactListIndex = (c: (typeof consumers)[number]) =>
-    hasSplit ? 1 + consumers.indexOf(c) : consumers.indexOf(c);
-  // Phone + Aufteilung: Haus is the first list row by default.
-  const houseDefault = i.compact
-    ? hasSplit
-      ? { x: compactPlaces[0]!.x, y: compactPlaces[0]!.y }
-      : { x: loadPos.x, y: loadPos.y }
-    : { x: loadPos.x + 140, y: loadPos.y - 70 };
+  const compactPlaces = i.compact && !useFork ? blobCompactConsumerPlaces(consumers.length, baseW) : [];
+  const houseDefault = phone
+    ? phone.house
+    : i.compact
+      ? { x: loadPos.x, y: loadPos.y }
+      : { x: loadPos.x + 140, y: loadPos.y - 70 };
   const housePos =
     hasSplit && placesStore["__house__"] && "dx" in placesStore["__house__"]
       ? {
@@ -246,28 +263,32 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
     c: (typeof consumers)[number],
     fanPt: { x: number; y: number },
     origin: { x: number; y: number },
+    forkDefault: { x: number; y: number } | undefined,
   ) => {
     const raw = placesStore[c.id];
     if (raw && "dx" in raw) return { x: origin.x + raw.dx, y: origin.y + raw.dy, labelDy: 0 };
+    if (forkDefault) return { x: forkDefault.x, y: forkDefault.y, labelDy: 0 };
     if (i.compact) {
-      const row = compactPlaces[compactListIndex(c)] ?? compactPlaces[0]!;
+      const row = compactPlaces[consumers.indexOf(c)] ?? compactPlaces[0]!;
       return { x: row.x, y: row.y, labelDy: 0 };
     }
     return { x: fanPt.x, y: fanPt.y, labelDy: 0 };
   };
-  const baseH = i.compact
-    ? compactRows
-      ? compactPlaces.at(-1)!.y + 36
-      : L.box[1]
-    : hasSplit
-      ? Math.max(fanBoxHeight(loadPos.y, loadFan, L.box[1]), fanBoxHeight(housePos.y, houseFanOpts, L.box[1]))
-      : fanBoxHeight(loadPos.y, loadFan, L.box[1]);
+  const baseH = phone
+    ? phone.boxBottom
+    : i.compact
+      ? consumers.length
+        ? compactPlaces.at(-1)!.y + 36
+        : L.box[1]
+      : hasSplit
+        ? Math.max(fanBoxHeight(loadPos.y, loadFan, L.box[1]), fanBoxHeight(housePos.y, houseFanOpts, L.box[1]))
+        : fanBoxHeight(loadPos.y, loadFan, L.box[1]);
 
   const places = hasSplit
     ? [
         ...separate.map((c, index) => ({
           c,
-          p: atCompactOrSaved(c, separateResolved[index]!, loadPos),
+          p: atCompactOrSaved(c, separateResolved[index]!, loadPos, phone?.separate[index]),
           from: loadPos,
           fromR: 36 as number,
           dragOrigin: loadPos,
@@ -275,23 +296,24 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
         })),
         ...included.map((c, index) => ({
           c,
-          p: atCompactOrSaved(c, includedResolved[index]!, housePos),
+          p: atCompactOrSaved(c, includedResolved[index]!, housePos, phone?.included[index]),
           from: housePos,
-          fromR: i.compact ? COMPACT_LIST_R : HOUSE_R,
+          fromR: useFork || i.compact ? (useFork ? HOUSE_R_COMPACT : COMPACT_LIST_R) : HOUSE_R,
           dragOrigin: housePos,
           bounds: null as ReturnType<typeof placeBoundsForFan> | null,
         })),
       ]
     : consumers.map((c, index) => ({
         c,
-        p: atCompactOrSaved(c, separateResolved[index]!, loadFan.origin),
+        p: atCompactOrSaved(c, separateResolved[index]!, loadFan.origin, undefined),
         from: c.mode === "included" ? loadPos : L.hub,
         fromR: c.mode === "included" ? 36 : i.compact ? 22 : 28,
         dragOrigin: loadFan.origin,
         bounds: null as ReturnType<typeof placeBoundsForFan> | null,
       }));
   const extentPositions = hasSplit ? [housePos, ...places.map(({ p }) => p)] : places.map(({ p }) => p);
-  const extent = useCompactList ? { w: baseW, h: baseH } : freePlaceExtent(extentPositions, baseW, baseH);
+  const extent =
+    useFork || useCompactList ? { w: baseW, h: baseH } : freePlaceExtent(extentPositions, baseW, baseH);
   const boxW = extent.w;
   const boxH = extent.h;
   const dragBoundsLoad = placeBoundsForFan(
@@ -364,7 +386,9 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
   const busy = Math.min(1, traffic / PULL_W);
   const blobPeriod = `${(3.2 - 1.4 * busy).toFixed(2)}s`;
   const nodeR = i.compact ? 32 : 36;
-  const houseDrawR = i.compact ? COMPACT_LIST_R : HOUSE_R;
+  const houseDrawR = useFork ? HOUSE_R_COMPACT : i.compact ? COMPACT_LIST_R : HOUSE_R;
+  const separatePlaces = places.filter(({ c }) => c.mode === "separate");
+  const includedPlaces = places.filter(({ c }) => c.mode === "included");
   const flows: { node: NodeKey; toHub: boolean }[] = [];
   if (pv > ACTIVE_W) flows.push({ node: "pv", toHub: true });
   if (battery < -ACTIVE_W) flows.push({ node: "bat", toHub: true });
@@ -388,10 +412,25 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
       </radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, nodeR, hubR)} stroke=${nodes[k].color} opacity=${Math.abs(nodes[k].value) > ACTIVE_W ? 0.4 : 0.16}/>`)}
-    ${hasSplit && !useCompactList
-      ? svg`<path class="flow-line" d=${flowSegment(loadPos, housePos, nodeR, houseDrawR)} stroke="var(--house)" opacity=${houseW > ACTIVE_W ? 0.4 : 0.16}/>
+    ${useFork && phone
+      ? compactSplitForkLinks({
+          load: loadPos,
+          loadR: nodeR,
+          fork: phone.fork,
+          house: housePos,
+          houseR: houseDrawR,
+          houseW,
+          total: loadW,
+          separate: separatePlaces,
+          included: includedPlaces,
+          boxW,
+          motion,
+          strokeOf,
+        })
+      : hasSplit
+        ? svg`<path class="flow-line" d=${flowSegment(loadPos, housePos, nodeR, houseDrawR)} stroke="var(--house)" opacity=${houseW > ACTIVE_W ? 0.4 : 0.16}/>
           ${electrons(loadPos, housePos, nodeR, houseDrawR, houseW, "var(--house)", motion)}`
-      : svg``}
+        : svg``}
     ${flows.map((f) => {
       const a = f.toHub ? L[f.node] : L.hub;
       const b = f.toHub ? L.hub : L[f.node];
@@ -426,52 +465,29 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
           @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!i.arrange) i.onSelect?.("house"); } }}
           @pointerdown=${(e: PointerEvent) => onConsumerDrag(e, "__house__", loadPos, i.arrange, i.onPlaceConsumer, dragBoundsLoad)}
         >
-          <circle cx=${housePos.x} cy=${housePos.y} r=${houseDrawR} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf("var(--house)")} stroke-width=${outline ? (i.compact ? "2.2" : "2.4") : "2"} filter=${houseW < ACTIVE_W || outline || i.compact ? "none" : "url(#blob-glow)"}/>
-          <g transform=${iconTransform(housePos.x, housePos.y, i.compact ? iconFit(houseDrawR) : nodeIconFit(HOUSE_R))} fill="none" stroke=${strokeOf("var(--house)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
+          <circle cx=${housePos.x} cy=${housePos.y} r=${houseDrawR} fill=${outline ? "none" : "rgba(10,16,30,.88)"} stroke=${strokeOf("var(--house)")} stroke-width=${outline ? (useFork || i.compact ? "2.2" : "2.4") : "2"} filter=${houseW < ACTIVE_W || outline || (i.compact && !useFork) ? "none" : "url(#blob-glow)"}/>
+          <g transform=${iconTransform(housePos.x, housePos.y, useFork || i.compact ? iconFit(houseDrawR) : nodeIconFit(HOUSE_R))} fill="none" stroke=${strokeOf("var(--house)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
             <path d=${ICONS.house} vector-effect="non-scaling-stroke"/>
           </g>
-          ${i.compact
-            ? svg`<text font-size="14" font-weight="700" fill="var(--text)" x=${housePos.x - 26} y=${housePos.y + 5} text-anchor="end">${i.fmt.w(houseW)}  ${t("nodeHouse")}</text>`
-            : svg`<text class="node-val-sm" x=${housePos.x} y=${housePos.y + 52} text-anchor="middle">${i.fmt.w(houseW)}</text>
-              <text class="node-lbl-sm" x=${housePos.x} y=${housePos.y + 68} text-anchor="middle">${t("nodeHouse")}</text>`}
+          ${useFork
+            ? svg`<text class="node-val-sm" x=${housePos.x} y=${housePos.y + 42} text-anchor="middle">${i.fmt.w(houseW)}</text>
+              <text class="node-lbl-sm" x=${housePos.x} y=${housePos.y + 58} text-anchor="middle">${t("nodeHouse")}</text>`
+            : i.compact
+              ? svg`<text font-size="14" font-weight="700" fill="var(--text)" x=${housePos.x - 26} y=${housePos.y + 5} text-anchor="end">${i.fmt.w(houseW)}  ${t("nodeHouse")}</text>`
+              : svg`<text class="node-val-sm" x=${housePos.x} y=${housePos.y + 52} text-anchor="middle">${i.fmt.w(houseW)}</text>
+                <text class="node-lbl-sm" x=${housePos.x} y=${housePos.y + 68} text-anchor="middle">${t("nodeHouse")}</text>`}
         </g>`
       : svg``}
-    ${useCompactList
-      ? hasSplit
-        ? svg`${compactBuses(
-            [
-              {
-                c: {
-                  id: "__house__",
-                  name: t("nodeHouse"),
-                  entityId: "",
-                  watts: houseW,
-                  mode: "included" as const,
-                  missing: false,
-                  icon: "meter" as const,
-                },
-                p: housePos,
-              },
-              ...places.filter(({ c }) => c.mode === "separate"),
-            ],
-            loadPos,
-            boxW,
-            motion,
-            nodeR,
-          )}${compactBuses(
-            places.filter(({ c }) => c.mode === "included"),
-            housePos,
-            boxW,
-            motion,
-            houseDrawR,
-          )}`
-        : compactBuses(places, loadPos, boxW, motion, nodeR)
-      : places.map(({ c, p, from, fromR }) => {
-          const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
-          const toR = i.compact ? COMPACT_LIST_R : CONSUMER_R;
-          return svg`<path class="flow-line" d=${flowSegment(from, p, fromR, toR)} stroke=${color} opacity=${Math.abs(c.watts) > ACTIVE_W ? 0.4 : 0.16}/>
-            ${electrons(from, p, fromR, toR, c.watts, color, motion)}`;
-        })}
+    ${useFork
+      ? svg``
+      : useCompactList
+        ? compactBuses(places, loadPos, boxW, motion, nodeR)
+        : places.map(({ c, p, from, fromR }) => {
+            const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
+            const toR = i.compact ? COMPACT_LIST_R : CONSUMER_R;
+            return svg`<path class="flow-line" d=${flowSegment(from, p, fromR, toR)} stroke=${color} opacity=${Math.abs(c.watts) > ACTIVE_W ? 0.4 : 0.16}/>
+              ${electrons(from, p, fromR, toR, c.watts, color, motion)}`;
+          })}
     ${places.map(({ c, p, dragOrigin, bounds }) => {
       const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
       const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
