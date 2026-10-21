@@ -11,6 +11,30 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1-beta.7] – Cockpit: Fluss, Entscheidung und Energie-Dashboard (2026-10-21)
+
+> **Beta.** Enthält 0.5.1-beta.6. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.7.md](docs/release-notes/v0.5.1-beta.7.md).
+
+### Neu
+- **Handy-Aufteilung und Anordnen** am Energiefluss (Knoten, Blob, Haus) ohne Überlapp; Positionen speicherbar.
+- **Zusatz-PV-Knoten** (Fremd-WR / Additional) mit getrennten Tageschips und History aus Quellsensoren; Sensoren `additional_pv_power` und `pv_zusatz_heute`.
+- **Strategie-Vorschau** auf Prognose (Schattenmodus-SoC, Eingriffs-Strip, klickbare Legende).
+- **Phasen-Gantt** und **Regelungsleiter** auf Entscheidung.
+- **Bilanzpuls Jahr**, **Einstellungs-Suche**, **Theme-Vorschau** und Hell/Dunkel in der Kopfzeile.
+- **Energie-Dashboard-Assistent** mit Hinweisen zu Fremd-WR und Wallbox.
+
+### Geändert
+- Kompaktere **Prognose- und Preisplan-Charts** auf dem Handy.
+- Hilfe: FAQ Netzladung trotz guter PV-Prognose; Prognose-Hilfe an Strategie-Vorschau.
+
+### Korrekturen
+- Prognose-Chart zeichnet Linien nach Serienwechsel wieder durchgehend.
+
+### Hinweise
+- Neustart der Integration und hartes Neuladen des Browsers, damit Sensoren und Panel ankommen.
+
+---
+
 ## [0.5.1-beta.6] – Netzladung bis zum nächsten günstigen Fenster (2026-10-21)
 
 > **Beta.** Enthält 0.5.1-beta.5. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.6.md](docs/release-notes/v0.5.1-beta.6.md).
