@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { E } from "./entities";
 import {
+  aggregateBalanceByMonth,
   buildBalanceDays,
   calendarDay,
   canShiftBalanceForward,
@@ -123,6 +124,26 @@ describe("buildBalanceDays", () => {
     expect(days.map((d) => d.day)).toEqual(["2026-10-19", "2026-10-20"]);
     expect(days[0]?.balance).toBeCloseTo(4 + 0.5 - 1 - 0.25);
     expect(days[1]?.balance).toBeCloseTo(1 + 0.5 - 2 - 0.25);
+  });
+
+  it("starts the year pulse on January 1", () => {
+    const now = new Date(2026, 9, 20, 12, 0).getTime();
+    expect(calendarDay(new Date(periodStart("year", now)))).toBe("2026-01-01");
+  });
+});
+
+describe("aggregateBalanceByMonth", () => {
+  it("sums daily parts into monthly bars", () => {
+    const days = [
+      { day: "2026-01-01", ts: new Date(2026, 0, 1).getTime(), balance: 1, feedRevenue: 2, saving: 0, costToday: 1, wear: 0 },
+      { day: "2026-01-02", ts: new Date(2026, 0, 2).getTime(), balance: 3, feedRevenue: 4, saving: 1, costToday: 2, wear: 0 },
+      { day: "2026-02-01", ts: new Date(2026, 1, 1).getTime(), balance: -1, feedRevenue: 0, saving: 0, costToday: 1, wear: 0 },
+    ];
+    const months = aggregateBalanceByMonth(days);
+    expect(months.map((d) => d.day)).toEqual(["2026-01-01", "2026-02-01"]);
+    expect(months[0]?.balance).toBeCloseTo(4);
+    expect(months[0]?.feedRevenue).toBeCloseTo(6);
+    expect(months[1]?.balance).toBeCloseTo(-1);
   });
 });
 

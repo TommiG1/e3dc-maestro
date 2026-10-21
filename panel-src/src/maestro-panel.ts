@@ -21,7 +21,14 @@ import {
 } from "./consumers";
 import { controlsSheet } from "./controls";
 import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
-import { powerHistoryOptions, useChartTheme } from "./charts";
+import {
+  FORECAST_POWER_KEYS,
+  loadForecastHidden,
+  powerHistoryOptions,
+  saveForecastHidden,
+  useChartTheme,
+  type ForecastPowerKey,
+} from "./charts";
 import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
 import { makeFmt, type Fmt } from "./format";
@@ -145,8 +152,11 @@ class MaestroPanel extends LitElement {
   private _helpListening = false;
   private _mobile = window.matchMedia(MOBILE).matches;
   private _mq = window.matchMedia(MOBILE);
-  private _range = 24;
+  /** Phones start at 12 h so the forecast plot is readable; user can still pick 24. */
+  private _range = window.matchMedia(MOBILE).matches ? 12 : 24;
   private _showIst = true;
+  private _forecastHidden = loadForecastHidden();
+  private _settingsQuery = "";
   private _sparks?: Record<SparkKey, Point[]>;
   private _ist?: IstSeries;
   private _timeline?: TimelineItem[];
@@ -756,6 +766,7 @@ class MaestroPanel extends LitElement {
   private _openSettingsGroup(id: string): void {
     this._screen = "settings";
     this._settingsGroup = id;
+    this._settingsQuery = "";
     if (id === CLASSIC_DASHBOARD.id) this._classic = undefined;
     history.pushState({ maestroGroup: true }, "", `#settings/${id}`);
     this.requestUpdate();
@@ -1050,6 +1061,7 @@ class MaestroPanel extends LitElement {
       timeline: this._timeline,
       range: this._range,
       showIst: this._showIst,
+      forecastHidden: this._forecastHidden,
       onRange: (h) => {
         this._range = h;
         this.requestUpdate();
@@ -1058,6 +1070,15 @@ class MaestroPanel extends LitElement {
         this._showIst = !this._showIst;
         this.requestUpdate();
         void this._ensureHistory();
+      },
+      onToggleForecastSeries: (key: ForecastPowerKey) => {
+        const next = new Set(this._forecastHidden);
+        if (next.has(key)) next.delete(key);
+        else if (next.size < FORECAST_POWER_KEYS.length - 1) next.add(key);
+        else return;
+        this._forecastHidden = next;
+        saveForecastHidden(next);
+        this.requestUpdate();
       },
       consumers: toFlow(this._consumers, hass),
       consumerOverflow: this._heldOverflow(includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass))),
@@ -1206,6 +1227,11 @@ class MaestroPanel extends LitElement {
         if (!next.delete(section)) next.add(section);
         this._pvOpen = next;
         savePvOpen(next);
+        this.requestUpdate();
+      },
+      settingsQuery: this._settingsQuery,
+      onSettingsQuery: (query) => {
+        this._settingsQuery = query;
         this.requestUpdate();
       },
     };

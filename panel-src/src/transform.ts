@@ -278,6 +278,57 @@ export function phaseBands(phases: string[], points: Point[]): Band[] {
   return bands;
 }
 
+/** Turn newest-first phase-change events into left-to-right bands for a 24 h Gantt. */
+export function timelineBands(
+  items: TimelineItem[],
+  now = Date.now(),
+  windowMs = 24 * 3600e3,
+): Band[] {
+  if (!items.length || !(windowMs > 0)) return [];
+  const origin = now - windowMs;
+  const chrono = [...items].filter((it) => it.phase && Number.isFinite(it.ts)).sort((a, b) => a.ts - b.ts);
+  if (!chrono.length) return [];
+  const bands: Band[] = [];
+  for (let i = 0; i < chrono.length; i++) {
+    const x = Math.max(chrono[i].ts, origin);
+    const x2 = Math.min(i + 1 < chrono.length ? chrono[i + 1].ts : now, now);
+    if (x2 <= origin || x >= now || x2 <= x) continue;
+    bands.push({ phase: chrono[i].phase, x, x2 });
+  }
+  return bands;
+}
+
+/** Stable colors for decision / Gantt phase chips. */
+export function phaseColor(phase: string): string {
+  const known: Record<string, string> = {
+    off: "#64748b",
+    manual: "#64748b",
+    emergency: "#f87171",
+    feed_in_limit: "#e879f9",
+    reserve_protection: "#fb923c",
+    evcc_pause: "#94a3b8",
+    ht_protection: "#a78bfa",
+    force_discharge: "#22d3ee",
+    morning_discharge: "#67e8f9",
+    astro_wait: "#94a3b8",
+    morning_cap: "#818cf8",
+    hard_soc_limit: "#c084fc",
+    fast_floor: "#4ade80",
+    grid_charge: "#34d399",
+    grid_hold: "#fbbf24",
+    corridor: "#38bdf8",
+    pv_delay: "#60a5fa",
+    spreading: "#2dd4bf",
+    curtailment_guard: "#f87171",
+    idle: "#94a3b8",
+  };
+  if (known[phase]) return known[phase];
+  let hash = 0;
+  for (let i = 0; i < phase.length; i++) hash = (hash * 31 + phase.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `hsl(${hue} 55% 55%)`;
+}
+
 export interface Slot {
   start: string;
   start_local: string;
@@ -302,7 +353,7 @@ export function parseSlots(v: unknown): Slot[] {
   );
 }
 
-/** Planned end-of-slot SoC from the price plan, for the forecast chart when the plan controls. */
+/** Planned end-of-slot SoC from the price plan (forecast strategy preview, also in shadow mode). */
 export function planSocPoints(slots: Slot[]): Point[] {
   return slots
     .filter((s) => Number.isFinite(s.soc_pct))

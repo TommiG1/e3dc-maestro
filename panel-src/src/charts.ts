@@ -96,7 +96,7 @@ const merge = (a: Obj, b: Obj): Obj => {
 };
 const withBase = (o: Obj): Opts => merge(chartBase(), o) as unknown as Opts;
 
-const nowMarker = (label: string) => ({
+const nowMarker = (label: string, compact = false) => ({
   x: Date.now(),
   borderColor: COLORS.text,
   opacity: 0.6,
@@ -104,7 +104,13 @@ const nowMarker = (label: string) => ({
     text: label,
     orientation: "horizontal",
     borderWidth: 0,
-    style: { background: COLORS.text, color: COLORS.bg, fontWeight: 700 },
+    style: {
+      background: COLORS.text,
+      color: COLORS.bg,
+      fontWeight: 700,
+      fontSize: compact ? "10px" : "12px",
+      padding: compact ? { left: 4, right: 4, top: 2, bottom: 2 } : undefined,
+    },
   },
 });
 
@@ -153,27 +159,60 @@ const xaxis = (extra: Obj = {}) => ({
   ...extra,
 });
 
+/** Power series the user can hide on the forecast chart (SoC stays). */
+export type ForecastPowerKey = "pv" | "house" | "import" | "feed";
+
+export const FORECAST_POWER_KEYS: readonly ForecastPowerKey[] = ["pv", "house", "import", "feed"];
+
+const FORECAST_HIDDEN_KEY = "e3dc-maestro.forecast-hidden.v1";
+
+export function parseForecastHidden(raw: unknown): Set<ForecastPowerKey> {
+  if (!Array.isArray(raw)) return new Set();
+  const allowed = new Set<string>(FORECAST_POWER_KEYS);
+  return new Set(raw.filter((k): k is ForecastPowerKey => typeof k === "string" && allowed.has(k)));
+}
+
+export function loadForecastHidden(): Set<ForecastPowerKey> {
+  try {
+    return parseForecastHidden(JSON.parse(localStorage.getItem(FORECAST_HIDDEN_KEY) ?? "null"));
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveForecastHidden(hidden: ReadonlySet<ForecastPowerKey>): void {
+  localStorage.setItem(FORECAST_HIDDEN_KEY, JSON.stringify([...hidden]));
+}
+
 export interface ForecastInput {
   traj: Trajectory;
   targetSoc: number | undefined;
-  /** When set (price plan controls the battery), replaces the generic SoC trajectory. */
+  /** When set (price-plan slots with SoC), replaces the generic SoC trajectory. */
   planSoc: Point[] | undefined;
+  /** Plan exists but does not control the battery yet. */
+  planShadow?: boolean;
   ist: IstSeries | undefined;
   showIst: boolean;
+  /** Power series to omit; SoC always stays. */
+  hiddenPower?: ReadonlySet<ForecastPowerKey>;
+  /** Narrow screens: less chrome, more plot width. */
+  compact?: boolean;
   fmt: Fmt;
   i18n: I18n;
 }
 
-export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i18n }: ForecastInput): Opts {
+export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, showIst, hiddenPower, compact, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
   const usePlanSoc = !!planSoc && planSoc.length >= 2;
   const socSeries = usePlanSoc ? planSoc : traj.trajectory_points;
-  const socName = usePlanSoc ? i18n.t("legendPlanSoc") : i18n.t("legendSoc");
+  const socName = usePlanSoc
+    ? i18n.t(planShadow ? "legendPlanSocShadow" : "legendPlanSoc")
+    : i18n.t("legendSoc");
+  const hidden = hiddenPower ?? new Set<ForecastPowerKey>();
   const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
-    const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: 0.05 };
-    // Vertical text (bottom to top) keeps the name off the 100 % line at the top edge and fits
-    // narrow bands. A one-step phase is only minutes wide, so labeling every one would stack text.
-    if (b.x2 - b.x >= 30 * 60e3) {
+    const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: compact ? 0.08 : 0.05 };
+    // Vertical phase names eat plot width on phones; keep the tint, drop the text.
+    if (!compact && b.x2 - b.x >= 30 * 60e3) {
       ann.label = {
         text: i18n.phase(b.phase),
         borderWidth: 0,
@@ -187,36 +226,70 @@ export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i
     return ann;
   });
 
-  const series: Obj[] = [
-    { name: i18n.t("legendPv"), type: "area", data: toKw(traj.pv_points) },
-    { name: i18n.t("legendHouse"), type: "line", data: toKw(traj.house_points) },
-    { name: i18n.t("legendImport"), type: "area", data: imp },
-    { name: i18n.t("legendFeed"), type: "area", data: exp },
-    { name: socName, type: "line", data: socSeries },
+  type PowerDef = {
+    key: ForecastPowerKey;
+    name: string;
+    type: string;
+    data: Point[];
+    color: string;
+    width: number;
+    dash: number;
+    fill: string;
+  };
+  const powerDefs: PowerDef[] = [
+    { key: "pv", name: i18n.t("legendPv"), type: "area", data: toKw(traj.pv_points), color: COLORS.pv, width: 2, dash: 0, fill: "gradient" },
+    { key: "house", name: i18n.t("legendHouse"), type: "line", data: toKw(traj.house_points), color: COLORS.house, width: 2, dash: 4, fill: "solid" },
+    { key: "import", name: i18n.t("legendImport"), type: "area", data: imp, color: COLORS.gridIn, width: 1.5, dash: 0, fill: "gradient" },
+    { key: "feed", name: i18n.t("legendFeed"), type: "area", data: exp, color: COLORS.gridOut, width: 1.5, dash: 0, fill: "gradient" },
   ];
-  const colors: string[] = [COLORS.pv, COLORS.house, COLORS.gridIn, COLORS.gridOut, COLORS.bat];
-  const widths = [2, 2, 1.5, 1.5, 3.5];
-  const dashes = [0, 4, 0, 0, 0];
-  const fillTypes = ["gradient", "solid", "gradient", "gradient", "solid"];
-  const yaxis: Obj[] = [
-    { seriesName: i18n.t("legendPv"), min: 0, title: { text: "kW" }, labels: { formatter: (v: number) => fmt.n(v, 1) } },
-    { seriesName: i18n.t("legendPv"), show: false },
-    { seriesName: i18n.t("legendPv"), show: false },
-    { seriesName: i18n.t("legendPv"), show: false },
-    {
-      seriesName: socName,
-      opposite: true,
-      min: 0,
-      max: 100,
-      tickAmount: 5,
-      title: { text: "SoC %" },
-      labels: { formatter: (v: number) => `${Math.round(v)}%` },
-    },
-  ];
+  const visible = powerDefs.filter((d) => !hidden.has(d.key));
+  const powerAxisName = visible[0]?.name ?? i18n.t("legendPv");
 
-  const socIndex = 4;
+  const series: Obj[] = visible.map((d) => ({ name: d.name, type: d.type, data: d.data }));
+  const colors: string[] = visible.map((d) => d.color);
+  const widths: number[] = visible.map((d) => d.width);
+  const dashes: number[] = visible.map((d) => d.dash);
+  const fillTypes: string[] = visible.map((d) => d.fill);
+  const kwLabels = {
+    formatter: (v: number) => fmt.n(v, compact ? 0 : 1),
+    style: compact ? { fontSize: "10px" } : undefined,
+    offsetX: compact ? -2 : 0,
+  };
+  const yaxis: Obj[] = visible.map((_, i) =>
+    i === 0
+      ? {
+          seriesName: powerAxisName,
+          min: 0,
+          tickAmount: compact ? 4 : undefined,
+          title: compact ? { text: undefined } : { text: "kW" },
+          labels: kwLabels,
+        }
+      : { seriesName: powerAxisName, show: false },
+  );
+
+  const socIndex = series.length;
+  series.push({ name: socName, type: "line", data: socSeries });
+  colors.push(COLORS.bat);
+  widths.push(compact ? 2.75 : 3.5);
+  dashes.push(0);
+  fillTypes.push("solid");
+  yaxis.push({
+    seriesName: socName,
+    opposite: visible.length > 0,
+    min: 0,
+    max: 100,
+    tickAmount: compact ? 4 : 5,
+    title: compact ? { text: undefined } : { text: "SoC %" },
+    labels: {
+      formatter: (v: number) => `${Math.round(v)}%`,
+      style: compact ? { fontSize: "10px" } : undefined,
+      offsetX: compact ? 2 : 0,
+    },
+  });
+
+  const socPctIndexes = new Set<number>([socIndex]);
   let actualFrom = -1;
-  if (showIst && ist && (ist.pv.length > 1 || ist.house.length > 1)) {
+  if (showIst && ist && (ist.pv.length > 1 || ist.house.length > 1 || ist.soc.length > 1)) {
     actualFrom = series.length;
     // Close the gap at "now": extend each actual line to the first forecast point.
     const bridge = (actual: Point[], forecast: Point[]): Point[] => {
@@ -224,31 +297,59 @@ export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i
       const first = forecast[0];
       return last && first && first[0] > last[0] ? [...actual, first] : actual;
     };
-    series.push(
-      { name: `${i18n.t("legendPv")} ${i18n.t("legendActual")}`, type: "line", data: toKw(bridge(ist.pv, traj.pv_points)) },
-      { name: `${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, type: "line", data: toKw(bridge(ist.house, traj.house_points)) },
-      { name: `${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, type: "line", data: bridge(ist.soc, socSeries) },
-    );
-    colors.push(COLORS.pv, COLORS.house, COLORS.bat);
-    widths.push(1.5, 1.5, 1.5);
-    dashes.push(0, 0, 0);
-    fillTypes.push("solid", "solid", "solid");
-    yaxis.push(
-      { seriesName: i18n.t("legendPv"), show: false },
-      { seriesName: i18n.t("legendPv"), show: false },
-      { seriesName: socName, opposite: true, min: 0, max: 100, show: false },
-    );
+    const pushActual = (name: string, data: Point[], color: string, onSocAxis: boolean) => {
+      series.push({ name, type: "line", data });
+      colors.push(color);
+      widths.push(1.5);
+      dashes.push(0);
+      fillTypes.push("solid");
+      if (onSocAxis) {
+        socPctIndexes.add(series.length - 1);
+        yaxis.push({ seriesName: socName, opposite: true, min: 0, max: 100, show: false });
+      } else {
+        yaxis.push({ seriesName: powerAxisName, show: false });
+      }
+    };
+    if (!hidden.has("pv") && ist.pv.length > 1) {
+      pushActual(`${i18n.t("legendPv")} ${i18n.t("legendActual")}`, toKw(bridge(ist.pv, traj.pv_points)), COLORS.pv, false);
+    }
+    if (!hidden.has("house") && ist.house.length > 1) {
+      pushActual(`${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, toKw(bridge(ist.house, traj.house_points)), COLORS.house, false);
+    }
+    if (ist.soc.length > 1) {
+      pushActual(`${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, bridge(ist.soc, socSeries), COLORS.bat, true);
+    }
   }
 
   const lineAtTop = targetSoc !== undefined && targetSoc >= 90;
   return withBase({
-    chart: { id: "fc", type: "line", height: 420, zoom: { enabled: true, type: "x" }, toolbar: { show: false, autoSelected: "zoom" } },
-    grid: { padding: { top: lineAtTop ? 28 : 8 } },
+    chart: {
+      id: "fc",
+      type: "line",
+      height: compact ? 300 : 420,
+      zoom: { enabled: true, type: "x" },
+      toolbar: { show: false, autoSelected: "zoom" },
+      parentHeightOffset: compact ? 0 : undefined,
+    },
+    grid: {
+      padding: compact
+        ? { top: lineAtTop ? 22 : 4, left: 4, right: 4, bottom: 0 }
+        : { top: lineAtTop ? 28 : 8 },
+    },
     series,
     colors,
     stroke: { width: widths, curve: "smooth", dashArray: dashes },
-    fill: { type: fillTypes, gradient: { opacityFrom: 0.45, opacityTo: 0.02 }, opacity: series.map((_, i) => (actualFrom >= 0 && i >= actualFrom ? 0.55 : 1)) },
-    xaxis: xaxis({ tooltip: { enabled: false } }),
+    fill: {
+      type: fillTypes,
+      gradient: { opacityFrom: 0.45, opacityTo: 0.02 },
+      opacity: series.map((_, i) => (actualFrom >= 0 && i >= actualFrom ? 0.55 : 1)),
+    },
+    xaxis: xaxis({
+      tooltip: { enabled: false },
+      ...(compact
+        ? { labels: { datetimeUTC: false, format: "HH:mm", style: { fontSize: "10px" } }, tickAmount: 4 }
+        : {}),
+    }),
     yaxis,
     tooltip: {
       shared: true,
@@ -256,12 +357,12 @@ export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i
       x: { format: "HH:mm" },
       y: {
         formatter: (v: number | null, o?: { seriesIndex: number }) =>
-          v == null ? "–" : o?.seriesIndex === socIndex || (actualFrom >= 0 && o?.seriesIndex === actualFrom + 2) ? `${fmt.n(v)} %` : `${fmt.n(v, 2)} kW`,
+          v == null ? "–" : socPctIndexes.has(o?.seriesIndex ?? -1) ? `${fmt.n(v)} %` : `${fmt.n(v, 2)} kW`,
       },
     },
-    markers: { size: 0, hover: { size: 5 } },
+    markers: { size: 0, hover: { size: compact ? 4 : 5 } },
     annotations: {
-      xaxis: [...bands, nowMarker(i18n.t("now"))],
+      xaxis: [...bands, nowMarker(i18n.t("now"), compact)],
       yaxis:
         targetSoc === undefined
           ? []
@@ -272,18 +373,18 @@ export function forecastOptions({ traj, targetSoc, planSoc, ist, showIst, fmt, i
                 borderColor: COLORS.accent2,
                 strokeDashArray: 6,
                 label: {
-                  text: i18n.t("targetLabel", { v: Math.round(targetSoc) }),
+                  text: compact ? `${Math.round(targetSoc)}%` : i18n.t("targetLabel", { v: Math.round(targetSoc) }),
                   position: "right",
                   textAnchor: "end",
-                  offsetX: -8,
+                  offsetX: compact ? -4 : -8,
                   // Apex places the baseline at y + offsetY - 3. Negative offsetY lifts the label off the line.
-                  offsetY: -16,
+                  offsetY: compact ? -12 : -16,
                   borderWidth: 0,
                   style: {
                     background: "rgba(7,11,20,.85)",
                     color: "#c7d2fe",
-                    fontSize: "12px",
-                    padding: { left: 6, right: 6, top: 3, bottom: 3 },
+                    fontSize: compact ? "10px" : "12px",
+                    padding: { left: compact ? 4 : 6, right: compact ? 4 : 6, top: 2, bottom: 2 },
                   },
                 },
               },
@@ -321,9 +422,11 @@ export interface PlanInput {
   slots: Slot[];
   fmt: Fmt;
   i18n: I18n;
+  /** Narrow screens: less chrome, more plot width. */
+  compact?: boolean;
 }
 
-export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
+export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput): Opts {
   const slots = chartSlots(allSlots);
   const ts = (s: Slot) => Date.parse(s.start);
   const actionLabel = (s: Slot) => {
@@ -335,10 +438,18 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
         : i18n.t("slotRelease");
   };
   const row = (label: string, value: string) =>
-    `<div style="display:flex;justify-content:space-between;gap:16px;color:${COLORS.muted}"><span>${label}</span><b style="color:${COLORS.text}">${value}</b></div>`;
+    `<div style="display:flex;justify-content:space-between;gap:12px;color:${COLORS.muted}"><span>${label}</span><b style="color:${COLORS.text}">${value}</b></div>`;
+  const labelStyle = compact ? { fontSize: "10px" } : undefined;
 
   return withBase({
-    chart: { type: "line", height: 360, zoom: { enabled: true, type: "x" }, toolbar: { show: false, autoSelected: "zoom" } },
+    chart: {
+      type: "line",
+      height: compact ? 280 : 360,
+      zoom: { enabled: true, type: "x" },
+      toolbar: { show: false, autoSelected: "zoom" },
+      parentHeightOffset: compact ? 0 : undefined,
+    },
+    grid: compact ? { padding: { top: 4, left: 4, right: 4, bottom: 0 } } : undefined,
     series: [
       {
         name: i18n.t("slotPrice"),
@@ -348,13 +459,38 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
       { name: i18n.t("legendPlanSoc"), type: "line", data: slots.map((s) => ({ x: ts(s), y: s.soc_pct })) },
     ],
     colors: [COLORS.bat, COLORS.series],
-    stroke: { width: [0, 2.5], curve: "stepline" },
-    plotOptions: { bar: { columnWidth: "78%", borderRadius: 4, borderRadiusApplication: "end" } },
+    stroke: { width: [0, compact ? 2 : 2.5], curve: "stepline" },
+    plotOptions: {
+      bar: {
+        columnWidth: compact ? "88%" : "78%",
+        borderRadius: compact ? 2 : 4,
+        borderRadiusApplication: "end",
+      },
+    },
     fill: { opacity: [0.85, 1] },
-    xaxis: xaxis(),
+    xaxis: xaxis(
+      compact
+        ? { labels: { datetimeUTC: false, format: "HH:mm", style: { fontSize: "10px" } }, tickAmount: 4 }
+        : {},
+    ),
     yaxis: [
-      { title: { text: "ct/kWh" }, labels: { formatter: (v: number) => fmt.n(v, 0) } },
-      { opposite: true, min: 0, max: 100, title: { text: "SoC %" }, labels: { formatter: (v: number) => `${Math.round(v)}%` } },
+      {
+        tickAmount: compact ? 4 : undefined,
+        title: compact ? { text: undefined } : { text: "ct/kWh" },
+        labels: { formatter: (v: number) => fmt.n(v, 0), style: labelStyle, offsetX: compact ? -2 : 0 },
+      },
+      {
+        opposite: true,
+        min: 0,
+        max: 100,
+        tickAmount: compact ? 4 : undefined,
+        title: compact ? { text: undefined } : { text: "SoC %" },
+        labels: {
+          formatter: (v: number) => `${Math.round(v)}%`,
+          style: labelStyle,
+          offsetX: compact ? 2 : 0,
+        },
+      },
     ],
     tooltip: {
       shared: true,
@@ -362,7 +498,7 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
       custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
         const s = slots[dataPointIndex];
         if (!s) return "";
-        return `<div style="padding:12px 14px;min-width:190px">
+        return `<div style="padding:${compact ? "10px 12px" : "12px 14px"};min-width:${compact ? "160px" : "190px"};max-width:min(280px,90vw)">
           <div style="font-weight:700;margin-bottom:8px">${fmt.dayTime(s.start)}</div>
           ${row(i18n.t("slotPrice"), `${fmt.n(s.price * 100)} ct`)}
           ${row(i18n.t("slotSoc"), `${fmt.n(s.soc_pct)} %`)}
@@ -370,7 +506,7 @@ export function planOptions({ slots: allSlots, fmt, i18n }: PlanInput): Opts {
           <div style="margin-top:8px;color:${ACTION_COLOR[slotAction(s)]};font-weight:600">${actionLabel(s)}</div></div>`;
       },
     },
-    annotations: { xaxis: [nowMarker(i18n.t("now"))] },
+    annotations: { xaxis: [nowMarker(i18n.t("now"), compact)] },
   });
 }
 
@@ -488,6 +624,8 @@ export interface BalancePulseInput {
   days: BalanceDay[];
   fmt: Fmt;
   i18n: I18n;
+  /** One bar per month (year pulse); labels and click hint adapt. */
+  monthly?: boolean;
   onDay?: (day: string) => void;
 }
 
@@ -496,8 +634,9 @@ const pulseBarColor = (value: number, today: boolean): string => {
   return today ? "#fca5a5" : "rgba(248, 113, 113, 0.78)";
 };
 
-const pulseDayLabel = (ts: number, loc: string, dense: boolean): string => {
+const pulseDayLabel = (ts: number, loc: string, dense: boolean, monthly = false): string => {
   const d = new Date(ts);
+  if (monthly) return d.toLocaleDateString(loc, { month: "short" });
   if (dense) return d.toLocaleDateString(loc, { day: "numeric" });
   return d.toLocaleDateString(loc, { weekday: "short", day: "numeric" });
 };
@@ -566,32 +705,34 @@ export function alignTwinAxisZeros(
   return { primary: { min: pMin, max: pMax }, secondary: { min: sMin, max: Math.max(sMax, 1e-6) } };
 }
 
-/** Diverging daily balance bars (left €) plus cumulative running total (right €). */
-export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInput): Opts {
+/** Diverging daily (or monthly) balance bars (left €) plus cumulative running total (right €). */
+export function balancePulseOptions({ days, fmt, i18n, monthly, onDay }: BalancePulseInput): Opts {
   const todayKey = calendarDay();
-  const dense = days.length > 14;
+  const monthKey = todayKey.slice(0, 7);
+  const dense = !monthly && days.length > 14;
   const row = (label: string, value: string, accent?: string) =>
     `<div style="display:flex;justify-content:space-between;gap:18px;color:${COLORS.muted}"><span>${label}</span><b style="color:${accent ?? COLORS.text};font-variant-numeric:tabular-nums">${value}</b></div>`;
   let running = 0;
-  const categories = days.map((d) => pulseDayLabel(d.ts, fmt.loc, dense));
+  const labelOf = (ts: number) => pulseDayLabel(ts, fmt.loc, dense, monthly);
+  const categories = days.map((d) => labelOf(d.ts));
   const columns = days.map((d) => {
-    const today = d.day === todayKey;
+    const current = monthly ? d.day.startsWith(monthKey) : d.day === todayKey;
     return {
-      x: pulseDayLabel(d.ts, fmt.loc, dense),
+      x: labelOf(d.ts),
       y: d.balance === undefined ? null : +d.balance.toFixed(2),
-      fillColor: d.balance === undefined ? COLORS.faint : pulseBarColor(d.balance, today),
+      fillColor: d.balance === undefined ? COLORS.faint : pulseBarColor(d.balance, current),
     };
   });
   const cumulative = days.map((d) => {
     if (d.balance !== undefined) running += d.balance;
-    return { x: pulseDayLabel(d.ts, fmt.loc, dense), y: +running.toFixed(2) };
+    return { x: labelOf(d.ts), y: +running.toFixed(2) };
   });
   const axes = alignTwinAxisZeros(
     columns.map((p) => p.y).filter((v): v is number => v !== null),
     cumulative.map((p) => p.y),
   );
-  const todayIndex = days.findIndex((d) => d.day === todayKey);
-  const dailyName = i18n.t("pulseDaily");
+  const todayIndex = days.findIndex((d) => (monthly ? d.day.startsWith(monthKey) : d.day === todayKey));
+  const dailyName = i18n.t(monthly ? "pulseMonthly" : "pulseDaily");
   const sumName = i18n.t("pulseCumulative");
   const axisTitle = (text: string, color: string) => ({
     text,
@@ -698,7 +839,7 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
         tickAmount: 5,
         forceNiceScale: false,
         decimalsInFloat: 0,
-        title: axisTitle(i18n.t("pulseDailyAxis"), COLORS.muted),
+        title: axisTitle(i18n.t(monthly ? "pulseMonthlyAxis" : "pulseDailyAxis"), COLORS.muted),
         labels: {
           style: { colors: COLORS.muted, fontSize: "11px", fontWeight: 550 },
           formatter: (v: number) => `${fmt.n(v, 0)} €`,
@@ -731,7 +872,7 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
                 strokeDashArray: 5,
                 opacity: 0.55,
                 label: {
-                  text: i18n.t("periodToday"),
+                  text: i18n.t(monthly ? "periodMonth" : "periodToday"),
                   orientation: "horizontal",
                   borderWidth: 0,
                   offsetY: -2,
@@ -755,8 +896,11 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
         const d = days[dataPointIndex];
         if (!d) return "";
         const sum = cumulative[dataPointIndex]?.y;
+        const heading = monthly
+          ? new Date(d.ts).toLocaleDateString(fmt.loc, { month: "long", year: "numeric" })
+          : fmt.day(d.ts);
         return `<div style="padding:12px 14px;min-width:212px">
-          <div style="font-weight:700;margin-bottom:8px;color:${COLORS.text}">${fmt.day(d.ts)}</div>
+          <div style="font-weight:700;margin-bottom:8px;color:${COLORS.text}">${heading}</div>
           ${row(dailyName, `${fmt.n(d.balance, 2)} €`, d.balance !== undefined && d.balance < 0 ? COLORS.gridIn : COLORS.gridOut)}
           ${row(sumName, `${fmt.n(sum, 2)} €`, COLORS.accent)}
           <div style="height:1px;background:${COLORS.grid};margin:8px 0"></div>
@@ -764,7 +908,7 @@ export function balancePulseOptions({ days, fmt, i18n, onDay }: BalancePulseInpu
           ${row(i18n.t("kpiSaving", { when: "" }).trim(), `${fmt.n(d.saving, 2)} €`)}
           ${row(i18n.t("kpiCostGross"), `${fmt.n(d.costToday, 2)} €`)}
           ${row(i18n.t("kpiWear"), `${fmt.n(d.wear, 2)} €`)}
-          <div style="margin-top:8px;color:${COLORS.muted};font-size:11px">${i18n.t("pulseClickDay")}</div>
+          <div style="margin-top:8px;color:${COLORS.muted};font-size:11px">${i18n.t(monthly ? "pulseClickMonth" : "pulseClickDay")}</div>
         </div>`;
       },
     },

@@ -12,6 +12,7 @@ import {
   planOptions,
   socRingGradient,
   sparkOptions,
+  type ForecastPowerKey,
 } from "./charts";
 import type { ClassicStatus } from "./classic";
 import { separateDayEnergy, visibleInFlow, type FlowConsumer } from "./consumers";
@@ -30,6 +31,7 @@ import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 import { calendarPopover } from "./calendar-popover";
 import {
+  aggregateBalanceByMonth,
   calendarDay,
   canShiftBalanceForward,
   dayBalance,
@@ -54,10 +56,12 @@ import {
   parseAutonomyHours,
   parseSlots,
   parseTrajectory,
+  phaseColor,
   planEmptyKind,
   planSocPoints,
   priceExtremes,
   slotAction,
+  timelineBands,
   type PlanEmptyKind,
   type Point,
   type TimelineItem,
@@ -89,6 +93,9 @@ export interface Ctx {
   showIst: boolean;
   onRange: (hours: number) => void;
   onToggleIst: () => void;
+  /** Forecast power series the user hid (SoC stays). */
+  forecastHidden: ReadonlySet<ForecastPowerKey>;
+  onToggleForecastSeries: (key: ForecastPowerKey) => void;
   consumers: FlowConsumer[];
   consumerOverflow: boolean;
   onEditConsumers: () => void;
@@ -158,6 +165,8 @@ export interface Ctx {
   onTogglePlanTune: () => void;
   pvOpen: ReadonlySet<string>;
   onTogglePv: (section: string) => void;
+  settingsQuery: string;
+  onSettingsQuery: (query: string) => void;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];
@@ -793,7 +802,9 @@ export function liveView(c: Ctx): TemplateResult {
     `,
     )}
     ${(() => {
-      const days = c.pulseDays ?? [];
+      const rawDays = c.pulseDays ?? [];
+      const monthly = c.pulseRange === "year";
+      const days = monthly ? aggregateBalanceByMonth(rawDays) : rawDays;
       const defined = days.filter((d) => d.balance !== undefined);
       const pulseSum = defined.length ? defined.reduce((acc, d) => acc + d.balance!, 0) : undefined;
       const pulseTone = pulseSum === undefined || pulseSum === 0 ? "" : pulseSum > 0 ? "pos" : "neg";
@@ -803,7 +814,7 @@ export function liveView(c: Ctx): TemplateResult {
       const pulseBody =
         pulseState === "error"
           ? html`<p class="err">${t("historyFailed")}</p>`
-          : pulseState === "loading" && !days.length
+          : pulseState === "loading" && !rawDays.length
             ? html`<p class="hint">${t("loading")}</p>`
             : !defined.length
               ? html`<p class="hint">${t("pulseEmpty")}</p>`
@@ -811,16 +822,19 @@ export function liveView(c: Ctx): TemplateResult {
                   class="pulse-chart"
                   .options=${memo(
                     `pulse-${c.pulseRange}`,
-                    [c.theme, c.fmt.loc, days],
+                    [c.theme, c.fmt.loc, days, monthly],
                     () =>
                       balancePulseOptions({
                         days,
+                        monthly,
                         fmt: c.fmt,
                         i18n: c.i18n,
-                        onDay: (day) => c.onBalanceSelect("day", day),
+                        onDay: (day) => c.onBalanceSelect(monthly ? "month" : "day", day),
                       }),
                   )}
                 ></maestro-chart>`;
+      const pulsePeriodLabel = (r: PulseRange): "periodWeek" | "periodMonth" | "periodYear" =>
+        r === "week" ? "periodWeek" : r === "month" ? "periodMonth" : "periodYear";
       return group(
         "balancePulse",
         t("pulseTitle"),
@@ -832,9 +846,9 @@ export function liveView(c: Ctx): TemplateResult {
         </span>`,
         pulseBody,
         html`<div class="seg period" role="group" aria-label=${t("pulseTitle")}>
-          ${(["week", "month"] as const).map(
+          ${(["week", "month", "year"] as const).map(
             (r) =>
-              html`<button class=${c.pulseRange === r ? "active" : ""} aria-pressed=${c.pulseRange === r} @click=${() => c.onPulseRange(r)}>${t(r === "week" ? "periodWeek" : "periodMonth")}</button>`,
+              html`<button class=${c.pulseRange === r ? "active" : ""} aria-pressed=${c.pulseRange === r} @click=${() => c.onPulseRange(r)}>${t(pulsePeriodLabel(r))}</button>`,
           )}
         </div>`,
         "pulse-body",
@@ -857,57 +871,111 @@ const pct = (c: Ctx, id: string): string => {
 
 // ---------------------------------------------------------------- Forecast
 
+const POWER_LEGEND: { key: ForecastPowerKey; color: string; label: "legendPv" | "legendHouse" | "legendImport" | "legendFeed" }[] = [
+  { key: "pv", color: COLORS.pv, label: "legendPv" },
+  { key: "house", color: COLORS.house, label: "legendHouse" },
+  { key: "import", color: COLORS.gridIn, label: "legendImport" },
+  { key: "feed", color: COLORS.gridOut, label: "legendFeed" },
+];
+
 export function forecastView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const a = attrs(c, E.trajectory);
   const traj = parseTrajectory(a);
   if (!traj) return html`<div class="card"><p class="empty">${t("noForecast")}</p></div>`;
   const planAttrs = attrs(c, E.plan);
-  const planSoc =
-    planAttrs.controlling === true ? planSocPoints(parseSlots(planAttrs.plan_slots)) : undefined;
-  const usePlanSoc = !!planSoc && planSoc.length >= 2;
-  const legend: [string, string][] = [
-    [COLORS.bat, usePlanSoc ? t("legendPlanSoc") : t("legendSoc")],
-    [COLORS.pv, t("legendPv")],
-    [COLORS.house, t("legendHouse")],
-    [COLORS.gridIn, t("legendImport")],
-    [COLORS.gridOut, t("legendFeed")],
-  ];
-  const socMin = usePlanSoc ? Math.min(...planSoc!.map((p) => p[1])) : n(a.min_soc);
-  const socMax = usePlanSoc ? Math.max(...planSoc!.map((p) => p[1])) : n(a.max_soc);
+  const slots = parseSlots(planAttrs.plan_slots);
+  const planSoc = planSocPoints(slots);
+  const usePlanSoc = planSoc.length >= 2;
+  const planControlling = planAttrs.controlling === true;
+  const titleKey = usePlanSoc ? "chartTitleStrategy" : "chartTitle";
+  const socLabel = !usePlanSoc
+    ? t("legendSoc")
+    : planControlling
+      ? t("legendPlanSoc")
+      : t("legendPlanSocShadow");
+  const socMin = usePlanSoc ? Math.min(...planSoc.map((p) => p[1])) : n(a.min_soc);
+  const socMax = usePlanSoc ? Math.max(...planSoc.map((p) => p[1])) : n(a.max_soc);
   const stat = (label: string, value: TemplateResult | string) =>
     html`<div class="card stat"><h3>${label}</h3><div class="v">${value}</div></div>`;
+  const hiddenKey = [...c.forecastHidden].sort().join(",");
 
   return html`
-    <div class="card">
+    <div class="card forecast-card">
       <div class="chart-head">
         <div class="grow">
-          <h3>${t(usePlanSoc ? "chartTitlePlan" : "chartTitle")}</h3>
-          <div class="legend">${legend.map(([color, label]) => html`<span><i style="background:${color}"></i>${label}</span>`)}</div>
+          <h3>${t(titleKey)}</h3>
+          ${usePlanSoc ? html`<span class="badge forecast-badge">${planControlling ? t("planActive") : t("planShadow")}</span>` : nothing}
+          <div class="legend" role="group" aria-label=${t("legendToggleHint")}>
+            <span class="legend-fixed"><i style="background:${COLORS.bat}"></i>${socLabel}</span>
+            ${POWER_LEGEND.map(
+              ({ key, color, label }) => html`<button
+                type="button"
+                class="legend-toggle ${c.forecastHidden.has(key) ? "off" : ""}"
+                aria-pressed=${!c.forecastHidden.has(key)}
+                title=${t("legendToggleHint")}
+                @click=${() => c.onToggleForecastSeries(key)}
+              ><i style="background:${color}"></i>${t(label)}</button>`,
+            )}
+          </div>
         </div>
-        <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
-        <button class="toggle" @click=${() => downloadCsv("maestro-prognose.csv", forecastCsv(traj))}>${t("exportCsv")}</button>
-        <div class="seg" role="group">
-          ${[6, 12, 24].map(
-            (h) => html`<button class=${c.range === h ? "active" : ""} aria-pressed=${c.range === h} @click=${() => c.onRange(h)}>${t("hoursShort", { h })}</button>`,
-          )}
+        <div class="chart-tools">
+          <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
+          ${c.mobile ? nothing : html`<button class="toggle" @click=${() => downloadCsv("maestro-prognose.csv", forecastCsv(traj))}>${t("exportCsv")}</button>`}
+          <div class="seg" role="group">
+            ${[6, 12, 24].map(
+              (h) => html`<button class=${c.range === h ? "active" : ""} aria-pressed=${c.range === h} @click=${() => c.onRange(h)}>${t("hoursShort", { h })}</button>`,
+            )}
+          </div>
         </div>
       </div>
       <maestro-chart
         id="fc-main"
-        .options=${memo("forecast", [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, c.fmt.loc], () =>
-          forecastOptions({
-            traj,
-            targetSoc: num(st(c, E.targetSoc)),
-            planSoc: usePlanSoc ? planSoc : undefined,
-            ist: c.ist,
-            showIst: c.showIst,
-            fmt: c.fmt,
-            i18n: c.i18n,
-          }),
+        .options=${memo(
+          "forecast",
+          [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, hiddenKey, c.mobile, c.fmt.loc],
+          () =>
+            forecastOptions({
+              traj,
+              targetSoc: num(st(c, E.targetSoc)),
+              planSoc: usePlanSoc ? planSoc : undefined,
+              planShadow: usePlanSoc && !planControlling,
+              ist: c.ist,
+              showIst: c.showIst,
+              hiddenPower: c.forecastHidden,
+              compact: c.mobile,
+              fmt: c.fmt,
+              i18n: c.i18n,
+            }),
         )}
       ></maestro-chart>
-      <maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>
+      ${slots.length
+        ? html`<div class="strategy-strip" aria-label=${t("strategyStrip")}>
+            <div class="strip-head">
+              <h4>${t("strategyStrip")}</h4>
+              <div class="legend">
+                <span><i style="background:${COLORS.gridOut}"></i>${t("legendCharge")}</span>
+                <span><i style="background:${COLORS.pv}"></i>${t("legendHold")}</span>
+                <span><i style="background:${COLORS.bat}"></i>${t("legendRelease")}</span>
+              </div>
+            </div>
+            <div class="strip">
+              ${slots.map(
+                (s) =>
+                  html`<div
+                    class="slot ${slotAction(s)}"
+                    title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct · ${slotAction(s) === "charge" ? t("legendCharge") : slotAction(s) === "hold" ? t("legendHold") : t("legendRelease")}"
+                  ></div>`,
+              )}
+            </div>
+            <div class="strip-axis">${slots
+              .filter((_, i) => i % (c.mobile ? 6 : 4) === 0)
+              .map((s) => html`<span>${s.start_local}</span>`)}</div>
+          </div>`
+        : nothing}
+      ${c.mobile
+        ? nothing
+        : html`<maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>`}
     </div>
     <div class="grid stat-row">
       ${stat(t("statMinMax"), html`${Math.round(socMin ?? 0)}<small>%</small> / ${Math.round(socMax ?? 0)}<small>%</small>`)}
@@ -989,24 +1057,32 @@ export function planView(c: Ctx): TemplateResult {
 
   return html`
     <div class="grid plan-top">
-      <div class="card">
+      <div class="card plan-card">
         <div class="chart-head">
           <div class="grow">
             <h3>${t("priceTitle")}</h3>
+            <span class="badge forecast-badge">${a.shadow_mode ? t("planShadow") : t("planActive")}</span>
             <div class="legend">
               ${legend.map(([color, label]) => html`<span><i style="background:${color}"></i>${label}</span>`)}
               <span><i style="background:#fff;height:2px;border-radius:0"></i>${t("legendPlanSoc")}</span>
             </div>
           </div>
-          <span class="badge">${a.shadow_mode ? t("planShadow") : t("planActive")}</span>
         </div>
-        <maestro-chart .options=${memo("plan", [c.theme, st(c, E.plan), c.fmt.loc], () => planOptions({ slots, fmt: c.fmt, i18n: c.i18n }))}></maestro-chart>
-        <div class="strip">
-          ${slots.map(
-            (s) => html`<div class="slot ${slotAction(s)}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
+        <maestro-chart
+          id="plan-main"
+          .options=${memo("plan", [c.theme, st(c, E.plan), c.mobile, c.fmt.loc], () =>
+            planOptions({ slots, fmt: c.fmt, i18n: c.i18n, compact: c.mobile }),
           )}
-        </div>
-        <div class="strip-axis">${slots.filter((_, i) => i % 4 === 0).map((s) => html`<span>${s.start_local}</span>`)}</div>
+        ></maestro-chart>
+        ${c.mobile
+          ? nothing
+          : html`<div class="strip">
+                ${slots.map(
+                  (s) =>
+                    html`<div class="slot ${slotAction(s)}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
+                )}
+              </div>
+              <div class="strip-axis">${slots.filter((_, i) => i % 4 === 0).map((s) => html`<span>${s.start_local}</span>`)}</div>`}
       </div>
       <div class="card plan-kpi">
         <div>
@@ -1078,7 +1154,7 @@ function flowOptsMenu(c: Ctx): TemplateResult {
     blob: { title: "flowStyleBlob", hint: "flowStyleBlobHint" },
     city: { title: "flowStyleCity", hint: "flowStyleCityHint" },
   };
-  const canArrange = c.consumers.length > 0 && !c.mobile;
+  const canArrange = c.consumers.length > 0;
   return html`
     <div class="flow-opts-scrim" @click=${() => c.onCloseFlowOpts()}></div>
     <div class="flow-opts-menu" role="dialog" aria-label=${t("flowOptsTitle")}>
@@ -1297,6 +1373,15 @@ export function decisionView(c: Ctx): TemplateResult {
       <div class="bar"><div class="soll" style="width:${((soll ?? 0) / maxW) * 100}%"></div><div class="sent" style="width:${((sent ?? 0) / maxW) * 100}%"></div></div>
     </div>`;
 
+  const now = Date.now();
+  const windowMs = 24 * 3600e3;
+  const origin = now - windowMs;
+  const bands = c.timeline?.length ? timelineBands(c.timeline, now, windowMs) : [];
+  const ganttLegend = [...new Set(bands.map((b) => b.phase))];
+  const leftPct = (ms: number) => Math.max(0, Math.min(100, ((ms - origin) / windowMs) * 100));
+  const widthPct = (x: number, x2: number) => Math.max(0.2, Math.min(100, ((x2 - x) / windowMs) * 100));
+  const list = (c.timeline ?? []).slice(0, 12);
+
   return html`
     <div class="grid dec-top">
       <div class="card phase-hero">
@@ -1328,12 +1413,40 @@ export function decisionView(c: Ctx): TemplateResult {
         <h3>${t("timelineTitle")}</h3>
         <button class="toggle" ?disabled=${!c.timeline?.length} @click=${() => c.timeline && downloadCsv("maestro-entscheidungen.csv", timelineCsv(c))}>${t("exportCsv")}</button>
       </div>
-      ${c.timeline?.length
+      ${bands.length
+        ? html`<div class="phase-gantt" aria-label=${t("ganttTitle")}>
+            <div class="gantt-head">
+              <h4>${t("ganttTitle")}</h4>
+              <span class="sub">${t("ganttHint")}</span>
+            </div>
+            <div class="gantt-track">
+              ${bands.map(
+                (b) => html`<div
+                  class="gantt-seg"
+                  style="left:${leftPct(b.x)}%;width:${widthPct(b.x, b.x2)}%;background:${phaseColor(b.phase)}"
+                  title="${phase(b.phase)} · ${c.fmt.time(b.x)}–${c.fmt.time(b.x2)}"
+                ></div>`,
+              )}
+              <div class="gantt-now" style="left:${leftPct(now)}%" title=${t("now")}></div>
+            </div>
+            <div class="gantt-axis">
+              <span>${c.fmt.dayTime(origin)}</span>
+              <span>${c.fmt.time(origin + windowMs / 2)}</span>
+              <span>${t("now")}</span>
+            </div>
+            <div class="legend gantt-legend">
+              ${ganttLegend.map(
+                (id) => html`<span><i style="background:${phaseColor(id)}"></i>${phase(id)}</span>`,
+              )}
+            </div>
+          </div>`
+        : nothing}
+      ${list.length
         ? html`<div class="timeline">
-            ${c.timeline.map(
+            ${list.map(
               (h) => html`<div class="tl-item">
                 <div class="tl-time">${c.fmt.dayTime(h.ts)}</div>
-                <div class="tl-phase">${phase(h.phase)}</div>
+                <div class="tl-phase"><i class="tl-dot" style="background:${phaseColor(h.phase)}"></i>${phase(h.phase)}</div>
                 <div class="tl-reason">${h.reason}</div>
               </div>`,
             )}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FlowConsumer } from "./consumers";
-import { splitByMode, totalConsumptionW } from "./flow-split";
+import { splitByMode, splitFlowBoxHeight, totalConsumptionW } from "./flow-split";
 
 const row = (watts: number, mode: FlowConsumer["mode"], id = String(watts)): FlowConsumer => ({
   id,
@@ -25,5 +25,14 @@ describe("splitByMode", () => {
     const { included, separate } = splitByMode([row(10, "included", "a"), row(20, "separate", "b")]);
     expect(included.map((c) => c.id)).toEqual(["a"]);
     expect(separate.map((c) => c.id)).toEqual(["b"]);
+  });
+});
+
+describe("splitFlowBoxHeight", () => {
+  it("grows the phone card when more leaves hang under Haus", () => {
+    const two = splitFlowBoxHeight(true, 2)!;
+    const four = splitFlowBoxHeight(true, 4)!;
+    expect(four).toBeGreaterThan(two);
+    expect(two).toBeGreaterThan(400);
   });
 });

@@ -623,6 +623,7 @@ export const styles = css`
   }
   .flow-wrap.arrange .flow-node.arrange {
     cursor: grab;
+    touch-action: none;
   }
   .flow-wrap.arrange .flow-node.arrange:active {
     cursor: grabbing;
@@ -2086,6 +2087,15 @@ export const styles = css`
     margin-bottom: 6px;
     flex-wrap: wrap;
   }
+  .chart-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .forecast-badge {
+    margin-top: 6px;
+  }
   .seg {
     display: inline-flex;
     padding: 3px;
@@ -2334,19 +2344,64 @@ export const styles = css`
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
+    align-items: center;
     font-size: 12px;
     color: var(--muted);
     margin-top: 6px;
   }
-  .legend span {
+  .legend span,
+  .legend-toggle,
+  .legend-fixed {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+  }
+  .legend-toggle {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+  }
+  .legend-toggle:hover {
+    color: var(--text);
+  }
+  .legend-toggle.off {
+    opacity: 0.38;
+    text-decoration: line-through;
+  }
+  .legend-toggle.off i {
+    filter: grayscale(0.7);
   }
   .legend i {
     width: 10px;
     height: 10px;
     border-radius: 3px;
+  }
+  .strategy-strip {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+  }
+  .strategy-strip .strip-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .strategy-strip h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .strategy-strip .legend {
+    margin-top: 0;
+  }
+  .strategy-strip .strip {
+    margin-top: 10px;
   }
   .plan-top {
     grid-template-columns: 2fr 1fr;
@@ -2546,6 +2601,69 @@ export const styles = css`
   .tl-card {
     margin-top: 18px;
   }
+  .phase-gantt {
+    margin: 4px 0 18px;
+  }
+  .gantt-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 14px;
+    margin-bottom: 10px;
+  }
+  .gantt-head h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .gantt-head .sub {
+    margin: 0;
+    font-size: 12px;
+  }
+  .gantt-track {
+    position: relative;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--fill);
+    border: 1px solid var(--stroke);
+    overflow: hidden;
+  }
+  .gantt-seg {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    border-radius: 6px;
+    opacity: 0.92;
+    min-width: 2px;
+  }
+  .gantt-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--text);
+    opacity: 0.75;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .gantt-axis {
+    display: flex;
+    justify-content: space-between;
+    font: 500 11px ui-monospace, monospace;
+    color: var(--faint);
+    margin-top: 6px;
+  }
+  .gantt-legend {
+    margin-top: 10px;
+  }
+  .tl-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
   .timeline {
     position: relative;
     padding-left: 26px;
@@ -2581,6 +2699,9 @@ export const styles = css`
     color: var(--faint);
   }
   .tl-phase {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 700;
     margin: 3px 0;
   }
@@ -2890,6 +3011,52 @@ export const styles = css`
     color: var(--muted);
     font-size: 13px;
     margin-top: 2px;
+  }
+  .settings-search {
+    display: block;
+    margin: 0 0 14px;
+  }
+  .settings-query {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 500 14px inherit;
+    padding: 10px 12px;
+  }
+  .settings-hits {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .settings-hit {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--stroke);
+    background: var(--glass);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .settings-hit:hover {
+    background: var(--glass-strong);
+    border-color: var(--stroke-strong);
+  }
+  .settings-hit b {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .settings-hit span {
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.35;
   }
   .settings-tiles {
     display: grid;
@@ -3581,6 +3748,83 @@ export const styles = css`
     }
     .phase-name {
       font-size: 28px;
+    }
+    .forecast-card,
+    .plan-card {
+      padding: 14px 12px;
+    }
+    .forecast-card .chart-head,
+    .plan-card .chart-head {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .forecast-card .chart-head h3,
+    .plan-card .chart-head h3 {
+      font-size: 15px;
+      line-height: 1.3;
+    }
+    .forecast-card .chart-tools {
+      width: 100%;
+    }
+    .forecast-card .chart-tools .toggle {
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+    .forecast-card .legend,
+    .plan-card .legend {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      gap: 12px;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .forecast-card .legend::-webkit-scrollbar,
+    .plan-card .legend::-webkit-scrollbar {
+      display: none;
+    }
+    .forecast-card .legend-toggle,
+    .forecast-card .legend-fixed,
+    .plan-card .legend span {
+      flex-shrink: 0;
+    }
+    .plan-kpi {
+      gap: 10px;
+    }
+    .plan-kpi .plan-state {
+      font-size: 18px;
+    }
+    .plan-kpi .row b {
+      font-size: 14px;
+    }
+    .strategy-strip .strip-head .legend {
+      display: none;
+    }
+    .strategy-strip .slot {
+      height: 28px;
+    }
+    .strategy-strip .strip-axis {
+      font-size: 10px;
+    }
+    #fc-main,
+    #plan-main {
+      margin: 0 -2px;
+    }
+    .gantt-track {
+      height: 32px;
+    }
+    .gantt-legend {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .gantt-legend::-webkit-scrollbar {
+      display: none;
+    }
+    .gantt-legend span {
+      flex-shrink: 0;
     }
   }
   .opt-entity,

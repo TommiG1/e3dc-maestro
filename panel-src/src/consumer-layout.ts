@@ -225,6 +225,18 @@ export function resolveConsumerPositions(
   });
 }
 
+/** True when any of the ids has a saved free offset. */
+export function hasFreePlaces(
+  places: Record<string, StoredConsumerPlace> | undefined,
+  ids: readonly string[],
+): boolean {
+  if (!places) return false;
+  return ids.some((id) => {
+    const row = places[id];
+    return Boolean(row && "dx" in row);
+  });
+}
+
 /** Map a pointer to a free offset from the house origin. */
 export function placeFromPoint(
   x: number,

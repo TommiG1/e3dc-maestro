@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SETTING_TIPS } from "./setting-tips";
-import { PLAN_CONTROLS, SETTINGS_GROUPS, bundleRows, pvRowVisible, resolveSettingsArea, rowQuiet, rowVisible } from "./settings";
+import { makeI18n } from "./i18n";
+import { PLAN_CONTROLS, SETTINGS_GROUPS, bundleRows, matchingSettings, pvRowVisible, resolveSettingsArea, rowQuiet, rowVisible } from "./settings";
 
 describe("SETTINGS_GROUPS", () => {
   const rows = SETTINGS_GROUPS.flatMap((group) => group.rows);
@@ -31,6 +32,33 @@ describe("SETTINGS_GROUPS", () => {
     const ids = SETTINGS_GROUPS.map((group) => group.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const group of SETTINGS_GROUPS) expect(group.icon.length).toBeGreaterThan(0);
+  });
+});
+
+describe("matchingSettings", () => {
+  const t = makeI18n("de").t;
+
+  it("returns undefined while the query is empty", () => {
+    expect(matchingSettings("", t, "de", () => undefined)).toBeUndefined();
+    expect(matchingSettings("   ", t, "de", () => undefined)).toBeUndefined();
+  });
+
+  it("finds groups, tips, and option fields", () => {
+    const byReserve = matchingSettings("Notstrom", t, "de", () => undefined);
+    expect(byReserve?.some((hit) => hit.groupId === "safety")).toBe(true);
+
+    const byTip = matchingSettings("Notladung", t, "de", () => undefined);
+    expect(byTip?.some((hit) => hit.id.includes("charge_threshold"))).toBe(true);
+
+    const byOpt = matchingSettings("Preis-Sensor", t, "de", () => undefined);
+    expect(byOpt?.some((hit) => hit.groupId === "tariff" && hit.id.includes("price_sensor"))).toBe(true);
+  });
+
+  it("uses entity labels when provided", () => {
+    const hits = matchingSettings("Wunderreserve", t, "de", (key) =>
+      key === "fixed_reserve_soc" ? "Wunderreserve %" : undefined,
+    );
+    expect(hits?.some((hit) => hit.title.includes("Wunderreserve"))).toBe(true);
   });
 });
 

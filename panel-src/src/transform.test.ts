@@ -12,11 +12,13 @@ import {
   parseSlots,
   parseTrajectory,
   phaseBands,
+  phaseColor,
   planEmptyKind,
   planSocPoints,
   priceExtremes,
   slotAction,
   splitGrid,
+  timelineBands,
 } from "./transform";
 
 describe("trajectory", () => {
@@ -365,6 +367,45 @@ describe("planEmptyKind", () => {
     expect(planEmptyKind("dynamic_auto", { enabled: true, status: "no_profile" })).toBe("no_profile");
     expect(planEmptyKind("dynamic_auto", { enabled: true, status: "no_room" })).toBe("no_room");
     expect(planEmptyKind("dynamic_auto", { enabled: true, status: "ok" })).toBe("no_plan");
+  });
+});
+
+describe("timelineBands", () => {
+  it("builds chronological bands clipped to the window", () => {
+    const now = Date.parse("2026-10-16T18:00:00+02:00");
+    const bands = timelineBands(
+      [
+        { phase: "corridor", reason: "", ts: Date.parse("2026-10-16T10:00:00+02:00") },
+        { phase: "idle", reason: "", ts: Date.parse("2026-10-16T08:00:00+02:00") },
+        { phase: "grid_hold", reason: "", ts: Date.parse("2026-10-16T14:00:00+02:00") },
+      ],
+      now,
+      12 * 3600e3,
+    );
+    expect(bands.map((b) => b.phase)).toEqual(["idle", "corridor", "grid_hold"]);
+    expect(bands[0]?.x).toBe(Date.parse("2026-10-16T08:00:00+02:00"));
+    expect(bands[0]?.x2).toBe(Date.parse("2026-10-16T10:00:00+02:00"));
+    expect(bands.at(-1)?.x2).toBe(now);
+  });
+
+  it("clips an early phase to the window start", () => {
+    const now = Date.parse("2026-10-16T12:00:00+02:00");
+    const bands = timelineBands(
+      [{ phase: "idle", reason: "", ts: Date.parse("2026-10-15T10:00:00+02:00") }],
+      now,
+      24 * 3600e3,
+    );
+    expect(bands).toHaveLength(1);
+    expect(bands[0]?.x).toBe(now - 24 * 3600e3);
+    expect(bands[0]?.x2).toBe(now);
+  });
+});
+
+describe("phaseColor", () => {
+  it("returns stable known and hashed colors", () => {
+    expect(phaseColor("corridor")).toBe("#38bdf8");
+    expect(phaseColor("custom_x")).toBe(phaseColor("custom_x"));
+    expect(phaseColor("custom_x")).not.toBe(phaseColor("custom_y"));
   });
 });
 

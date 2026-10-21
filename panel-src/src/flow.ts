@@ -3,6 +3,7 @@ import {
   fanBoxHeight,
   fanBoxPad,
   freePlaceExtent,
+  hasFreePlaces,
   houseFan,
   onConsumerDrag,
   placeBoundsForFan,
@@ -269,25 +270,38 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const consumers = (i.consumers ?? []).slice(0, 6);
   const L = i.compact ? LAYOUTS.compact : LAYOUTS.wide;
   const fan = houseFan(L.house, consumers.length);
+  const placesStore = i.consumerPlaces ?? {};
+  const customPlaces = hasFreePlaces(
+    placesStore,
+    consumers.map((c) => c.id),
+  );
+  const useCompactList = i.compact && !customPlaces && !i.arrange;
   const baseW = L.box[0] + (i.compact ? 0 : fanBoxPad(consumers.length));
   const baseH = i.compact
     ? compactFlowHeight(consumers.length)
     : fanBoxHeight(L.house.y, fan, L.box[1]);
-  const fanPlaces = i.compact
-    ? []
-    : resolveConsumerPositions(
-        consumers.map((c) => c.id),
-        i.consumerPlaces ?? {},
-        fan,
-        consumers.map((c) => c.mode),
-      );
-  const extent = i.compact ? { w: baseW, h: baseH } : freePlaceExtent(fanPlaces, baseW, baseH);
+  const fanPlaces = resolveConsumerPositions(
+    consumers.map((c) => c.id),
+    placesStore,
+    fan,
+    consumers.map((c) => c.mode),
+  );
+  const compactDefaults = i.compact ? compactConsumerPositions(consumers.length, L.box[0]) : [];
+  const resolved = consumers.map((c, index) => {
+    const raw = placesStore[c.id];
+    if (raw && "dx" in raw) {
+      return { x: L.house.x + raw.dx, y: L.house.y + raw.dy, labelDy: 0 };
+    }
+    if (useCompactList) return compactDefaults[index]!;
+    // Phone arrange / free place: start from list defaults, not the wide fan.
+    if (i.compact) return compactDefaults[index]!;
+    return { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
+  });
+  const extent = useCompactList ? { w: baseW, h: baseH } : freePlaceExtent(resolved, baseW, baseH);
   const boxW = extent.w;
   const boxH = extent.h;
-  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, 920), Math.max(boxH, 640));
-  const compactPlaces = i.compact ? compactConsumerPositions(consumers.length, boxW) : [];
-  const consumerAt = (index: number): Pos =>
-    i.compact ? compactPlaces[index] : { x: fanPlaces[index].x, y: fanPlaces[index].y, labelDy: 0 };
+  const dragBounds = placeBoundsForFan(fan, Math.max(boxW, i.compact ? 420 : 920), Math.max(boxH, i.compact ? 720 : 640));
+  const consumerAt = (index: number): Pos => resolved[index]!;
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
   const motion = i.motion !== false;
   const outline = i.outline === true;
@@ -330,13 +344,16 @@ export function energyFlow(i: FlowInput): TemplateResult {
       <radialGradient id="hubg"><stop offset="0" stop-color="rgba(56,189,248,.5)"/><stop offset="1" stop-color="rgba(56,189,248,0)"/></radialGradient>
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, NODE_R, hubR)} stroke=${nodes[k].color}/>`)}
-    ${i.compact ? compactBuses(places, L.house, boxW, motion, NODE_R) : places.map(({ c, p }) => {
-      const from = c.mode === "included" ? L.house : L.hub;
-      const fromR = c.mode === "included" ? NODE_R : hubR;
-      const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
-      return svg`<path class="flow-line" d=${flowSegment(from, p, fromR, CONSUMER_R)} stroke=${color}/>
-        ${electrons(from, p, fromR, CONSUMER_R, c.watts, color, motion)}`;
-    })}
+    ${useCompactList
+      ? compactBuses(places, L.house, boxW, motion, NODE_R)
+      : places.map(({ c, p }) => {
+          const from = c.mode === "included" ? L.house : L.hub;
+          const fromR = c.mode === "included" ? NODE_R : hubR;
+          const toR = i.compact ? COMPACT_LIST_R : CONSUMER_R;
+          const color = c.mode === "included" ? "var(--house)" : "var(--accent)";
+          return svg`<path class="flow-line" d=${flowSegment(from, p, fromR, toR)} stroke=${color}/>
+            ${electrons(from, p, fromR, toR, c.watts, color, motion)}`;
+        })}
     ${flows.map((f) => {
       const a = f.toHub ? L[f.node] : L.hub;
       const b = f.toHub ? L.hub : L[f.node];
@@ -368,7 +385,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
       const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
       if (i.compact) {
-        return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key}>
+        return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>
           <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
           <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${i.fmt.w(c.watts)}  ${clip(c.name, 24)}</text>

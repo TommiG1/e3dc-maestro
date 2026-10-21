@@ -3,6 +3,7 @@ import {
   defaultFanT,
   fanPoint,
   freePlaceExtent,
+  hasFreePlaces,
   houseFan,
   parseConsumerPlaces,
   parseConsumerPlacesByStyle,
@@ -17,6 +18,14 @@ describe("defaultFanT", () => {
     expect(defaultFanT(0, 3)).toBe(0);
     expect(defaultFanT(1, 3)).toBe(0.5);
     expect(defaultFanT(2, 3)).toBe(1);
+  });
+});
+
+describe("hasFreePlaces", () => {
+  it("detects saved free offsets", () => {
+    expect(hasFreePlaces({ a: { dx: 1, dy: 2 } }, ["a", "b"])).toBe(true);
+    expect(hasFreePlaces({ a: { t: 0.5, r: 1 } }, ["a"])).toBe(false);
+    expect(hasFreePlaces({}, ["a"])).toBe(false);
   });
 });
 

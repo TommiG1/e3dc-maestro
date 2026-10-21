@@ -2,9 +2,10 @@ import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { E, S, isOn, isSettingDisabled, num, type Hass, type HassEntity } from "./entities";
 import type { ClassicStatus } from "./classic";
-import type { I18n, Key } from "./i18n";
+import type { I18n, Key, Translate } from "./i18n";
 import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
+import { OPTION_BLOCKS, fieldLabel } from "./options";
 import { optionSections, sizingPage, type OptionCtx } from "./options-view";
 import { settingTip } from "./setting-tips";
 import { pauseStatus } from "./pause";
@@ -272,6 +273,120 @@ export const settingsHeading = (id: string | undefined): { title: Key; hint: Key
   return SETTINGS_GROUPS.find((group) => group.id === id);
 };
 
+export interface SettingsHit {
+  /** Stable key for the list. */
+  id: string;
+  groupId: string;
+  title: string;
+  path: string;
+}
+
+/** Landing-page search: groups, sections, entity rows, tips, and option fields. */
+export function matchingSettings(
+  query: string,
+  t: Translate,
+  language: string,
+  entityLabel: (key: string) => string | undefined,
+): SettingsHit[] | undefined {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return undefined;
+  const hits: SettingsHit[] = [];
+  const seen = new Set<string>();
+  const push = (hit: SettingsHit) => {
+    if (seen.has(hit.id)) return;
+    seen.add(hit.id);
+    hits.push(hit);
+  };
+  const has = (...parts: Array<string | undefined>) =>
+    parts.some((part) => !!part && part.toLowerCase().includes(needle));
+
+  const extras: { id: string; title: Key; hint: Key }[] = [
+    { id: SETUP.id, title: SETUP.title, hint: SETUP.hint },
+    { id: LOOK.id, title: LOOK.title, hint: LOOK.hint },
+    { id: SIZING.id, title: "setSizingTile", hint: "setSizingTileHint" },
+    { id: CLASSIC_DASHBOARD.id, title: CLASSIC_DASHBOARD.title, hint: CLASSIC_DASHBOARD.hint },
+  ];
+  for (const extra of extras) {
+    const title = t(extra.title);
+    const hint = t(extra.hint);
+    if (has(title, hint)) push({ id: `extra:${extra.id}`, groupId: extra.id, title, path: hint });
+  }
+
+  for (const group of SETTINGS_GROUPS) {
+    const groupTitle = t(group.title);
+    const groupHint = t(group.hint);
+    if (has(groupTitle, groupHint)) {
+      push({ id: `group:${group.id}`, groupId: group.id, title: groupTitle, path: groupHint });
+    }
+    for (const section of group.sections) {
+      const sectionTitle = t(section.title);
+      const sectionHint = t(section.hint);
+      if (has(sectionTitle, sectionHint)) {
+        push({
+          id: `section:${group.id}/${section.title}`,
+          groupId: group.id,
+          title: sectionTitle,
+          path: `${groupTitle} · ${sectionHint}`,
+        });
+      }
+      for (const row of section.rows) {
+        const label = entityLabel(row) || row.replaceAll("_", " ");
+        const tip = settingTip(language, row);
+        if (has(label, tip, row.replaceAll("_", " "), row)) {
+          push({
+            id: `row:${group.id}/${row}`,
+            groupId: group.id,
+            title: label,
+            path: `${groupTitle} · ${sectionTitle}`,
+          });
+        }
+      }
+    }
+  }
+
+  for (const block of OPTION_BLOCKS) {
+    const areaTitle = t(
+      (SETTINGS_GROUPS.find((group) => group.id === block.area)?.title ?? "setSizing") as Key,
+    );
+    const blockTitle = t(block.title);
+    const blockHint = t(block.hint);
+    if (has(blockTitle, blockHint)) {
+      push({
+        id: `optsec:${block.area}/${block.title}`,
+        groupId: block.area === "sizing" ? SIZING.id : block.area,
+        title: blockTitle,
+        path: `${areaTitle} · ${blockHint}`,
+      });
+    }
+    for (const field of block.fields) {
+      const label = fieldLabel(language, field.key);
+      if (has(label, field.key.replaceAll("_", " "), field.key)) {
+        push({
+          id: `opt:${block.area}/${field.key}`,
+          groupId: block.area === "sizing" ? SIZING.id : block.area,
+          title: label,
+          path: `${areaTitle} · ${blockTitle}`,
+        });
+      }
+    }
+  }
+
+  for (const key of [...SIZING_EXPANSION, ...SIZING_PRICES]) {
+    const label = entityLabel(key) || key.replaceAll("_", " ");
+    const tip = settingTip(language, key);
+    if (has(label, tip, key.replaceAll("_", " "), key)) {
+      push({
+        id: `sizing:${key}`,
+        groupId: SIZING.id,
+        title: label,
+        path: t("setSizing"),
+      });
+    }
+  }
+
+  return hits;
+}
+
 export interface SettingsCtx {
   hass: Hass;
   i18n: I18n;
@@ -300,6 +415,9 @@ export interface SettingsCtx {
   /** Section titles the user has opened. Folded sections start closed. */
   pvOpen: ReadonlySet<string>;
   onTogglePv: (section: string) => void;
+  /** Landing search query (empty = show all tiles). */
+  settingsQuery: string;
+  onSettingsQuery: (query: string) => void;
 }
 
 const focused = (el: HTMLInputElement): boolean => {
@@ -1007,6 +1125,14 @@ export function settingsView(c: SettingsCtx): TemplateResult {
   }
   const ready = Object.keys(S).length > 0;
   const phase = c.hass.states[E.phase]?.state;
+  const hits = matchingSettings(c.settingsQuery, t, c.hass.language ?? "de", (key) => {
+    const entity = c.hass.states[S[key]];
+    return entity ? labelOf(entity, key) : undefined;
+  });
+  const openHit = (groupId: string) => {
+    c.onSettingsQuery("");
+    c.onOpenGroup(groupId);
+  };
   return html`${ladderView(
     c.i18n,
     phase,
@@ -1014,7 +1140,28 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     isOn(c.hass.states[E.lowYield]),
     c.onOpenGroup,
   )}
-    <div class="settings-tiles">
+    <label class="settings-search">
+      <span class="sr">${t("settingsSearch")}</span>
+      <input
+        class="settings-query"
+        type="search"
+        placeholder=${t("settingsSearch")}
+        .value=${c.settingsQuery}
+        @input=${(e: Event) => c.onSettingsQuery((e.target as HTMLInputElement).value)}
+      />
+    </label>
+    ${hits
+      ? hits.length
+        ? html`<div class="settings-hits" role="list">
+            ${hits.map(
+              (hit) => html`<button type="button" class="settings-hit" role="listitem" @click=${() => openHit(hit.groupId)}>
+                <b>${hit.title}</b>
+                <span>${hit.path}</span>
+              </button>`,
+            )}
+          </div>`
+        : html`<p class="hint">${t("settingsSearchEmpty")}</p>`
+      : html`<div class="settings-tiles">
     ${tile(c, SETUP.id, SETUP.icon, SETUP.title, SETUP.hint)}
     ${tile(c, LOOK.id, LOOK.icon, LOOK.title, LOOK.hint)}
     ${tile(c, SIZING.id, SIZING.icon, "setSizingTile", "setSizingTileHint")}
@@ -1022,5 +1169,5 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     ${ready
       ? SETTINGS_GROUPS.map((group) => (groupHasRows(c, group) ? tile(c, group.id, group.icon, group.title, group.hint) : nothing))
       : html`<p class="hint">${t("settingsPending")}</p>`}
-  </div>`;
+  </div>`}`;
 }

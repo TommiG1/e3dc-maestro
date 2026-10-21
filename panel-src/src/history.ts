@@ -74,7 +74,7 @@ export function sumChanges(rows: { change?: number | null }[] | undefined): numb
   return any ? sum : undefined;
 }
 
-export type Period = "today" | "week" | "month";
+export type Period = "today" | "week" | "month" | "year";
 export type BalanceGrain = "day" | "week" | "month" | "year";
 
 export interface BalanceRange {
@@ -167,6 +167,7 @@ export function peekLruCache<V>(map: Map<string, V>, key: string): V | undefined
 export const periodStart = (period: Exclude<Period, "today">, now = Date.now()): number => {
   const start = new Date(now);
   if (period === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  else if (period === "year") start.setMonth(0, 1);
   else start.setDate(1);
   start.setHours(0, 0, 0, 0);
   return start.getTime();
@@ -315,7 +316,37 @@ function changeByDay(rows: StatRow[] | undefined): Map<string, number> {
   return map;
 }
 
-/** Build one BalanceDay per local calendar day from Monday / 1st until `now`. */
+/** Sum daily rows into one bar per calendar month (year pulse). */
+export function aggregateBalanceByMonth(days: BalanceDay[]): BalanceDay[] {
+  const months = new Map<string, BalanceDay>();
+  for (const day of days) {
+    const key = day.day.slice(0, 7);
+    const anchor = `${key}-01`;
+    const current = months.get(key) ?? {
+      day: anchor,
+      ts: parseCalendarDay(anchor).getTime(),
+      costToday: undefined,
+      feedRevenue: undefined,
+      saving: undefined,
+      wear: undefined,
+      balance: undefined,
+    };
+    const add = (part: BalancePartKey) => {
+      const value = day[part];
+      if (value === undefined) return;
+      current[part] = (current[part] ?? 0) + value;
+    };
+    add("costToday");
+    add("feedRevenue");
+    add("saving");
+    add("wear");
+    current.balance = dayBalance(current);
+    months.set(key, current);
+  }
+  return [...months.values()].sort((a, b) => a.ts - b.ts);
+}
+
+/** Build one BalanceDay per local calendar day from Monday / month start / Jan 1 until `now`. */
 export function buildBalanceDays(raw: StatRaw, period: PulseRange, now = Date.now()): BalanceDay[] {
   const maps = Object.fromEntries(BALANCE_PART_KEYS.map((key) => [key, changeByDay(raw[E[key]])])) as Record<
     BalancePartKey,
@@ -361,14 +392,14 @@ async function loadStatSums(hass: Hass, startMs: number, endMs: number): Promise
   return out;
 }
 
-/** Daily economic balances since Monday or the first of the month. */
+/** Daily economic balances since Monday, month start, or Jan 1. */
 export async function loadBalanceDays(hass: Hass, period: PulseRange): Promise<BalanceDay[]> {
   const now = Date.now();
   const raw = await fetchDayStats(hass, periodStart(period, now), now, BALANCE_PART_KEYS);
   return buildBalanceDays(raw, period, now);
 }
 
-/** Sum of daily statistic changes since Monday or the first of the month. */
+/** Sum of daily statistic changes since Monday, month start, or Jan 1. */
 export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today">): Promise<Partial<Record<PeriodKey, number>>> {
   return loadStatSums(hass, periodStart(period), Date.now());
 }
@@ -459,5 +490,6 @@ export async function loadTimeline(hass: Hass): Promise<TimelineItem[]> {
     significant_changes_only: true,
   });
   const live = hass.states[E.lastAction]?.attributes.history;
-  return buildTimeline(normalizeHistory(raw[E.lastAction]), live);
+  // Enough changes for a 24 h Gantt; the decision text list still shows the newest dozen.
+  return buildTimeline(normalizeHistory(raw[E.lastAction]), live, 48);
 }
