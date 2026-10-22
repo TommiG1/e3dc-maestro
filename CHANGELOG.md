@@ -9,8 +9,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.1-beta.8] – Preisplan: Restwert am Horizontende (2026-10-22)
+
+> **Beta.** Enthält 0.5.1-beta.7. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.8.md](docs/release-notes/v0.5.1-beta.8.md).
+
 ### Geändert
 - **Preisplan fährt den Akku am Ende der Preiskurve nicht mehr leer.** Bisher war Energie, die nach dem letzten bekannten Preis noch im Akku steckt, für den Plan wertlos. Endete die Kurve um Mitternacht, weil die Preise für morgen noch fehlten, lud er nur bis zum Abend. Jetzt zählt der Nachtbedarf bis zur ersten PV-Deckung (höchstens 24 h) zum günstigsten Preis der letzten vier Stunden der Kurve. Ist dieser Restpreis höher als die Ladekosten nach Wirkungsgrad und Mindestspanne, lädt der Plan den Nachtbedarf im günstigen Fenster mit. Der Sensor zeigt beide Werte als `terminal_need_kwh` und `terminal_price`.
+
+### Hinweise
+- Neustart der Integration, damit der neue Planer aktiv wird.
 
 ---
 
