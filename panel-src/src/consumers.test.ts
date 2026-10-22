@@ -4,6 +4,7 @@ import {
   consumersFromOptions,
   includedOverflow,
   newConsumerId,
+  OVERFLOW_HOLD_MS,
   overflowHeld,
   parseConsumers,
   separateDayEnergy,
@@ -106,14 +107,71 @@ describe("includedOverflow", () => {
     expect(includedOverflow(2000, [flow(2100, "included")])).toBe(true);
     expect(includedOverflow(undefined, [flow(2100, "included")])).toBe(false);
   });
+
+  it("skips the wallbox when Maestro house already had it subtracted", () => {
+    const wallbox = {
+      id: "wb",
+      name: "openWB",
+      entityId: WALLBOX_ENTITY,
+      watts: 9000,
+      mode: "included" as const,
+      missing: false,
+      icon: "wallbox" as const,
+    };
+    // wallbox_included_in_house: house sensor is pure household; wallbox must not re-enter the sum.
+    expect(includedOverflow(2000, [wallbox, flow(100, "included")], { wallboxInHouse: true })).toBe(false);
+    expect(includedOverflow(2000, [wallbox, flow(2100, "included")], { wallboxInHouse: true })).toBe(true);
+    // Without that flag the wallbox counts like any other included load.
+    expect(includedOverflow(2000, [wallbox], { wallboxInHouse: false })).toBe(true);
+  });
+
+  it("uses the raw meter and ignores loads that jumped ahead of it", () => {
+    const wallbox = {
+      id: "wb",
+      name: "openWB",
+      entityId: WALLBOX_ENTITY,
+      watts: 9000,
+      mode: "included" as const,
+      missing: false,
+      icon: "wallbox" as const,
+    };
+    const houseAt = 1_000_000;
+    const stamps = new Map([[WALLBOX_ENTITY, houseAt + 20_000]]);
+    // Wallbox 20s newer than meter → ignore until the meter catches up.
+    expect(
+      includedOverflow(2000, [wallbox], {
+        wallboxInHouse: true,
+        meterHouse: 3000,
+        houseUpdatedAt: houseAt,
+        itemUpdatedAt: stamps,
+      }),
+    ).toBe(false);
+    // Same timestamps → wallbox counts against the raw meter.
+    expect(
+      includedOverflow(2000, [wallbox], {
+        wallboxInHouse: true,
+        meterHouse: 3000,
+        houseUpdatedAt: houseAt,
+        itemUpdatedAt: new Map([[WALLBOX_ENTITY, houseAt]]),
+      }),
+    ).toBe(true);
+    expect(
+      includedOverflow(2000, [wallbox], {
+        wallboxInHouse: true,
+        meterHouse: 9100,
+        houseUpdatedAt: houseAt,
+        itemUpdatedAt: new Map([[WALLBOX_ENTITY, houseAt]]),
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("overflowHeld", () => {
   it("waits out a short mismatch and starts again after the values agree", () => {
     expect(overflowHeld(true, undefined, 1_000)).toEqual({ show: false, since: 1_000 });
-    expect(overflowHeld(true, 1_000, 10_999)).toEqual({ show: false, since: 1_000 });
-    expect(overflowHeld(true, 1_000, 11_000)).toEqual({ show: true, since: 1_000 });
-    expect(overflowHeld(false, 1_000, 12_000)).toEqual({ show: false, since: undefined });
+    expect(overflowHeld(true, 1_000, 1_000 + OVERFLOW_HOLD_MS - 1)).toEqual({ show: false, since: 1_000 });
+    expect(overflowHeld(true, 1_000, 1_000 + OVERFLOW_HOLD_MS)).toEqual({ show: true, since: 1_000 });
+    expect(overflowHeld(false, 1_000, 1_000 + OVERFLOW_HOLD_MS + 1_000)).toEqual({ show: false, since: undefined });
   });
 });
 

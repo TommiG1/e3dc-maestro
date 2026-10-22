@@ -19,6 +19,7 @@ import {
   flowEnds,
   flowSegment,
   iconFit,
+  pvClusterTotal,
   showPvExtraNode,
   type FlowInput,
 } from "./flow";
@@ -32,7 +33,7 @@ import {
 import maestroLogo from "./maestro-logo.png";
 
 const HOUSE_R = 30;
-const PV_EXTRA_R = 26;
+const PV_EXTRA_R = 22;
 const CONSUMER_R = 26;
 const COMPACT_LIST_R = 16;
 const HOUSE_ICON = "M3 11 12 3l9 8M5 9.5V21h14V9.5M10 21v-6h4v6";
@@ -247,15 +248,17 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const hasSplit = separate.length > 0;
   const g = layout(i.compact, consumers.length + (hasSplit && !i.compact ? 1 : 0));
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvMain = Math.max(0, pv);
   const pvExtra = Math.max(0, i.pvExtra ?? 0);
   const showPvExtra = showPvExtraNode(pvExtra);
+  const pvTotal = showPvExtra ? pvClusterTotal(pvMain, pvExtra) : pvMain;
   const houseW = Math.max(0, house);
   const loadW = hasSplit ? totalConsumptionW(house, consumers) : houseW;
   const motion = i.motion !== false;
   const outline = i.outline === true;
   const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
-  const roofGlow = cityRoofGlow(pv + pvExtra);
+  const roofGlow = cityRoofGlow(pvTotal);
   const fills = cityLoadFills(loadW, i.loadMax ?? DEFAULT_LOAD_MAX_W);
   const bars = lightBars(g.facade);
   const fillW = cityBasementFill(i.soc, g.plinth.w - 6);
@@ -388,16 +391,16 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
         ...places.map(({ p }) => p.y + 44),
       )
     : g.boxH;
-  // Clear of the roof slab; caption sits to the right (not above, where it collides with PV).
-  const extraGap = i.compact ? 24 : 36;
+  // Cluster: Zusatz sits tight against the roof (PV), not routed toward the hub.
+  const extraGap = i.compact ? 4 : 6;
   const extraNode = showPvExtra
     ? {
         x: g.roof.x + g.roof.w + PV_EXTRA_R + extraGap,
         y: g.roof.y + g.roof.h / 2,
       }
     : { x: 0, y: 0 };
-  const extraElbow = { x: extraNode.x, y: pvTie.y };
-  const extraPad = showPvExtra ? extraNode.x + PV_EXTRA_R + 78 : 0;
+  const roofTie = { x: g.roof.x + g.roof.w, y: midRoof.y };
+  const extraPad = showPvExtra ? extraNode.x + PV_EXTRA_R + 28 : 0;
   const boxW = Math.max(
     useFork || useCompactList ? g.boxW : i.compact ? Math.max(g.boxW, freeExtent.w) : freeExtent.w,
     extraPad,
@@ -426,9 +429,10 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
   const loadCapAnchor = i.compact ? "start" : "middle";
   const loadCapValY = i.compact ? midFacade.y - 4 : bars[0].y + bars[0].h + 34;
   const loadCapLblY = i.compact ? midFacade.y + 14 : bars[0].y + bars[0].h + 50;
+  const pvParts = showPvExtra ? i.fmt.wParts(pvMain, pvExtra) : undefined;
   const aria = [
-    `${t("nodePv")} ${i.fmt.w(pv)}`,
-    ...(showPvExtra ? [`${t("nodePvExtra")} ${i.fmt.w(pvExtra)}`] : []),
+    `${t("nodePv")} ${pvParts?.total ?? i.fmt.w(pvTotal)}`,
+    ...(pvParts ? [`${t("nodePvExtra")} ${pvParts.extra}`, `${t("nodePvMain")} ${pvParts.main}`] : []),
     `${facadeLabel} ${i.fmt.w(loadW)}`,
     ...(hasSplit ? [`${t("nodeHouse")} ${i.fmt.w(houseW)}`] : []),
     `${gridLabel} ${i.fmt.w(grid)}`,
@@ -499,21 +503,23 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
           })}
         </g>
         <rect x=${g.soffit.x} y=${g.soffit.y} width=${g.soffit.w} height=${g.soffit.h} fill=${outline ? "none" : "rgba(8,12,22,.85)"} stroke=${strokeOf("var(--pv)")} stroke-width="1" opacity="0.85"/>
-        <text class="node-val" x=${midRoof.x} y=${g.roof.y - 18} text-anchor="middle">${i.fmt.w(pv)}</text>
-        <text class="node-lbl" x=${midRoof.x} y=${g.roof.y - 2} text-anchor="middle">${t("nodePv")}</text>`,
+        <text class="node-val" x=${midRoof.x} y=${g.roof.y - 18} text-anchor="middle">${pvParts?.total ?? i.fmt.w(pvTotal)}</text>
+        <text class="node-lbl" x=${midRoof.x} y=${g.roof.y - 2} text-anchor="middle">${t("nodePv")}</text>
+        ${pvParts
+          ? svg`<text class="node-lbl" x=${midRoof.x} y=${g.roof.y + g.roof.h + 14} text-anchor="middle">${pvParts.main} · ${pvParts.extra}</text>`
+          : svg``}`,
     )}
-    ${showPvExtra
-      ? svg`<path class="flow-line" d=${`M${extraNode.x} ${extraNode.y} L${extraElbow.x} ${extraElbow.y} L${pvTie.x} ${pvTie.y}`} stroke="var(--pv-extra)" opacity=${pvExtra > ACTIVE_W ? 0.45 : 0.22} fill="none"/>
-        ${electrons(extraNode, extraElbow, PV_EXTRA_R, 0, pvExtra, "var(--pv-extra)", motion)}
-        ${electrons(extraElbow, pvTie, 0, 4, pvExtra, "var(--pv-extra)", motion)}
+    ${showPvExtra && pvParts
+      ? svg`<path class="flow-line" d=${`M${extraNode.x - PV_EXTRA_R} ${extraNode.y} L${roofTie.x} ${roofTie.y}`} stroke="var(--pv-extra)" opacity=${pvExtra > ACTIVE_W ? 0.55 : 0.28} fill="none"/>
+        ${electrons(extraNode, roofTie, PV_EXTRA_R, 0, pvExtra, "var(--pv-extra)", motion)}
         ${hit(
           "pvExtra",
           t("nodePvExtra"),
           i.onSelect,
           svg`<g opacity=${pvExtra > ACTIVE_W ? 1 : 0.55}>
             <circle cx=${extraNode.x} cy=${extraNode.y} r=${PV_EXTRA_R} fill=${outline ? "none" : "rgba(10,16,28,.92)"} stroke=${strokeOf("var(--pv-extra)")} stroke-width=${shellStroke} filter=${pvExtra > ACTIVE_W && !outline ? "url(#city-glow)" : "none"}/>
-            <text class="node-val" x=${extraNode.x + PV_EXTRA_R + 10} y=${extraNode.y - 4} text-anchor="start">${i.fmt.w(pvExtra)}</text>
-            <text class="node-lbl" x=${extraNode.x + PV_EXTRA_R + 10} y=${extraNode.y + 14} text-anchor="start">${t("nodePvExtra")}</text>
+            <text class="node-val" x=${extraNode.x + PV_EXTRA_R + 8} y=${extraNode.y - 4} text-anchor="start">${pvParts.extra}</text>
+            <text class="node-lbl" x=${extraNode.x + PV_EXTRA_R + 8} y=${extraNode.y + 14} text-anchor="start">${t("nodePvExtra")}</text>
           </g>`,
         )}`
       : svg``}
@@ -575,7 +581,7 @@ export function cityEnergyFlow(i: FlowInput): TemplateResult {
     />
     ${pv > ACTIVE_W
       ? svg`<path class="flow-line" d=${`M${midRoof.x} ${midRoof.y} L${pvTie.x} ${pvTie.y}`} stroke=${strokeOf("var(--pv)")} opacity="0.45"/>
-          ${electrons(midRoof, pvTie, 2, 2, pv, strokeOf("var(--pv)"), motion)}`
+          ${electrons(midRoof, pvTie, 2, 2, pvTotal, strokeOf("var(--pv)"), motion)}`
       : svg``}
     ${loadW > ACTIVE_W && battery > ACTIVE_W ? electrons(batHub, batFoot, 2, 2, Math.min(loadW, battery), strokeOf("var(--bat)"), motion) : svg``}
     ${battery < -ACTIVE_W ? electrons(batFoot, batHub, 2, 2, Math.abs(battery), strokeOf("var(--bat)"), motion) : svg``}

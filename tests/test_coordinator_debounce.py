@@ -359,7 +359,8 @@ def test_forecast_battery_ewma_accepts_idle_zero_after_charge():
     )
     assert charged == 8610.0
 
-    # House/PV guard would keep 8610 here; battery must snap via jump-reset.
+    # House/PV guard would keep 8610 here; battery/wallbox must snap via jump-reset
+    # (openWB idle is exact 0 W — same trap as a stopped battery charge).
     idle = _ewma_update(
         charged, 0.0, FORECAST_ANCHOR_TAU_S, dt_s, EWMA_JUMP_THRESHOLD_W,
         zero_glitch=False,

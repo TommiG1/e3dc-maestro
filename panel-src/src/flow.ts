@@ -122,7 +122,8 @@ const LAYOUTS = {
 
 export const ACTIVE_W = 30;
 const NODE_R = 42;
-const PV_EXTRA_R = 32;
+/** Satellite radius when Zusatz sits in the PV cluster (bound to Haupt-PV). */
+export const PV_EXTRA_R = 22;
 
 /** TEMP: Zusatz-Knoten auch bei 0 W zeichnen (Layout-Check). */
 export const TEMP_SHOW_PV_EXTRA_IDLE = false;
@@ -131,11 +132,38 @@ export function showPvExtraNode(watts: number): boolean {
   return watts > ACTIVE_W || TEMP_SHOW_PV_EXTRA_IDLE;
 }
 
-/** Satellite position next to Haupt-PV when Zusatz-PV is active. */
-export function pvExtraPos(pv: { x: number; y: number }, compact: boolean): Pos {
-  return compact
-    ? { x: pv.x - 72, y: pv.y + 12, labelDy: -52 }
-    : { x: pv.x - 105, y: pv.y + 8, labelDy: -56 };
+/** Live total shown on the PV node when Zusatz is present. */
+export function pvClusterTotal(main: number, extra: number): number {
+  return Math.max(0, main) + Math.max(0, extra);
+}
+
+/**
+ * Satellite beside Haupt-PV (cluster), not pulled toward the hub.
+ * Zusatz stays left of Haupt; same Y so labels stay clear.
+ */
+export function pvExtraPos(
+  pv: { x: number; y: number },
+  compact: boolean,
+  pvR = NODE_R,
+  extraR = PV_EXTRA_R,
+): Pos {
+  const gap = compact ? 8 : 10;
+  const dx = pvR + extraR + gap;
+  return { x: pv.x - dx, y: pv.y, labelDy: -38 };
+}
+
+/** Split caption: Zusatz first (left circle), then Haupt — matches cluster layout. */
+export function pvSplitCaption(
+  extraLabel: string,
+  mainLabel: string,
+  parts: { main: string; extra: string },
+): string {
+  return `${extraLabel} ${parts.extra} · ${mainLabel} ${parts.main}`;
+}
+
+/** Haupt·Zusatz sits under the PV circle so it never overlaps the icons. */
+export function pvSplitLabelY(pvY: number, pvR = NODE_R): number {
+  return pvY + pvR + 14;
 }
 const CONSUMER_R = 26;
 /** Phone: one row per consumer, icon on the right, caption beside it. */
@@ -330,15 +358,17 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const dragBounds = placeBoundsForFan(fan, Math.max(boxW, i.compact ? 420 : 920), Math.max(boxH, i.compact ? 720 : 640));
   const consumerAt = (index: number): Pos => resolved[index]!;
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvMain = Math.max(0, pv);
   const pvExtra = Math.max(0, i.pvExtra ?? 0);
   const showPvExtra = showPvExtraNode(pvExtra);
+  const pvTotal = showPvExtra ? pvClusterTotal(pvMain, pvExtra) : pvMain;
   const extraPos = pvExtraPos(L.pv, i.compact);
   const motion = i.motion !== false;
   const outline = i.outline === true;
   const strokeOf = (color: string) => tone(color, outline);
   const t = i.i18n.t;
   const nodes: Record<NodeKey, { color: string; label: string; value: number; icon: string }> = {
-    pv: { color: "var(--pv)", label: t("nodePv"), value: pv, icon: ICONS.pv },
+    pv: { color: "var(--pv)", label: t("nodePv"), value: pvTotal, icon: ICONS.pv },
     grid: {
       color: grid < 0 ? "var(--grid-in)" : "var(--grid-out)",
       label: grid < 0 ? t("nodeImport") : t("nodeFeed"),
@@ -354,7 +384,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
     },
   };
   const flows: { node: NodeKey; toHub: boolean }[] = [];
-  if (pv > ACTIVE_W) flows.push({ node: "pv", toHub: true });
+  if (pvTotal > ACTIVE_W) flows.push({ node: "pv", toHub: true });
   if (battery < -ACTIVE_W) flows.push({ node: "bat", toHub: true });
   if (battery > ACTIVE_W) flows.push({ node: "bat", toHub: false });
   if (grid < -ACTIVE_W) flows.push({ node: "grid", toHub: true });
@@ -364,9 +394,10 @@ export function energyFlow(i: FlowInput): TemplateResult {
   const hubR = i.compact ? COMPACT_LIST_R : CONSUMER_R;
   const keys: NodeKey[] = ["pv", "grid", "house", "bat"];
   const places = consumers.map((c, index) => ({ c, p: consumerAt(index) }));
+  const pvParts = showPvExtra ? i.fmt.wParts(pvMain, pvExtra) : undefined;
   const aria = [
     ...keys.map((k) => `${nodes[k].label} ${i.fmt.w(nodes[k].value)}`),
-    ...(showPvExtra ? [`${t("nodePvExtra")} ${i.fmt.w(pvExtra)}`] : []),
+    ...(pvParts ? [`${t("nodePvExtra")} ${pvParts.extra}`, `${t("nodePvMain")} ${pvParts.main}`] : []),
     ...places.map(({ c }) => `${c.name} ${i.fmt.w(c.watts)}`),
   ].join(", ");
   return svg`<svg viewBox="0 0 ${boxW} ${boxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label=${aria}>
@@ -376,7 +407,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
     </defs>
     ${keys.map((k) => svg`<path class="flow-line" d=${flowSegment(L[k], L.hub, NODE_R, hubR)} stroke=${nodes[k].color}/>`)}
     ${showPvExtra
-      ? svg`<path class="flow-line" d=${flowSegment(extraPos, L.hub, PV_EXTRA_R, hubR)} stroke="var(--pv-extra)"/>`
+      ? svg`<path class="flow-line" d=${flowSegment(extraPos, L.pv, PV_EXTRA_R, NODE_R)} stroke="var(--pv-extra)" opacity="0.55"/>`
       : svg``}
     ${useCompactList
       ? compactBuses(places, L.house, boxW, motion, NODE_R)
@@ -396,7 +427,7 @@ export function energyFlow(i: FlowInput): TemplateResult {
       return electrons(a, b, fromR, toR, nodes[f.node].value, nodes[f.node].color, motion);
     })}
     ${showPvExtra
-      ? electrons(extraPos, L.hub, PV_EXTRA_R, hubR, pvExtra, "var(--pv-extra)", motion)
+      ? electrons(extraPos, L.pv, PV_EXTRA_R, NODE_R, pvExtra, "var(--pv-extra)", motion)
       : svg``}
     <image href=${maestroLogo} x=${L.hub.x - hubR} y=${L.hub.y - hubR} width=${hubR * 2} height=${hubR * 2} aria-label="Maestro"/>
     ${keys.map((k) => {
@@ -404,13 +435,21 @@ export function energyFlow(i: FlowInput): TemplateResult {
       const p = L[k];
       const idle = Math.abs(n.value) < ACTIVE_W;
       const above = p.labelDy < 0;
+      const split =
+        k === "pv" && pvParts
+          ? pvSplitCaption(t("nodePvExtra"), t("nodePvMain"), pvParts)
+          : undefined;
+      const valueLabel = k === "pv" && pvParts ? pvParts.total : i.fmt.w(n.value);
       return svg`<g class="flow-node" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${n.label} @click=${() => i.onSelect?.(k)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.onSelect?.(k); } }}>
         <circle cx=${p.x} cy=${p.y} r="42" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf(n.color)} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
         <g transform=${iconTransform(p.x, p.y, nodeIconFit(NODE_R))} fill="none" stroke=${strokeOf(n.color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
           ${k === "bat" ? batteryGlyph(i.soc, strokeOf(n.color)) : svg`<path d=${n.icon} vector-effect="non-scaling-stroke"/>`}
         </g>
-        <text class="node-val" x=${p.x} y=${p.y + p.labelDy} text-anchor="middle">${i.fmt.w(n.value)}</text>
+        <text class="node-val" x=${p.x} y=${p.y + p.labelDy} text-anchor="middle">${valueLabel}</text>
         <text class="node-lbl" x=${p.x} y=${p.y + p.labelDy + (above ? 19 : 18)} text-anchor="middle">${n.label}</text>
+        ${split
+          ? svg`<text class="node-lbl-sm" x=${p.x} y=${pvSplitLabelY(p.y)} text-anchor="middle">${split}</text>`
+          : svg``}
       </g>`;
     })}
     ${showPvExtra
@@ -419,8 +458,6 @@ export function energyFlow(i: FlowInput): TemplateResult {
           <g transform=${iconTransform(extraPos.x, extraPos.y, nodeIconFit(PV_EXTRA_R))} fill="none" stroke=${strokeOf("var(--pv-extra)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
             <path d=${ICONS.pv} vector-effect="non-scaling-stroke"/>
           </g>
-          <text class="node-val" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy} text-anchor="middle">${i.fmt.w(pvExtra)}</text>
-          <text class="node-lbl" x=${extraPos.x} y=${extraPos.y + extraPos.labelDy + 19} text-anchor="middle">${t("nodePvExtra")}</text>
         </g>`
       : svg``}
     ${places.map(({ c, p }) => {

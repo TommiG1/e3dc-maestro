@@ -564,7 +564,7 @@ export function liveView(c: Ctx): TemplateResult {
   const pvDayTotal = num(st(c, E.pvToday));
   const pvExtraDay = Math.max(0, num(st(c, E.pvExtraToday)) ?? 0);
   const showPvExtraDay = pvExtraDay >= 0.05;
-  const pvMainDay = showPvExtraDay && pvDayTotal !== undefined ? Math.max(0, pvDayTotal - pvExtraDay) : pvDayTotal;
+  const pvDayParts = showPvExtraDay ? c.fmt.kwhParts(pvDayTotal, pvExtraDay) : undefined;
   const flowPv = splitFlowPv(num(st(c, E.pv)), num(st(c, E.additionalPv)));
   const separateDay = separateDayEnergy(c.consumers, num(st(c, E.wallboxEnergy)));
   const openToday = () => {
@@ -668,11 +668,11 @@ export function liveView(c: Ctx): TemplateResult {
         </div>
         <button type="button" class="flow-day" @click=${openToday} aria-label=${t("flowDayOpen")}>
           <span class="flow-day-label">${t("flowDay")}</span>
-          <span>${t("nodePv")} ${c.fmt.n(pvMainDay)}</span>
-          ${showPvExtraDay
-            ? html`<span class="flow-day-sep" aria-hidden="true">·</span>
-                <span>${t("nodePvExtra")} ${c.fmt.n(pvExtraDay)}</span>`
-            : nothing}
+          ${pvDayParts
+            ? html`<span>${t("nodePv")} ${pvDayParts.total}</span>
+                <span class="flow-day-sep" aria-hidden="true">·</span>
+                <span>${t("nodePvExtra")} ${pvDayParts.extra} · ${t("nodePvMain")} ${pvDayParts.main}</span>`
+            : html`<span>${t("nodePv")} ${c.fmt.n(pvDayTotal)}</span>`}
           <span class="flow-day-sep" aria-hidden="true">·</span>
           <span>${t("nodeHouse")} ${dayKwh("houseToday")}</span>
           <span class="flow-day-sep" aria-hidden="true">·</span>

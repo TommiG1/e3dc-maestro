@@ -625,9 +625,12 @@ class E3DCMaestroCoordinator(
             self._ewma_house, state_data.house_power or 0.0,
             EWMA_TAU_S, _dt_s, EWMA_JUMP_THRESHOLD_W,
         )
+        # openWB/custom meters report exact 0 W when idle — not an RSCP glitch.
+        # With zero_glitch=True the last charge power would stick forever.
         self._ewma_wallbox = _ewma_update(
             self._ewma_wallbox, state_data.wallbox_power or 0.0,
             EWMA_TAU_S, _dt_s, EWMA_JUMP_THRESHOLD_W,
+            zero_glitch=False,
         )
         state_data = dataclasses.replace(
             state_data,

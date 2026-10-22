@@ -21,7 +21,10 @@ import {
   flowSegment,
   iconFit,
   nodeIconFit,
+  pvClusterTotal,
   pvExtraPos,
+  pvSplitCaption,
+  pvSplitLabelY,
   showPvExtraNode,
   type FlowInput,
 } from "./flow";
@@ -30,8 +33,8 @@ import maestroLogo from "./maestro-logo.png";
 /** Same size as PV / Netz / Akku. */
 const NODE_R = 42;
 const NODE_R_COMPACT = 34;
-const PV_EXTRA_R = 28;
-const PV_EXTRA_R_COMPACT = 24;
+const PV_EXTRA_R = 22;
+const PV_EXTRA_R_COMPACT = 20;
 /** Verbrauch matches Netzbezug. */
 const LOAD_R = NODE_R;
 const LOAD_R_COMPACT = NODE_R_COMPACT;
@@ -217,6 +220,7 @@ export function splitFlowBoxHeight(compact: boolean, leafCount: number): number 
 
 export function splitEnergyFlow(i: FlowInput): TemplateResult {
   const { pv = 0, house = 0, grid = 0, battery = 0 } = i;
+  const pvMain = Math.max(0, pv);
   const pvExtra = Math.max(0, i.pvExtra ?? 0);
   const showPvExtra = showPvExtraNode(pvExtra);
   const motion = i.motion !== false;
@@ -232,13 +236,14 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
 
   const nodeR = compact ? NODE_R_COMPACT : NODE_R;
   const pvExtraR = compact ? PV_EXTRA_R_COMPACT : PV_EXTRA_R;
+  const pvTotal = showPvExtra ? pvClusterTotal(pvMain, pvExtra) : pvMain;
   const loadR = compact ? LOAD_R_COMPACT : LOAD_R;
   const houseR = compact ? HOUSE_R_COMPACT : HOUSE_R;
   const leafR = compact ? COMPACT_LIST_R : CONSUMER_R;
 
   const hub: Pt = compact ? { x: 125, y: 160 } : { x: 240, y: 215 };
   const pvPos: Pt = compact ? { x: 125, y: 55 } : { x: 240, y: 95 };
-  const extraPos = pvExtraPos(pvPos, compact);
+  const extraPos = pvExtraPos(pvPos, compact, nodeR, pvExtraR);
   const gridPos: Pt = compact ? { x: 42, y: 160 } : { x: 80, y: 215 };
   const batPos: Pt = compact ? { x: 125, y: 275 } : { x: 240, y: 335 };
   const loadPos: Pt = phone ? phone.load : { x: 420, y: 215 };
@@ -303,20 +308,7 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
   );
 
   const sources: { key: string; pos: Pt; color: string; label: string; value: number; icon: string; r?: number }[] = [
-    { key: "pv", pos: pvPos, color: "var(--pv)", label: t("nodePv"), value: pv, icon: ICONS.pv },
-    ...(showPvExtra
-      ? [
-          {
-            key: "pvExtra",
-            pos: { x: extraPos.x, y: extraPos.y },
-            color: "var(--pv-extra)",
-            label: t("nodePvExtra"),
-            value: pvExtra,
-            icon: ICONS.pv,
-            r: pvExtraR,
-          },
-        ]
-      : []),
+    { key: "pv", pos: pvPos, color: "var(--pv)", label: t("nodePv"), value: pvTotal, icon: ICONS.pv },
     {
       key: "grid",
       pos: gridPos,
@@ -339,8 +331,10 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
   // Phone: Verbrauch labels above so the fork can drop cleanly underneath.
   const loadLabelDy = compact ? -52 : 70;
   const labelBelow = compact ? 48 : 70;
+  const pvParts = showPvExtra ? i.fmt.wParts(pvMain, pvExtra) : undefined;
   const aria = [
     ...sources.map((s) => `${s.label} ${i.fmt.w(s.value)}`),
+    ...(pvParts ? [`${t("nodePvExtra")} ${pvParts.extra}`, `${t("nodePvMain")} ${pvParts.main}`] : []),
     `${t("nodeLoad")} ${i.fmt.w(total)}`,
     `${t("nodeHouse")} ${i.fmt.w(houseW)}`,
     ...all.map((c) => `${c.name} ${i.fmt.w(c.watts)}`),
@@ -356,6 +350,8 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
     r: number,
     labelDy: number,
     onDrag?: (e: PointerEvent) => void,
+    split?: string,
+    valueText?: string,
   ) => {
     const idle = Math.abs(value) < ACTIVE_W;
     const above = labelDy < 0;
@@ -373,8 +369,11 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
       <g transform=${iconTransform(pos.x, pos.y, r >= NODE_R_COMPACT ? nodeIconFit(r) : iconFit(r))} fill="none" stroke=${strokeOf(color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
         <path d=${icon} vector-effect="non-scaling-stroke"/>
       </g>
-      <text class=${valClass} x=${pos.x} y=${pos.y + labelDy} text-anchor="middle">${i.fmt.w(value)}</text>
+      <text class=${valClass} x=${pos.x} y=${pos.y + labelDy} text-anchor="middle">${valueText ?? i.fmt.w(value)}</text>
       <text class=${lblClass} x=${pos.x} y=${pos.y + labelDy + (above ? 19 : 16)} text-anchor="middle">${clip(label, 18)}</text>
+      ${split
+        ? svg`<text class="node-lbl-sm" x=${pos.x} y=${pvSplitLabelY(pos.y, r)} text-anchor="middle">${split}</text>`
+        : svg``}
     </g>`;
   };
 
@@ -474,6 +473,9 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
       <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     </defs>
     ${sources.map((s) => svg`<path class="flow-line" d=${flowSegment(s.pos, hub, s.r ?? nodeR, hubR)} stroke=${s.color}/>`)}
+    ${showPvExtra
+      ? svg`<path class="flow-line" d=${flowSegment({ x: extraPos.x, y: extraPos.y }, pvPos, pvExtraR, nodeR)} stroke="var(--pv-extra)" opacity="0.55"/>`
+      : svg``}
     <path class="flow-line" d=${flowSegment(hub, loadPos, hubR, loadR)} stroke="var(--house)"/>
     ${useFork
       ? forkSvg
@@ -485,8 +487,7 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
     ${sources.map((s) => {
       const r = s.r ?? nodeR;
       const toHub =
-        (s.key === "pv" && pv > ACTIVE_W) ||
-        (s.key === "pvExtra" && showPvExtra) ||
+        (s.key === "pv" && pvTotal > ACTIVE_W) ||
         (s.key === "bat" && battery < -ACTIVE_W) ||
         (s.key === "grid" && grid < -ACTIVE_W);
       const fromHub = (s.key === "bat" && battery > ACTIVE_W) || (s.key === "grid" && grid > ACTIVE_W);
@@ -494,6 +495,9 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
       if (fromHub) return electrons(hub, s.pos, hubR, r, s.value, s.color, motion);
       return svg``;
     })}
+    ${showPvExtra
+      ? electrons({ x: extraPos.x, y: extraPos.y }, pvPos, pvExtraR, nodeR, pvExtra, "var(--pv-extra)", motion)
+      : svg``}
     ${electrons(hub, loadPos, hubR, loadR, total, "var(--house)", motion)}
 
     <image href=${maestroLogo} x=${hub.x - hubR} y=${hub.y - hubR} width=${hubR * 2} height=${hubR * 2} aria-label="Maestro"/>
@@ -506,9 +510,25 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
         s.value,
         s.icon,
         s.r ?? nodeR,
-        s.key === "pv" || s.key === "pvExtra" ? (compact ? -52 : s.key === "pvExtra" ? -56 : -72) : labelBelow,
+        s.key === "pv" ? (compact ? -52 : -72) : labelBelow,
+        undefined,
+        s.key === "pv" && pvParts
+          ? pvSplitCaption(t("nodePvExtra"), t("nodePvMain"), pvParts)
+          : undefined,
+        s.key === "pv" ? pvParts?.total : undefined,
       ),
     )}
+    ${showPvExtra
+      ? svg`<g class="flow-node" opacity=${pvExtra > ACTIVE_W ? 1 : 0.55} role="button" tabindex="0" aria-label=${t("nodePvExtra")}
+          @click=${() => { if (!i.arrange) i.onSelect?.("pvExtra"); }}
+          @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!i.arrange) i.onSelect?.("pvExtra"); } }}
+        >
+          <circle cx=${extraPos.x} cy=${extraPos.y} r=${pvExtraR} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf("var(--pv-extra)")} stroke-width=${outline ? "2.4" : "2"} filter=${pvExtra > ACTIVE_W && !outline ? "url(#glow)" : "none"}/>
+          <g transform=${iconTransform(extraPos.x, extraPos.y, nodeIconFit(pvExtraR))} fill="none" stroke=${strokeOf("var(--pv-extra)")} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
+            <path d=${ICONS.pv} vector-effect="non-scaling-stroke"/>
+          </g>
+        </g>`
+      : svg``}
     ${node("load", loadPos, "var(--house)", t("nodeLoad"), total, ICONS.load, loadR, loadLabelDy)}
     ${node("house", housePos, "var(--house)", t("nodeHouse"), houseW, ICONS.house, houseR, compact ? 42 : 58, houseDrag)}
     ${separateNodes.map(({ c, p }) => leaf(c, p, loadPos, "var(--accent)", loadPos, dragBoundsLoad))}

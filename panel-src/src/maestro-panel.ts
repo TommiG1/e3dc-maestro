@@ -14,6 +14,7 @@ import {
   powerSensorChoices,
   saveConsumers,
   toFlow,
+  wattsOf,
   WALLBOX_ENTITY,
   type Consumer,
   type ConsumerIcon,
@@ -223,8 +224,9 @@ class MaestroPanel extends LitElement {
   private _classic?: ClassicStatus;
   private _energy?: EnergyDashboardStatus;
   private _storedOptions: Record<string, unknown> = {};
-  private _optionsLoaded = false;
   private _optionsReady = false;
+  private _optionsLoading = false;
+  private _optionsRetry?: number;
   private _optionError?: string;
   private _optionNotice?: string;
   private _optionQuery: Record<string, string> = {};
@@ -307,6 +309,8 @@ class MaestroPanel extends LitElement {
     window.clearInterval(this._timer);
     window.clearInterval(this._pauseClock);
     window.clearTimeout(this._overflowTimer);
+    window.clearTimeout(this._optionsRetry);
+    this._optionsRetry = undefined;
     cancelAnimationFrame(this._flowRaf);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
     window.removeEventListener("keydown", this._onKey);
@@ -884,6 +888,58 @@ class MaestroPanel extends LitElement {
     return held.show;
   }
 
+  /** Compare included loads to the raw house meter when possible — Maestro house is EWMA + 30 s tick. */
+  private _consumerOverflow(hass: Hass): boolean {
+    const flows = toFlow(this._consumers, hass);
+    const wallboxIds = [
+      WALLBOX_ENTITY,
+      ...(typeof this._storedOptions.wallbox_power_sensor === "string"
+        ? [this._storedOptions.wallbox_power_sensor]
+        : []),
+    ];
+    // Prefer openWB (or configured wallbox sensor) over the Maestro mirror for the sum —
+    // same source the coordinator subtracts from the E3DC meter.
+    const wbSource =
+      typeof this._storedOptions.wallbox_power_sensor === "string"
+        ? this._storedOptions.wallbox_power_sensor
+        : undefined;
+    const wbWatts = wbSource ? wattsOf(hass.states[wbSource]) : undefined;
+    const aligned =
+      wbWatts === undefined
+        ? flows
+        : flows.map((item) =>
+            wallboxIds.includes(item.entityId) ? { ...item, watts: Math.max(0, wbWatts) } : item,
+          );
+    const meterId =
+      typeof this._storedOptions.house_power_sensor === "string"
+        ? this._storedOptions.house_power_sensor
+        : undefined;
+    const meterEntity = meterId ? hass.states[meterId] : undefined;
+    const meterHouse = wattsOf(meterEntity);
+    const houseEntity = meterEntity ?? hass.states[E.house];
+    const itemUpdatedAt = new Map<string, number>();
+    for (const item of aligned) {
+      const stamp = hass.states[item.entityId]?.last_updated;
+      if (!stamp) continue;
+      const ms = Date.parse(stamp);
+      if (Number.isFinite(ms)) itemUpdatedAt.set(item.entityId, ms);
+      // Wallbox row may use the Maestro entity id but watts from openWB — stamp from the source.
+      if (wbSource && wallboxIds.includes(item.entityId)) {
+        const srcStamp = hass.states[wbSource]?.last_updated;
+        const srcMs = srcStamp ? Date.parse(srcStamp) : NaN;
+        if (Number.isFinite(srcMs)) itemUpdatedAt.set(item.entityId, srcMs);
+      }
+    }
+    const houseUpdatedAt = houseEntity?.last_updated ? Date.parse(houseEntity.last_updated) : undefined;
+    return includedOverflow(num(hass.states[E.house]), aligned, {
+      wallboxInHouse: this._storedOptions.wallbox_included_in_house === true,
+      wallboxEntityIds: wallboxIds,
+      meterHouse: meterHouse,
+      houseUpdatedAt: Number.isFinite(houseUpdatedAt) ? houseUpdatedAt : undefined,
+      itemUpdatedAt,
+    });
+  }
+
   private _setConsumers(next: Consumer[], closePicker = false): void {
     this._consumers = next.slice(0, MAX_CONSUMERS);
     saveConsumers(this._consumers);
@@ -1047,22 +1103,35 @@ class MaestroPanel extends LitElement {
   }
 
   private _fault(err: unknown): string {
+    // home-assistant-js-websocket rejects with bare ERR_CONNECTION_LOST (= 3) after
+    // iOS background suspend; prefer the nested HA result shape when present.
+    if (err === 3) return "Connection lost";
+    if (typeof err === "number") return String(err);
     if (err instanceof Error) return err.message;
-    if (err && typeof err === "object" && "message" in err) {
-      const message = (err as { message?: unknown }).message;
-      if (typeof message === "string" && message) return message;
+    if (err && typeof err === "object") {
+      const o = err as { message?: unknown; code?: unknown; error?: { message?: unknown; code?: unknown } };
+      if (typeof o.message === "string" && o.message) return o.message;
+      const nested = o.error;
+      if (nested && typeof nested === "object") {
+        if (typeof nested.message === "string" && nested.message) return nested.message;
+        if (nested.code === 3) return "Connection lost";
+      }
+      if (o.code === 3) return "Connection lost";
     }
     return String(err);
   }
 
   private async _loadOptions(): Promise<void> {
     const hass = this._hass;
-    if (!hass || this._optionsLoaded) return;
-    this._optionsLoaded = true;
+    if (!hass || this._optionsReady || this._optionsLoading) return;
+    this._optionsLoading = true;
     try {
       const res = await hass.callWS<{ options?: Record<string, unknown> }>({ type: "e3dc_maestro/panel_options" });
       this._storedOptions = res.options ?? {};
       this._optionsReady = true;
+      this._optionError = undefined;
+      window.clearTimeout(this._optionsRetry);
+      this._optionsRetry = undefined;
       if (!this._slotsDirty) this._slots = slotsFrom(this._storedOptions.tariff_slots);
       const stored = consumersFromOptions(this._storedOptions.flow_consumers, this._consumers);
       this._consumers = stored.list;
@@ -1070,8 +1139,26 @@ class MaestroPanel extends LitElement {
       if (stored.publishLocal) void this._setOption("flow_consumers", stored.list, true);
     } catch (err) {
       this._optionError = this._fault(err);
+      // iPhone Companion drops the websocket while backgrounded; retry when it is back.
+      if (this._isConnectionLost(err) && this._optionsRetry === undefined) {
+        this._optionsRetry = window.setTimeout(() => {
+          this._optionsRetry = undefined;
+          void this._loadOptions();
+        }, 1500);
+      }
+    } finally {
+      this._optionsLoading = false;
+      this.requestUpdate();
     }
-    this.requestUpdate();
+  }
+
+  private _isConnectionLost(err: unknown): boolean {
+    if (err === 3) return true;
+    if (!err || typeof err !== "object") return false;
+    const o = err as { code?: unknown; error?: { code?: unknown }; message?: unknown };
+    if (o.code === 3) return true;
+    if (o.error && typeof o.error === "object" && (o.error as { code?: unknown }).code === 3) return true;
+    return typeof o.message === "string" && /connection lost/i.test(o.message);
   }
 
   private async _setOption(key: string, value: unknown, quiet = false): Promise<void> {
@@ -1167,7 +1254,7 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       consumers: toFlow(this._consumers, hass),
-      consumerOverflow: this._heldOverflow(includedOverflow(num(hass.states[E.house]), toFlow(this._consumers, hass))),
+      consumerOverflow: this._heldOverflow(this._consumerOverflow(hass)),
       onEditConsumers: () => this._openConsumers(),
       arrangeConsumers: this._arrangeConsumers,
       onToggleArrange: () => {

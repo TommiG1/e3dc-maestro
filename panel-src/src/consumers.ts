@@ -5,8 +5,10 @@ export const WALLBOX_ENTITY = "sensor.e3dc_maestro_wallbox_leistung";
 export const MAX_CONSUMERS = 6;
 const STORAGE_KEY = "e3dc-maestro.consumers.v1";
 const OVERFLOW_W = 50;
-/** The mismatch has to last this long. A late house reading must not flash the warning. */
-export const OVERFLOW_HOLD_MS = 10_000;
+/** Hold long enough to outlast openWB (~10 s) and Maestro's 30 s update tick. */
+export const OVERFLOW_HOLD_MS = 25_000;
+/** Ignore a load that is newer than the house meter by this much — the meter has not caught up yet. */
+export const OVERFLOW_SKEW_MS = 15_000;
 
 export type ConsumerMode = "included" | "separate";
 
@@ -169,11 +171,44 @@ export function separateDayEnergy(
     .map((item) => ({ name: item.name, kwh: wallboxKwh }));
 }
 
+export interface OverflowOpts {
+  wallboxInHouse?: boolean;
+  wallboxEntityIds?: readonly string[];
+  /** Raw house meter (e.g. s10e_pro). Prefer this over Maestro's EWMA/pure house. */
+  meterHouse?: number;
+  /** Epoch ms of the baseline house reading's last_updated. */
+  houseUpdatedAt?: number;
+  /** Epoch ms of each included entity's last_updated. */
+  itemUpdatedAt?: ReadonlyMap<string, number>;
+  skewMs?: number;
+}
+
 /** Included consumers are a slice of house power. Above the house reading the assignment is wrong. */
-export function includedOverflow(house: number | undefined, items: FlowConsumer[]): boolean {
-  if (house === undefined) return false;
-  const sum = items.filter((i) => i.mode === "included").reduce((total, i) => total + Math.max(0, i.watts), 0);
-  return sum > house + OVERFLOW_W;
+export function includedOverflow(
+  house: number | undefined,
+  items: FlowConsumer[],
+  opts?: OverflowOpts,
+): boolean {
+  const baseline = opts?.meterHouse ?? house;
+  if (baseline === undefined) return false;
+  const wallboxIds = new Set(opts?.wallboxEntityIds?.length ? opts.wallboxEntityIds : [WALLBOX_ENTITY]);
+  // Maestro house_power is pure household when the wallbox sits in the E3DC meter —
+  // only skip the wallbox for that fallback baseline, not for the raw meter.
+  const skipWallbox = opts?.meterHouse === undefined && opts?.wallboxInHouse === true;
+  const skew = opts?.skewMs ?? OVERFLOW_SKEW_MS;
+  const houseAt = opts?.houseUpdatedAt;
+  let sum = 0;
+  for (const item of items) {
+    if (item.mode !== "included") continue;
+    if (skipWallbox && wallboxIds.has(item.entityId)) continue;
+    // Load jumped before the house meter moved — wait for the meter, do not warn yet.
+    if (houseAt !== undefined && opts?.itemUpdatedAt) {
+      const itemAt = opts.itemUpdatedAt.get(item.entityId);
+      if (itemAt !== undefined && Number.isFinite(itemAt) && itemAt - houseAt > skew) continue;
+    }
+    sum += Math.max(0, item.watts);
+  }
+  return sum > baseline + OVERFLOW_W;
 }
 
 /** Show the warning only after the mismatch has stayed true for the hold time. */
