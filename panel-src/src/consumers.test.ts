@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  consumerPowerCaption,
   consumerUnavailable,
   consumersFromOptions,
   includedOverflow,
@@ -8,12 +9,16 @@ import {
   overflowHeld,
   parseConsumers,
   separateDayEnergy,
+  socOf,
   visibleInFlow,
+  wallboxEntityIds,
   WALLBOX_ENTITY,
   wattsOf,
+  withWallboxMeta,
   type Consumer,
   type FlowConsumer,
 } from "./consumers";
+import { makeFmt } from "./format";
 import type { HassEntity } from "./entities";
 
 const entity = (state: string, unit: string): HassEntity => ({
@@ -89,6 +94,38 @@ describe("wattsOf", () => {
     expect(wattsOf(entity("400", "W"))).toBe(400);
     expect(wattsOf(entity("unavailable", "W"))).toBeUndefined();
     expect(wattsOf(entity("unknown", "W"))).toBeUndefined();
+  });
+});
+
+describe("socOf", () => {
+  it("clamps percent and zeros RSCP denormals", () => {
+    expect(socOf(entity("72.4", "%"))).toBe(72.4);
+    expect(socOf(entity("4.2e-43", "%"))).toBe(0);
+    expect(socOf(entity("150", "%"))).toBe(100);
+    expect(socOf(entity("unavailable", "%"))).toBeUndefined();
+  });
+});
+
+describe("consumerPowerCaption", () => {
+  const fmt = makeFmt("de");
+
+  it("appends SoC beside power", () => {
+    expect(consumerPowerCaption(fmt, 4200)).toBe("4,2 kW");
+    expect(consumerPowerCaption(fmt, 4200, 72)).toBe("4,2 kW · 72 %");
+    expect(consumerPowerCaption(fmt, 400, 7.6)).toBe("400 W · 8 %");
+  });
+});
+
+describe("withWallboxMeta", () => {
+  it("keeps the wallbox visible and attaches SoC / plug", () => {
+    const items = [
+      flow(0, "separate", WALLBOX_ENTITY),
+      flow(500, "included", "sensor.heat"),
+    ];
+    const next = withWallboxMeta(items, { soc: 55, plugged: true }, wallboxEntityIds("sensor.openwb"));
+    expect(next[0]).toMatchObject({ soc: 55, plugged: true, keepVisible: true });
+    expect(next[1].keepVisible).toBeUndefined();
+    expect(visibleInFlow(next).map((c) => c.entityId)).toEqual([WALLBOX_ENTITY, "sensor.heat"]);
   });
 });
 
@@ -176,11 +213,13 @@ describe("overflowHeld", () => {
 });
 
 describe("visibleInFlow", () => {
-  it("hides loads at or below 10 W unless arranging", () => {
+  it("hides loads at or below 10 W unless arranging or keepVisible", () => {
     const items = [flow(0, "included"), flow(10, "included"), flow(11, "separate"), flow(458, "included")];
     expect(visibleInFlow(items).map((c) => c.watts)).toEqual([11, 458]);
     expect(visibleInFlow(items, { arrange: true })).toHaveLength(4);
     expect(visibleInFlow([flow(-50, "included")]).map((c) => c.watts)).toEqual([-50]);
+    const wallbox = { ...flow(0, "separate", WALLBOX_ENTITY), keepVisible: true as const };
+    expect(visibleInFlow([wallbox]).map((c) => c.entityId)).toEqual([WALLBOX_ENTITY]);
   });
 });
 

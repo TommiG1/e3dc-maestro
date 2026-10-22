@@ -10,11 +10,13 @@ import {
   resolveConsumerPositions,
   type ConsumerPlace,
 } from "./consumer-layout";
-import { CONSUMER_ICON_PATH } from "./consumers";
+import { consumerPowerCaption } from "./consumers";
 import {
   ACTIVE_W,
   batteryFill,
   compactBuses,
+  consumerGlyph,
+  consumerIdle,
   electrons,
   flowSegment,
   iconFit,
@@ -525,24 +527,27 @@ export function blobEnergyFlow(i: FlowInput): TemplateResult {
               ${electrons(from, p, fromR, toR, c.watts, color, motion)}`;
           })}
     ${places.map(({ c, p, dragOrigin, bounds }) => {
-      const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
-      const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
+      const nodeColor = c.mode === "included" ? "var(--house)" : "var(--accent)";
+      const color = strokeOf(nodeColor);
+      const idle = consumerIdle(c, ACTIVE_W);
+      const power = consumerPowerCaption(i.fmt, c.watts, c.soc);
+      const aria = [c.name, power, c.plugged === true ? i.i18n.t("plantPlug") : undefined].filter(Boolean).join(", ");
       const open = () => {
         if (!i.arrange) i.onSelect?.(c.id);
       };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
       const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, dragOrigin, i.arrange, i.onPlaceConsumer, bounds ?? undefined);
       if (i.compact) {
-        return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
+        return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>
-          <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
-          <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${i.fmt.w(c.watts)}  ${clip(c.name, 24)}</text>
+          <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">${consumerGlyph(c, nodeColor, outline)}</g>
+          <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${power}  ${clip(c.name, 24)}</text>
         </g>`;
       }
-      return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
+      return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>
         <circle cx=${p.x} cy=${p.y} r="26" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#blob-glow)"}/>
-        <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
-        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${i.fmt.w(c.watts)}</text>
+        <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">${consumerGlyph(c, nodeColor, outline)}</g>
+        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${power}</text>
         <text class="node-lbl-sm" x=${p.x + 34} y=${p.y + 14} text-anchor="start">${clip(c.name, 18)}</text>
       </g>`;
     })}

@@ -13,12 +13,18 @@ import {
   newConsumerId,
   powerSensorChoices,
   saveConsumers,
+  FLOW_CONSUMER_MIN_W,
+  pluggedOf,
+  socOf,
   toFlow,
+  wallboxEntityIds,
   wattsOf,
+  withWallboxMeta,
   WALLBOX_ENTITY,
   type Consumer,
   type ConsumerIcon,
   type ConsumerMode,
+  type FlowConsumer,
 } from "./consumers";
 import { controlsSheet } from "./controls";
 import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
@@ -888,15 +894,73 @@ class MaestroPanel extends LitElement {
     return held.show;
   }
 
+  private _wallboxIds(): string[] {
+    return wallboxEntityIds(
+      typeof this._storedOptions.wallbox_power_sensor === "string"
+        ? this._storedOptions.wallbox_power_sensor
+        : undefined,
+    );
+  }
+
+  /** Configured vehicle SoC, else first RSCP wallbox-soc from the plant map. */
+  private _wallboxSoc(hass: Hass): number | undefined {
+    const configured =
+      typeof this._storedOptions.wallbox_soc_sensor === "string"
+        ? this._storedOptions.wallbox_soc_sensor
+        : undefined;
+    if (configured) return socOf(hass.states[configured]);
+    for (const box of plant.wallboxes) {
+      const id = box.entities.soc;
+      if (typeof id !== "string") continue;
+      const value = socOf(hass.states[id]);
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  }
+
+  /** Configured plug binary, else plant / openWB Ladekabel. */
+  private _wallboxPlugged(hass: Hass): boolean | undefined {
+    const configured =
+      typeof this._storedOptions.wallbox_plug_entity === "string"
+        ? this._storedOptions.wallbox_plug_entity
+        : undefined;
+    if (configured) return pluggedOf(hass.states[configured]);
+    for (const box of plant.wallboxes) {
+      const id = box.entities.plug;
+      if (typeof id !== "string") continue;
+      const value = pluggedOf(hass.states[id]);
+      if (value !== undefined) return value;
+    }
+    const power =
+      typeof this._storedOptions.wallbox_power_sensor === "string"
+        ? this._storedOptions.wallbox_power_sensor
+        : undefined;
+    const openwb = power?.match(/^sensor\.(openwb_chargepoint_\d+)_ladeleistung$/);
+    if (openwb) {
+      const value = pluggedOf(hass.states[`binary_sensor.${openwb[1]}_ladekabel`]);
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  }
+
+  private _flowConsumers(hass: Hass): FlowConsumer[] {
+    const ids = this._wallboxIds();
+    const flows = toFlow(this._consumers, hass);
+    let plugged = this._wallboxPlugged(hass);
+    // No plug sensor: charging still means the cable is in.
+    if (plugged === undefined) {
+      const charging = flows.some(
+        (item) => ids.includes(item.entityId) && Math.abs(item.watts) > FLOW_CONSUMER_MIN_W,
+      );
+      if (charging) plugged = true;
+    }
+    return withWallboxMeta(flows, { soc: this._wallboxSoc(hass), plugged }, ids);
+  }
+
   /** Compare included loads to the raw house meter when possible — Maestro house is EWMA + 30 s tick. */
   private _consumerOverflow(hass: Hass): boolean {
     const flows = toFlow(this._consumers, hass);
-    const wallboxIds = [
-      WALLBOX_ENTITY,
-      ...(typeof this._storedOptions.wallbox_power_sensor === "string"
-        ? [this._storedOptions.wallbox_power_sensor]
-        : []),
-    ];
+    const wallboxIds = this._wallboxIds();
     // Prefer openWB (or configured wallbox sensor) over the Maestro mirror for the sum —
     // same source the coordinator subtracts from the E3DC meter.
     const wbSource =
@@ -1253,7 +1317,7 @@ class MaestroPanel extends LitElement {
         saveForecastHidden(next);
         this.requestUpdate();
       },
-      consumers: toFlow(this._consumers, hass),
+      consumers: this._flowConsumers(hass),
       consumerOverflow: this._heldOverflow(this._consumerOverflow(hass)),
       onEditConsumers: () => this._openConsumers(),
       arrangeConsumers: this._arrangeConsumers,

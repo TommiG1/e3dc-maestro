@@ -125,6 +125,8 @@ _SPECS: dict[str, _Spec] = {
     "wallbox_enabled": ("bool",),
     "wallbox_type": ("select", (WALLBOX_TYPE_E3DC, WALLBOX_TYPE_GENERIC)),
     "wallbox_power_sensor": _entity(),
+    "wallbox_soc_sensor": _entity(),
+    "wallbox_plug_entity": _entity(),
     "wallbox_included_in_house": ("bool",),
     "wallbox_min_current": _n(6, 32),
     "wallbox_max_current": _n(6, 32),
@@ -197,7 +199,12 @@ _SPECS: dict[str, _Spec] = {
     "flow_consumers": ("consumers",),
 }
 
-_DISPLAY_OPTIONS = frozenset({"flow_consumers"})
+# Display-only: cockpit reads these from entry options; no coordinator reload.
+_DISPLAY_OPTIONS = frozenset({
+    "flow_consumers",
+    "wallbox_soc_sensor",
+    "wallbox_plug_entity",
+})
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
 _CONSUMER_ENTITY = re.compile(r"wallbox|evcc|easee|go-?e", re.IGNORECASE)
 

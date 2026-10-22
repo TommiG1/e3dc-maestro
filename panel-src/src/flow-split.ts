@@ -13,10 +13,12 @@ import {
   type ConsumerPlace,
   type StoredConsumerPlace,
 } from "./consumer-layout";
-import { CONSUMER_ICON_PATH, type FlowConsumer } from "./consumers";
+import { consumerPowerCaption, type FlowConsumer } from "./consumers";
 import {
   ACTIVE_W,
   compactBuses,
+  consumerGlyph,
+  consumerIdle,
   electrons,
   flowSegment,
   iconFit,
@@ -378,28 +380,27 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
   };
 
   const listRow = (
-    key: string,
+    c: FlowConsumer,
     pos: Pt,
     color: string,
-    label: string,
-    value: number,
-    icon: string,
     onDrag?: (e: PointerEvent) => void,
   ) => {
-    const idle = Math.abs(value) < ACTIVE_W;
+    const idle = consumerIdle(c, ACTIVE_W);
+    const power = consumerPowerCaption(i.fmt, c.watts, c.soc);
+    const aria = [c.name, power, c.plugged === true ? i.i18n.t("plantPlug") : undefined].filter(Boolean).join(", ");
     const open = () => {
-      if (!i.arrange) i.onSelect?.(key);
+      if (!i.arrange) i.onSelect?.(c.id);
     };
-    return svg`<g class="flow-node ${onDrag && i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${label}
+    return svg`<g class="flow-node ${onDrag && i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria}
       @click=${open}
       @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
       @pointerdown=${onDrag}
     >
       <circle cx=${pos.x} cy=${pos.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf(color)} stroke-width=${outline ? "2.2" : "2"}/>
       <g transform=${iconTransform(pos.x, pos.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${strokeOf(color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
-        <path d=${icon} vector-effect="non-scaling-stroke"/>
+        ${consumerGlyph(c, color, outline)}
       </g>
-      <text font-size="14" font-weight="700" fill="var(--text)" x=${pos.x - 26} y=${pos.y + 5} text-anchor="end">${i.fmt.w(value)}  ${clip(label, 24)}</text>
+      <text font-size="14" font-weight="700" fill="var(--text)" x=${pos.x - 26} y=${pos.y + 5} text-anchor="end">${power}  ${clip(c.name, 24)}</text>
     </g>`;
   };
 
@@ -411,26 +412,28 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
     dragOrigin: Pt,
     bounds: ReturnType<typeof placeBoundsForFan>,
   ) => {
-    const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
+    const idle = consumerIdle(c, ACTIVE_W);
+    const power = consumerPowerCaption(i.fmt, c.watts, c.soc);
+    const aria = [c.name, power, c.plugged === true ? i.i18n.t("plantPlug") : undefined].filter(Boolean).join(", ");
     const open = () => {
       if (!i.arrange) i.onSelect?.(c.id);
     };
     const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, dragOrigin, i.arrange, i.onPlaceConsumer, bounds);
     if (compact) {
-      return listRow(c.id, p, color, c.name, c.watts, CONSUMER_ICON_PATH[c.icon], i.arrange ? drag : undefined);
+      return listRow(c, p, color, i.arrange ? drag : undefined);
     }
     return svg`<path class="flow-line" d=${flowSegment(from, p, from === loadPos ? loadR : houseR, leafR)} stroke=${color}/>
       ${electrons(from, p, from === loadPos ? loadR : houseR, leafR, c.watts, color, motion)}
-      <g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name}
+      <g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria}
         @click=${open}
         @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
         @pointerdown=${drag}
       >
         <circle cx=${p.x} cy=${p.y} r=${CONSUMER_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${strokeOf(color)} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
         <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${strokeOf(color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
-          <path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/>
+          ${consumerGlyph(c, color, outline)}
         </g>
-        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${i.fmt.w(c.watts)}</text>
+        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${power}</text>
         <text class="node-lbl-sm" x=${p.x + 34} y=${p.y + 14} text-anchor="start">${clip(c.name, 18)}</text>
       </g>`;
   };

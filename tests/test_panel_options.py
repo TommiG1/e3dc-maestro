@@ -9,6 +9,8 @@ from custom_components.e3dc_maestro.const import (
     CONF_ADDITIONAL_GENERATION_SENSOR,
     CONF_BATTERY_CAPACITY_KWH,
     CONF_SOC_SENSOR,
+    CONF_WALLBOX_PLUG_ENTITY,
+    CONF_WALLBOX_SOC_SENSOR,
     DOMAIN,
 )
 from custom_components.e3dc_maestro.panel_options import (
@@ -73,6 +75,27 @@ def test_sensor_change_reloads():
     assert reloaded and reloaded[0][CONF_SOC_SENSOR] == "sensor.soc"
     assert entry.options[CONF_SOC_SENSOR] == "sensor.soc"
     assert result["reloaded"] is True
+
+
+def test_wallbox_soc_and_plug_are_display_only():
+    params = SimpleNamespace()
+    hass, entry, written, reloaded = _hass(
+        {},
+        {"sensor.car_soc", "binary_sensor.ladekabel"},
+        params,
+    )
+    result = apply_panel_options(
+        hass,
+        {
+            CONF_WALLBOX_SOC_SENSOR: "sensor.car_soc",
+            CONF_WALLBOX_PLUG_ENTITY: "binary_sensor.ladekabel",
+        },
+    )
+    assert result["reloaded"] is False
+    assert reloaded == []
+    assert written == []
+    assert entry.options[CONF_WALLBOX_SOC_SENSOR] == "sensor.car_soc"
+    assert entry.options[CONF_WALLBOX_PLUG_ENTITY] == "binary_sensor.ladekabel"
 
 
 def test_additional_producers_accept_list_and_legacy_string():

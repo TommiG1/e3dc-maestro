@@ -396,6 +396,7 @@ kannst du den Powersensor einbinden, um saubere Statistiken zu erhalten.
 | **Wallbox-Regelung** | aus | Aktiviert die Strombegrenzungs-Logik |
 | **Wallbox-Typ** | e3dc | `e3dc` = integrierte E3DC-Wallbox (RSCP-Service); `generic` = openWB / EVCC / beliebige Wallbox via custom-Services |
 | **Wallbox-Powersensor** | – | W-Sensor des Wallbox-Verbrauchs (z. B. `sensor.<gerät>_wallbox_consumption` oder `sensor.openwb_chargepoint_4_ladeleistung`). Auto-erkannt. |
+| **Fahrzeug-SoC-Sensor** | – | %-Sensor für den Fahrzeug-Ladestand (Anzeige im Energiefluss neben der Wallbox-Leistung). Bei E3DC-Wallbox oft auto-erkannt (`wallbox-soc`); sonst EVCC/openWB/Fahrzeug-Integration wählen. |
 | **Hausverbrauchszähler enthält die Wallbox bereits** | Auto | `false` bei E3DC-Wallbox (eigener Powermeter); `true` bei openWB am EVU-Hauptzähler. Ist die Option aktiv, wird der Wallbox-Wert vom Hausverbrauch abgezogen. |
 | **Minimalstrom (A)** | 6 | IEC-61851-Minimum |
 | **Maximalstrom (A)** | 16 | Maximal erlaubter Ladestrom |

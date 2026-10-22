@@ -125,6 +125,8 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     hint: "secWallboxWireHint",
     fields: [
       entity("wallbox_power_sensor", sensor),
+      entity("wallbox_soc_sensor", sensor),
+      entity("wallbox_plug_entity", ["binary_sensor", "sensor"]),
       { key: "wallbox_included_in_house", kind: "bool" },
       { key: "wallbox_phases", kind: "select", choices: ["1", "3"] },
       { key: "wallbox_service_on", kind: "action" },
@@ -208,6 +210,8 @@ const labels: Record<string, { de: string; en: string }> = {
   tomorrow_pv_sensor: { de: "Prognose morgen", en: "Tomorrow's forecast" },
   pv_forecast_sensor_day2: { de: "Prognose übermorgen", en: "Day-after forecast" },
   wallbox_power_sensor: { de: "Wallbox-Leistung", en: "Wallbox power" },
+  wallbox_soc_sensor: { de: "Fahrzeug-SoC", en: "Vehicle SoC" },
+  wallbox_plug_entity: { de: "Stecker angesteckt", en: "Plug connected" },
   wallbox_included_in_house: { de: "In der Hauslast enthalten", en: "Included in house load" },
   wallbox_phases: { de: "Phasen", en: "Phases" },
   wallbox_service_on: { de: "Wallbox einschalten", en: "Turn wallbox on" },

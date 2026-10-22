@@ -181,6 +181,8 @@ CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = "wallbox_discharge_guard_threshold_w"
 # nicht durch Ladespitzen verfälscht werden.
 CONF_WALLBOX_PROVIDER = "wallbox_provider"                  # none|e3dc|openwb|custom (UI-Hinweis)
 CONF_WALLBOX_POWER_SENSOR = "wallbox_power_sensor"          # entity_id, W
+CONF_WALLBOX_SOC_SENSOR = "wallbox_soc_sensor"              # entity_id, % Fahrzeug-SoC (Anzeige im Flow)
+CONF_WALLBOX_PLUG_ENTITY = "wallbox_plug_entity"            # binary_sensor: Stecker angesteckt (Flow-Icon)
 CONF_WALLBOX_INCLUDED_IN_HOUSE = "wallbox_included_in_house"  # bool: True = Hausverbrauchszähler enthält Wallbox bereits
 
 # Config entry keys – heat pump (Step 7)

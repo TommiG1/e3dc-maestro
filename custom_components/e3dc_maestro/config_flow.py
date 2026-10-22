@@ -109,6 +109,8 @@ from .const import (
     CONF_WALLBOX_PROVIDER,
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
+    CONF_WALLBOX_SOC_SENSOR,
+    CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_TYPE,
     CONF_WATCHDOG_TIMEOUT,
     CONF_WINTER_MINIMUM_HOUR,
@@ -506,6 +508,53 @@ def _autodetect_openwb_wallbox(hass) -> str | None:
     return candidates[0][1]
 
 
+def _openwb_plug_for_power(hass, power_eid: str | None) -> str | None:
+    """``sensor.openwb_chargepoint_N_ladeleistung`` → ``binary_sensor.…_ladekabel``."""
+    if not isinstance(power_eid, str):
+        return None
+    if not power_eid.startswith("sensor.openwb_chargepoint") or not power_eid.endswith(
+        "_ladeleistung"
+    ):
+        return None
+    plug_id = f"binary_sensor.{power_eid[len('sensor.'):-len('_ladeleistung')]}_ladekabel"
+    registry = er.async_get(hass)
+    ent = registry.entities.get(plug_id)
+    if ent is None or getattr(ent, "disabled_by", None) is not None:
+        return None
+    return plug_id
+
+
+def _autodetect_wallbox_translation(
+    hass, translation_key: str, domains: tuple[str, ...], entry_ids: set[str] | None = None
+) -> str | None:
+    """First e3dc_rscp entity matching a wallbox translation_key."""
+    registry = er.async_get(hass)
+    for ent in registry.entities.values():
+        if getattr(ent, "disabled_by", None) is not None:
+            continue
+        if getattr(ent, "translation_key", None) != translation_key:
+            continue
+        domain = ent.entity_id.split(".", 1)[0]
+        if domain not in domains:
+            continue
+        if entry_ids is not None and ent.config_entry_id not in entry_ids:
+            continue
+        return ent.entity_id
+    return None
+
+
+def _autodetect_wallbox_soc(hass, entry_ids: set[str] | None = None) -> str | None:
+    """First e3dc_rscp vehicle SoC sensor (translation_key wallbox-soc)."""
+    return _autodetect_wallbox_translation(hass, "wallbox-soc", ("sensor",), entry_ids)
+
+
+def _autodetect_wallbox_plug(hass, entry_ids: set[str] | None = None) -> str | None:
+    """First e3dc_rscp plug binary_sensor (translation_key wallbox-plug)."""
+    return _autodetect_wallbox_translation(
+        hass, "wallbox-plug", ("binary_sensor", "sensor"), entry_ids
+    )
+
+
 def _autodetect_rscp_sources(hass) -> dict[str, Any]:
     """Resolve default sensor entity_ids from the e3dc_rscp integration via suffix matching.
 
@@ -551,6 +600,18 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
             # openWB misst typischerweise nur den Chargepoint; der Hauszähler steht
             # am EVU und enthält die Wallbox-Leistung bereits → True als Default.
             out[CONF_WALLBOX_INCLUDED_IN_HOUSE] = True
+    if rscp_entries:
+        rscp_ids = {e.entry_id for e in rscp_entries}
+        wallbox_soc = _autodetect_wallbox_soc(hass, rscp_ids)
+        if wallbox_soc:
+            out[CONF_WALLBOX_SOC_SENSOR] = wallbox_soc
+        wallbox_plug = _autodetect_wallbox_plug(hass, rscp_ids)
+        if wallbox_plug:
+            out[CONF_WALLBOX_PLUG_ENTITY] = wallbox_plug
+    if CONF_WALLBOX_PLUG_ENTITY not in out:
+        openwb_plug = _openwb_plug_for_power(hass, out.get(CONF_WALLBOX_POWER_SENSOR))
+        if openwb_plug:
+            out[CONF_WALLBOX_PLUG_ENTITY] = openwb_plug
     # EVCC-Integration (marq24/ha-evcc) ist orthogonal zur Wallbox-Quelle
     # → unabhängig erkennen und mit auffüllen.
     out.update(_autodetect_evcc(hass))
@@ -816,6 +877,10 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
         # über Maestro macht, kann hier seinen openWB/E3DC-Powermeter einbinden,
         # damit Optimizer/Forecast/EWMA nicht durch Ladespitzen verfälscht werden.
         vol.Optional(CONF_WALLBOX_POWER_SENSOR): _entity_selector(),
+        vol.Optional(CONF_WALLBOX_SOC_SENSOR): _entity_selector(),
+        vol.Optional(CONF_WALLBOX_PLUG_ENTITY): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+        ),
         vol.Optional(
             CONF_WALLBOX_INCLUDED_IN_HOUSE,
             default=DEFAULT_WALLBOX_INCLUDED_IN_HOUSE,

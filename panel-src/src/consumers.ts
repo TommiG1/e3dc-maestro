@@ -1,4 +1,5 @@
 import { num, type Hass, type HassEntity } from "./entities";
+import type { Fmt } from "./format";
 
 /** Wallbox is measured beside house_power (see total_load_power). */
 export const WALLBOX_ENTITY = "sensor.e3dc_maestro_wallbox_leistung";
@@ -24,6 +25,10 @@ export const CONSUMER_ICON_PATH: Record<ConsumerIcon, string> = {
   meter: "M6 16a6 6 0 1 1 12 0M12 16l3.5-3.5",
 };
 
+/** Wallbox body vs. plug pins + cable — plug stroke turns green when connected. */
+export const WALLBOX_BODY_PATH = "M6 8h12v7H6z";
+export const WALLBOX_PLUG_PATH = "M9 8V5M15 8V5M12 15v4M9 19h6";
+
 export interface Consumer {
   id: string;
   entityId: string;
@@ -40,6 +45,12 @@ export interface FlowConsumer {
   mode: ConsumerMode;
   missing: boolean;
   icon: ConsumerIcon;
+  /** Vehicle SoC % when this row is the configured wallbox. */
+  soc?: number;
+  /** Plug connected — paints the wallbox pins green. */
+  plugged?: boolean;
+  /** Stay in the live flow even when power is below the idle threshold. */
+  keepVisible?: boolean;
 }
 
 export interface SeparateDayItem {
@@ -65,6 +76,71 @@ export function wattsOf(entity: HassEntity | undefined): number | undefined {
   if (value === undefined) return undefined;
   const unit = entity?.attributes.unit_of_measurement;
   return unit === "kW" ? value * 1000 : value;
+}
+
+/** Finite SoC in 0–100. Tiny denormals under 0.05 % become 0 (RSCP quirk). */
+export function socOf(entity: HassEntity | undefined): number | undefined {
+  const value = num(entity);
+  if (value === undefined) return undefined;
+  const unit = entity?.attributes.unit_of_measurement;
+  const raw = unit === "%" && Math.abs(value) < 0.05 ? 0 : value;
+  if (!Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.min(100, raw));
+}
+
+/** Power caption with optional vehicle SoC, e.g. `4,2 kW · 72 %`. */
+export function consumerPowerCaption(fmt: Pick<Fmt, "w">, watts: number, soc?: number): string {
+  const power = fmt.w(watts);
+  if (soc === undefined || !Number.isFinite(soc)) return power;
+  return `${power} · ${Math.round(soc)} %`;
+}
+
+/** on/off (and a few sensor spellings) → boolean; unknown/unavailable → undefined. */
+export function pluggedOf(entity: HassEntity | undefined): boolean | undefined {
+  if (!entity) return undefined;
+  const state = entity.state;
+  if (state === "unavailable" || state === "unknown") return undefined;
+  if (state === "on" || state === "true" || state === "1" || state === "connected") return true;
+  if (state === "off" || state === "false" || state === "0" || state === "disconnected") return false;
+  return undefined;
+}
+
+export interface WallboxMeta {
+  soc?: number;
+  plugged?: boolean;
+}
+
+/** Mark wallbox rows: always visible, optional SoC + plug state. */
+export function withWallboxMeta(
+  items: FlowConsumer[],
+  meta: WallboxMeta,
+  wallboxIds: readonly string[],
+): FlowConsumer[] {
+  if (!wallboxIds.length) return items;
+  const ids = new Set(wallboxIds);
+  return items.map((item) => {
+    if (!ids.has(item.entityId)) return item;
+    return {
+      ...item,
+      keepVisible: true,
+      ...(meta.soc !== undefined ? { soc: meta.soc } : {}),
+      ...(meta.plugged !== undefined ? { plugged: meta.plugged } : {}),
+    };
+  });
+}
+
+/** @deprecated use withWallboxMeta */
+export function withWallboxSoc(
+  items: FlowConsumer[],
+  soc: number | undefined,
+  wallboxIds: readonly string[],
+): FlowConsumer[] {
+  return withWallboxMeta(items, { soc }, wallboxIds);
+}
+
+/** Maestro mirror + optional configured power sensor. */
+export function wallboxEntityIds(powerSensor?: string): string[] {
+  return powerSensor ? [WALLBOX_ENTITY, powerSensor] : [WALLBOX_ENTITY];
 }
 
 export function isPowerSensor(entity: HassEntity | undefined): entity is HassEntity {
@@ -157,7 +233,7 @@ export function visibleInFlow(
 ): FlowConsumer[] {
   if (opts?.arrange) return items;
   const min = opts?.minW ?? FLOW_CONSUMER_MIN_W;
-  return items.filter((c) => Math.abs(c.watts) > min);
+  return items.filter((c) => c.keepVisible || Math.abs(c.watts) > min);
 }
 
 /** Separate loads with a day counter. Only the Maestro wallbox sensor has one today. */

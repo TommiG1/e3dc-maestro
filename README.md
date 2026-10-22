@@ -375,6 +375,7 @@ switch — you can wire up the sensor purely for clean statistics.
 | **Wallbox control** | off | Enables current-limiting logic |
 | **Wallbox type** | e3dc | `e3dc` = native E3DC wallbox (RSCP service); `generic` = openWB / EVCC / any wallbox via custom services |
 | **Wallbox power sensor** | – | Wattage sensor of the wallbox (e.g. `sensor.<device>_wallbox_consumption` or `sensor.openwb_chargepoint_4_ladeleistung`). Auto-detected. |
+| **Vehicle SoC sensor** | – | Percent sensor for the car’s state of charge (shown next to wallbox power in the energy flow). Often auto-detected for E3DC (`wallbox-soc`); otherwise pick EVCC/openWB/vehicle integration. |
 | **House meter already includes wallbox** | auto | `false` for native E3DC wallbox (separate power meter); `true` for openWB on the grid meter. If on, Maestro subtracts the wallbox value from the house power. |
 | **Min. current (A)** | 6 | IEC-61851 minimum |
 | **Max. current (A)** | 16 | Maximum allowed charge current |

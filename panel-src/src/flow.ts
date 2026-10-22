@@ -11,7 +11,13 @@ import {
   type ConsumerPlace,
   type StoredConsumerPlace,
 } from "./consumer-layout";
-import { CONSUMER_ICON_PATH, type FlowConsumer } from "./consumers";
+import {
+  CONSUMER_ICON_PATH,
+  WALLBOX_BODY_PATH,
+  WALLBOX_PLUG_PATH,
+  consumerPowerCaption,
+  type FlowConsumer,
+} from "./consumers";
 import maestroLogo from "./maestro-logo.png";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
@@ -255,9 +261,32 @@ const OUTLINE: Record<string, string> = {
   "var(--grid-out)": "#047857",
   "var(--bat)": "#0e7490",
   "var(--accent)": "#075985",
+  "var(--ok)": "#047857",
+  "var(--muted)": "#64748b",
 };
 
 const tone = (color: string, outline: boolean) => (outline ? (OUTLINE[color] ?? "#152033") : color);
+
+/** Consumer glyph; wallbox pins/cable go green when the plug sensor is on. */
+export function consumerGlyph(
+  c: Pick<FlowConsumer, "icon" | "plugged">,
+  color: string,
+  outline = false,
+): TemplateResult {
+  if (c.icon !== "wallbox" || c.plugged === undefined) {
+    return svg`<path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/>`;
+  }
+  const plug = tone(c.plugged ? "var(--ok)" : "var(--muted)", outline);
+  return svg`<path d=${WALLBOX_BODY_PATH} vector-effect="non-scaling-stroke"/>
+    <path d=${WALLBOX_PLUG_PATH} stroke=${plug} vector-effect="non-scaling-stroke"/>`;
+}
+
+/** Dim idle loads, but keep a plugged wallbox readable. */
+export function consumerIdle(c: Pick<FlowConsumer, "missing" | "watts" | "plugged">, activeW: number): boolean {
+  if (c.missing) return true;
+  if (c.plugged === true) return false;
+  return Math.abs(c.watts) < activeW;
+}
 
 export function electrons(
   from: { x: number; y: number },
@@ -462,23 +491,31 @@ export function energyFlow(i: FlowInput): TemplateResult {
       : svg``}
     ${places.map(({ c, p }) => {
       const color = strokeOf(c.mode === "included" ? "var(--house)" : "var(--accent)");
-      const idle = c.missing || Math.abs(c.watts) < ACTIVE_W;
+      const idle = consumerIdle(c, ACTIVE_W);
       const open = () => {
         if (!i.arrange) i.onSelect?.(c.id);
       };
       const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
       const drag = (e: PointerEvent) => onConsumerDrag(e, c.id, fan.origin, i.arrange, i.onPlaceConsumer, dragBounds);
+      const power = consumerPowerCaption(i.fmt, c.watts, c.soc);
+      const aria = [
+        c.name,
+        power,
+        c.plugged === true ? t("plantPlug") : undefined,
+      ]
+        .filter(Boolean)
+        .join(", ");
       if (i.compact) {
-        return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
+        return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>
-          <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
-          <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${i.fmt.w(c.watts)}  ${clip(c.name, 24)}</text>
+          <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">${consumerGlyph(c, c.mode === "included" ? "var(--house)" : "var(--accent)", outline)}</g>
+          <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${power}  ${clip(c.name, 24)}</text>
         </g>`;
       }
-      return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${c.name} @click=${open} @keydown=${key} @pointerdown=${drag}>
+      return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>
         <circle cx=${p.x} cy=${p.y} r="26" fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.4" : "2"} filter=${idle || outline ? "none" : "url(#glow)"}/>
-        <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round"><path d=${CONSUMER_ICON_PATH[c.icon]} vector-effect="non-scaling-stroke"/></g>
-        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${i.fmt.w(c.watts)}</text>
+        <g transform=${iconTransform(p.x, p.y, iconFit(CONSUMER_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">${consumerGlyph(c, c.mode === "included" ? "var(--house)" : "var(--accent)", outline)}</g>
+        <text class="node-val-sm" x=${p.x + 34} y=${p.y - 2} text-anchor="start">${power}</text>
         <text class="node-lbl-sm" x=${p.x + 34} y=${p.y + 14} text-anchor="start">${clip(c.name, 18)}</text>
       </g>`;
     })}
