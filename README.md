@@ -84,6 +84,8 @@ dashboard are optional and not shown here.
 
 ### Live
 
+Energy flow and battery, with **Today**, **Daily balance** and **Balance pulse** expanded.
+
 ![Cockpit live](Screenshots/cockpit_01_live.png)
 
 ### Forecast
@@ -103,6 +105,8 @@ dashboard are optional and not shown here.
 ![Cockpit plant](Screenshots/cockpit_07_anlage.png)
 
 ### Settings
+
+Overview with the control ladder and tiles (setup, plant, protection, grid & tariff, PV charging, …).
 
 ![Cockpit settings](Screenshots/cockpit_08_einstellungen.png)
 

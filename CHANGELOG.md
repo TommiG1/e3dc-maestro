@@ -11,6 +11,30 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1] – Cockpit, Netzladung und Preisplan (2026-10-22)
+
+Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release-notes/v0.5.1.md](docs/release-notes/v0.5.1.md).
+
+### Neu
+- **Netzladung-Strategie** (Aus / Zeitfenster / Preisschwelle / automatisch / Experte) statt verstreuter Schalter; prognosebasierter Bedarf bis zum nächsten günstigen Fenster (#26).
+- **Hilfe** im Panel zu Seiten, Einstellungen und Regelungsleiter; FAQ.
+- Live: **Heute / Tagesbilanz / Bilanzpuls**, Kalender, Blob-/Haus-Fluss, Zusatz-PV, Akku-Pack und Overlay, Auto-Strategie.
+- Preisplan: Restwert am Horizontende, optional **Energyforecast**, **48‑h-Prognose**, erwarteter Plan-SoC.
+- Wallbox **SoC/Stecker** im Fluss; Sidebar **E3DC Maestro Cockpit** (umbenennbar, #20).
+- Tibber-Kurve ohne Template; Energie-Dashboard-Assistent; Einstellungs-Suche; Phasen-Gantt.
+
+### Geändert
+- Max. Netzladung/Tag nur noch Sicherheitsgrenze (0 = keine); Ladeschwelle neuer Installationen 0 %; Hauptschalter/Pause überstehen Neustart.
+- PV-Laden und Netz/Tarif nach Aufgabe sortiert; Prozent-Regler mit Skala.
+
+### Korrekturen
+- Panel-Cache an Dateiinhalt; Debug-Log unter 255 Zeichen; Euro-Tageszähler; Autonomie schneller; Notstromreserve ≠ ungerechtfertigte Netzladung; Wallbox-Idle; diverse Prognose-/Fluss-Fixes.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+
+---
+
 ## [0.5.1-beta.10] – Wallbox-Anzeige und Sidebar-Titel (2026-10-22)
 
 > **Beta.** Enthält 0.5.1-beta.9. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.10.md](docs/release-notes/v0.5.1-beta.10.md).

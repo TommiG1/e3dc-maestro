@@ -84,6 +84,8 @@ Dashboard sind optional und hier nicht abgebildet.
 
 ### Live
 
+Energiefluss und Akku, darunter aufgeklappt **Heute**, **Tagesbilanz** und **Bilanzpuls**.
+
 ![Cockpit Live](Screenshots/cockpit_01_live.png)
 
 ### Prognose
@@ -103,6 +105,8 @@ Dashboard sind optional und hier nicht abgebildet.
 ![Cockpit Anlage](Screenshots/cockpit_07_anlage.png)
 
 ### Einstellungen
+
+Übersicht mit Regelungsleiter und Kacheln (Einrichtung, Anlage, Schutz, Netz und Tarif, PV-Laden, …).
 
 ![Cockpit Einstellungen](Screenshots/cockpit_08_einstellungen.png)
 
