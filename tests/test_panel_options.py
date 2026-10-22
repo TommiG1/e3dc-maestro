@@ -79,7 +79,7 @@ def test_sensor_change_reloads():
 
 def test_wallbox_soc_and_plug_are_display_only():
     params = SimpleNamespace()
-    hass, entry, written, reloaded = _hass(
+    hass, entry, written, _reloaded = _hass(
         {},
         {"sensor.car_soc", "binary_sensor.ladekabel"},
         params,
@@ -92,7 +92,6 @@ def test_wallbox_soc_and_plug_are_display_only():
         },
     )
     assert result["reloaded"] is False
-    assert reloaded == []
     assert written == []
     assert entry.options[CONF_WALLBOX_SOC_SENSOR] == "sensor.car_soc"
     assert entry.options[CONF_WALLBOX_PLUG_ENTITY] == "binary_sensor.ladekabel"

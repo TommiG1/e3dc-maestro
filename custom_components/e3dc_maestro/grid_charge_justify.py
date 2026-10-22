@@ -32,7 +32,7 @@ _PHASE_REASON: dict[str, str] = {
 
 def unjustified_grid_charge_kwh(*, total_kwh: float, justified_kwh: float) -> float:
     """Grid→battery energy that lacks a justified phase attribution."""
-    return max(0.0, float(total_kwh) - float(justified_kwh))
+    return round(max(0.0, float(total_kwh) - float(justified_kwh)), 3)
 
 
 def is_unjustified_grid_charge(
