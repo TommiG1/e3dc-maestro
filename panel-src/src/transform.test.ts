@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   batteryForecast,
   bucket,
+  bucketSlots,
   chartSlots,
+  displaySlots,
   buildTimeline,
   etaToTargetMs,
   formatEtaLabel,
@@ -302,6 +304,38 @@ describe("price plan", () => {
     expect(chartSlots(slots).map((s) => s.start)).toEqual(slots.slice(1).map((s) => s.start));
     expect(chartSlots(slots.slice(2))).toHaveLength(3);
     expect(chartSlots(slots.slice(3))).toHaveLength(2);
+  });
+
+  it("buckets quarter-hour forecast slots to hourly bars", () => {
+    const slots = Array.from({ length: 8 }, (_, i) => {
+      const h = 12 + Math.floor(i / 4);
+      const m = (i % 4) * 15;
+      return slot(0.2 + i * 0.01, {
+        start: `2026-10-22T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+02:00`,
+        start_local: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+        grid_charge_kwh: i === 1 ? 0.5 : 0,
+        hold: false,
+        soc_pct: 40 + i,
+        forecast: true,
+      });
+    });
+    const hourly = displaySlots(slots);
+    expect(hourly).toHaveLength(2);
+    expect(hourly[0].price).toBeCloseTo(0.215, 5);
+    expect(hourly[0].grid_charge_kwh).toBeCloseTo(0.5);
+    expect(hourly[0].soc_pct).toBe(43);
+    expect(hourly[0].forecast).toBe(true);
+    expect(hourly[1].start_local).toBe("13:00");
+  });
+
+  it("keeps hourly plans without rebucketting", () => {
+    const slots = [
+      slot(0.3, { start: "2026-10-22T12:00:00+02:00", start_local: "12:00" }),
+      slot(0.4, { start: "2026-10-22T13:00:00+02:00", start_local: "13:00" }),
+      slot(0.5, { start: "2026-10-22T14:00:00+02:00", start_local: "14:00" }),
+    ];
+    expect(displaySlots(slots)).toHaveLength(3);
+    expect(bucketSlots(slots, 3600_000)).toHaveLength(3);
   });
 
   it("drops malformed slots and finds price extremes", () => {

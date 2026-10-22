@@ -9,6 +9,16 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Energyforecast.de** verlängert optional die Preiskurve hinter dem letzten Tibber-/aWATTar-Preis. API-Token und Marktzone unter Einstellungen → Netz und Tarif (eigener Block mit Kurzhinweis) oder Config-Flow. Hilfe: Netz und Tarif, Preisplan, FAQ „Energyforecast anbinden“. Echte Preise bleiben Quelle der Wahrheit; Prognose-Slots erscheinen im Preisplan blasser und sind im Tooltip gekennzeichnet. Netzentgelte im Energyforecast-Profil wie bei Tibber setzen (`total_ct_kwh`). Ohne Token bleibt der Restwert am Horizontende unverändert.
+- **SoC-Prognose über 48 h** statt 24 h (Zoom 6/12/24/48). Mit Solcast-Morgenprofil für Tag 2; sonst wiederholt das Tagesprofil. Die Sensoren Min-/Max-SoC, Netzbezug und Autarkie bleiben bei den nächsten 24 h; Entity-IDs ändern sich nicht.
+
+### Geändert
+- **Preisplan-SoC in den Charts zeigt den erwarteten Verlauf.** Der Planer rechnet weiter vorsichtig (Verbrauch × Sicherheitsfaktor, PV × 0,8, historische PV zusätzlich × 0,7). Die Kurve spielt seine Entscheidungen aber mit erwartetem Verbrauch und erwarteter PV nach. Vorher blieb sie an Tagen mit knappem PV-Überschuss flach am Boden. Neues Slot-Feld `soc_expected_pct`; `soc_pct` bleibt die vorsichtige Rechnung.
+
+### Korrekturen
+- Prognose: Notladung unter der Ladeschwelle schießt nicht mehr um mehrere Prozent übers Ziel, und der Akku entlädt in der Vorschau nicht unter die Ladeschwelle. Vorher entstand ohne bekannte Preise für den Folgetag ein Sägezahn.
+
 ---
 
 ## [0.5.1-beta.8] – Preisplan: Restwert am Horizontende (2026-10-22)

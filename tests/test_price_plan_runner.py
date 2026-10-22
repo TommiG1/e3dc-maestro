@@ -103,6 +103,21 @@ class TestPlanFromCurve:
         tomorrow = [0.20] * 6 + [0.30] * 12 + [0.60] * 4 + [0.30] * 2
         return _horizon(today, tomorrow)
 
+    def test_expected_soc_ignores_safety_factors(self):
+        # PV-Überschuss, den die Sicherheitsfaktoren in ein Defizit verwandeln:
+        # die Planung entlädt, die angezeigte Erwartung lädt.
+        snap = _run(
+            _horizon(),
+            soc_pct=20.0,
+            cons_profile_w=[1000.0] * 24,
+            pv_today_w=[1150.0] * 24,
+            pv_tomorrow_w=[1150.0] * 24,
+            safety_factor=1.2,
+        )
+        rows = snap.rows
+        assert rows[-1]["soc_pct"] < 20.0
+        assert rows[-1]["soc_expected_pct"] > 20.0
+
     def test_rows_cover_horizon_and_summary(self):
         snap = _run(self._curve(), cons_profile_w=[800.0] * 24)
         assert snap.status == STATUS_OK
@@ -121,6 +136,18 @@ class TestPlanFromCurve:
         snap = _run(self._curve(), pv_hist_w=hist)
         tomorrow_row = next(r for r in snap.rows if r["start"].startswith("2026-10-10T12"))
         assert abs(tomorrow_row["pv_kwh"] - 0.7) < 1e-6
+
+    def test_forecast_flag_after_provider_until(self):
+        snap = _run(
+            _horizon(),
+            provider_until=dt.datetime(2026, 10, 9, 22, 0, tzinfo=TZ),
+        )
+        assert snap.status == STATUS_OK
+        assert snap.provider_until == dt.datetime(2026, 10, 9, 22, 0, tzinfo=TZ)
+        before = [r for r in snap.rows if r["start"].startswith("2026-10-09T2") and r["start_local"] < "22:00"]
+        after = [r for r in snap.rows if r["forecast"]]
+        assert before and all(not r["forecast"] for r in before)
+        assert after and all(r["start_local"] >= "22:00" or r["start"].startswith("2026-10-10") for r in after)
 
     def test_terminal_need_until_morning_pv(self):
         # Kurve endet heute 24:00; PV (hist × 0,7 × 0,8) deckt ab 08:00 lokal (06 UTC)

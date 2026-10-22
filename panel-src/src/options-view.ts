@@ -269,9 +269,18 @@ function fieldRow(c: OptionCtx, field: OptionField, plain = false): TemplateResu
   }
   if (field.kind === "text") {
     const value = typeof c.options[field.key] === "string" ? (c.options[field.key] as string) : "";
+    const maxLength = field.maxLength ?? 64;
     return row(
       label,
-      html`<input aria-label=${label} .value=${value} maxlength="64" ?disabled=${locked} @change=${(e: Event) => c.onChange(field.key, (e.target as HTMLInputElement).value)} />`,
+      html`<input
+        aria-label=${label}
+        type=${field.secret ? "password" : "text"}
+        autocomplete=${field.secret ? "off" : "on"}
+        .value=${value}
+        maxlength=${maxLength}
+        ?disabled=${locked}
+        @change=${(e: Event) => c.onChange(field.key, (e.target as HTMLInputElement).value)}
+      />`,
       locked,
       false,
       plain,

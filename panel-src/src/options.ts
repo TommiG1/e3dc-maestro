@@ -13,6 +13,10 @@ export interface OptionField {
   choices?: readonly string[];
   domains?: readonly string[];
   required?: boolean;
+  /** Max length for text fields (default 64). */
+  maxLength?: number;
+  /** Password-style input for tokens. */
+  secret?: boolean;
 }
 
 export interface Slot {
@@ -27,8 +31,8 @@ export type OptionArea = "plant" | "safety" | "tariff" | "pv" | "loads" | "sizin
 
 export interface OptionBlock {
   area: OptionArea;
-  title: "secSources" | "secAdaptive" | "secPriceSensor" | "secForecastSensors" | "secWallboxWire" | "secEvccWire" | "secHpWire" | "secSizingInputs";
-  hint: "secSourcesHint" | "secAdaptiveHint" | "secPriceSensorHint" | "secForecastSensorsHint" | "secWallboxWireHint" | "secEvccWireHint" | "secHpWireHint" | "secSizingInputsHint";
+  title: "secSources" | "secAdaptive" | "secPriceSensor" | "secEnergyforecast" | "secForecastSensors" | "secWallboxWire" | "secEvccWire" | "secHpWire" | "secSizingInputs";
+  hint: "secSourcesHint" | "secAdaptiveHint" | "secPriceSensorHint" | "secEnergyforecastHint" | "secForecastSensorsHint" | "secWallboxWireHint" | "secEvccWireHint" | "secHpWireHint" | "secSizingInputsHint";
   fields: readonly OptionField[];
   /** One card for every field, instead of a card per field. */
   bundle?: boolean;
@@ -87,6 +91,21 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     title: "secPriceSensor",
     hint: "secPriceSensorHint",
     fields: [entity("price_sensor", sensor)],
+    bundle: true,
+  },
+  {
+    area: "tariff",
+    title: "secEnergyforecast",
+    hint: "secEnergyforecastHint",
+    fields: [
+      { key: "energyforecast_token", kind: "text", maxLength: 128, secret: true },
+      {
+        key: "energyforecast_market_zone",
+        kind: "select",
+        choices: ["DE-LU", "AT", "FR", "NL", "BE", "PL", "DK1", "DK2", "CH", "CZ", "HU", "SI"],
+      },
+    ],
+    bundle: true,
   },
   {
     area: "pv",
@@ -182,6 +201,8 @@ const labels: Record<string, { de: string; en: string }> = {
   adaptive_reserve_safety_factor: { de: "Sicherheitsfaktor", en: "Safety factor" },
   adaptive_reserve_max_soc: { de: "Obergrenze der Reserve", en: "Reserve ceiling" },
   price_sensor: { de: "Preis-Sensor", en: "Price sensor" },
+  energyforecast_token: { de: "Energyforecast API-Token", en: "Energyforecast API token" },
+  energyforecast_market_zone: { de: "Energyforecast Marktzone", en: "Energyforecast market zone" },
   pv_forecast_sensor: { de: "Restprognose heute", en: "Remaining forecast today" },
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
   tomorrow_pv_sensor: { de: "Prognose morgen", en: "Tomorrow's forecast" },

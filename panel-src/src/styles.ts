@@ -2524,6 +2524,9 @@ export const styles = css`
   .slot.release {
     background: linear-gradient(180deg, rgba(34, 211, 238, 0.45), rgba(34, 211, 238, 0.15));
   }
+  .slot.forecast {
+    opacity: 0.55;
+  }
   .strip-axis {
     display: flex;
     justify-content: space-between;

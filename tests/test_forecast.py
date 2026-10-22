@@ -58,7 +58,7 @@ class TestSimulateNext24h:
         anch = _simulate(soc=50.0, cons=300.0, pv=0.0, battery_anchor_w=1500.0)
         assert anch.trajectory_battery_w[0] > base.trajectory_battery_w[0] + 1000
         assert abs(anch.trajectory_battery_w[0] - 1500) < 200
-        assert abs(anch.trajectory_battery_w[-1] - base.trajectory_battery_w[-1]) < 50
+        assert abs(anch.trajectory_battery_w[40] - base.trajectory_battery_w[40]) < 50
         # Anker fließt konsistent in die SoC-Integration ein.
         assert anch.trajectory_soc[3] > base.trajectory_soc[3]
 
@@ -488,6 +488,48 @@ class TestDay2Boundary:
         )
         assert len(result.trajectory_soc) == 192
         assert result.max_soc >= result.trajectory_soc[95]
+
+
+class TestChargeThresholdFloor:
+    def _params(self):
+        return MaestroParams(**{**_PARAMS.__dict__, "charge_threshold": 10.0,
+                                "seasonal_reserve_enabled": False})
+
+    def test_discharge_stops_at_charge_threshold(self):
+        r = simulate_next_24h(
+            soc=30.0, consumption_h=[1000.0] * 24, pv_h=[0.0] * 24,
+            params=self._params(), now=_NOW, battery_capacity_kwh=15.0, horizon_h=48,
+        )
+        assert len(r.trajectory_soc) == 192
+        assert r.min_soc == pytest.approx(10.0, abs=0.1)
+        assert "emergency" not in r.trajectory_phases
+
+    def test_emergency_charge_does_not_overshoot(self):
+        r = simulate_next_24h(
+            soc=5.0, consumption_h=[300.0] * 24, pv_h=[0.0] * 24,
+            params=self._params(), now=_NOW, battery_capacity_kwh=15.0,
+        )
+        assert r.trajectory_soc[0] == pytest.approx(10.0, abs=0.1)
+        assert max(r.trajectory_soc) <= 10.1
+
+
+class TestSensorFirstDay:
+    def test_48h_forecast_summarised_over_first_24h(self):
+        from custom_components.e3dc_maestro.sensor import _first_day
+
+        params = MaestroParams(**{**_PARAMS.__dict__, "charge_threshold": 10.0,
+                                  "seasonal_reserve_enabled": False})
+        kw = dict(consumption_h=[250.0] * 24, pv_h=[0.0] * 24, params=params,
+                  now=_NOW, battery_capacity_kwh=15.0)
+        day = simulate_next_24h(soc=60.0, **kw)
+        two = simulate_next_24h(soc=60.0, horizon_h=48, **kw)
+        assert two.min_soc < day.min_soc
+        assert _first_day(two, "min_soc") == pytest.approx(day.min_soc, abs=0.1)
+        assert _first_day(two, "max_soc") == pytest.approx(day.max_soc, abs=0.1)
+        assert _first_day(two, "grid_draw_kwh") == pytest.approx(day.grid_draw_kwh, abs=0.05)
+        assert _first_day(two, "self_sufficiency_pct") == pytest.approx(
+            day.self_sufficiency * 100, abs=0.5
+        )
 
 
 class TestBatteryThroughput:

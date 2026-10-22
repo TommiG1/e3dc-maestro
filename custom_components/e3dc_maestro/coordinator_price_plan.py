@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_PRICE_SENSOR
+from .const import (
+    CONF_ENERGYFORECAST_MARKET_ZONE,
+    CONF_ENERGYFORECAST_TOKEN,
+    CONF_PRICE_SENSOR,
+    DEFAULT_ENERGYFORECAST_MARKET_ZONE,
+)
+from .energyforecast import API_URL, extend_horizon, slots_from_payload
 from .grid_charge_strategy import plan_tuning
 from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
 from .price_curve import PriceHorizon, read_price_horizon
@@ -24,6 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 PRICE_PLAN_MAX_AGE_S = 20 * 60
 # Tibber-Preise ändern sich stündlich; morgen steht frühestens am Nachmittag fest.
 TIBBER_PRICE_REFRESH_S = 15 * 60
+# Energyforecast aktualisiert 2× täglich; sechs Stunden reichen laut Anbieter.
+ENERGYFORECAST_REFRESH_S = 6 * 60 * 60
 
 
 class CoordinatorPricePlanMixin:
@@ -33,10 +41,17 @@ class CoordinatorPricePlanMixin:
     _tibber_curve_at: datetime | None = None
     _tibber_curve_attrs: dict | None = None
     _tibber_curve_warned: bool = False
+    _energyforecast_at: datetime | None = None
+    _energyforecast_slots: list | None = None
+    _energyforecast_token: str | None = None
+    _energyforecast_zone: str | None = None
+    _energyforecast_warned: bool = False
+    _price_provider_until: datetime | None = None
 
     def _reset_price_plan(self) -> None:
         self.price_plan = None
         self._price_plan_fingerprint = None
+        self._price_provider_until = None
 
     def _price_plan_action(self, now: datetime) -> PricePlanAction | None:
         """Aktuelle Handlungsempfehlung – nur wenn der Plan steuern soll und frisch ist.
@@ -61,7 +76,12 @@ class CoordinatorPricePlanMixin:
         )
 
     async def _async_price_horizon(self, now: datetime) -> PriceHorizon | None:
-        """Preiskurve ab jetzt aus dem Preis-Sensor (oder der Tibber-Aktion)."""
+        """Preiskurve ab jetzt aus dem Preis-Sensor (oder der Tibber-Aktion).
+
+        Optional verlängert Energyforecast.de die Kurve hinter dem letzten
+        echten Tarifpreis. ``_price_provider_until`` markiert die Nahtstelle.
+        """
+        self._price_provider_until = None
         sensor_id = self.entry.options.get(CONF_PRICE_SENSOR)
         if not sensor_id:
             return None
@@ -74,6 +94,12 @@ class CoordinatorPricePlanMixin:
             tibber_attrs = await self._async_tibber_curve_attrs(sensor_id, st, now)
             if tibber_attrs:
                 horizon = read_price_horizon(tibber_attrs, now)
+        if horizon is None:
+            return None
+        forecast = await self._async_energyforecast_slots(now)
+        if forecast:
+            horizon, provider_until = extend_horizon(horizon, forecast, now)
+            self._price_provider_until = provider_until
         return horizon
 
     async def _async_update_price_plan(
@@ -136,6 +162,7 @@ class CoordinatorPricePlanMixin:
                     pv_today_w=pv_today,
                     pv_tomorrow_w=pv_tomorrow,
                     pv_hist_w=pv_hist,
+                    provider_until=self._price_provider_until,
                 )
 
             snapshot = await self.hass.async_add_executor_job(_run)
@@ -181,6 +208,74 @@ class CoordinatorPricePlanMixin:
         self._tibber_curve_at = now
         self._tibber_curve_attrs = fetched
         return fetched
+
+    async def _async_energyforecast_slots(self, now: datetime) -> list | None:
+        """Cached Energyforecast-Slots, nur wenn ein Token gesetzt ist."""
+        token = self.entry.options.get(CONF_ENERGYFORECAST_TOKEN)
+        if not isinstance(token, str) or not token.strip():
+            self._energyforecast_slots = None
+            self._energyforecast_token = None
+            return None
+        token = token.strip()
+        zone = self.entry.options.get(CONF_ENERGYFORECAST_MARKET_ZONE)
+        if not isinstance(zone, str) or not zone.strip():
+            zone = DEFAULT_ENERGYFORECAST_MARKET_ZONE
+        zone = zone.strip()
+
+        if (
+            self._energyforecast_slots is not None
+            and self._energyforecast_token == token
+            and self._energyforecast_zone == zone
+            and self._energyforecast_at is not None
+            and (now - self._energyforecast_at).total_seconds() < ENERGYFORECAST_REFRESH_S
+        ):
+            return self._energyforecast_slots
+
+        from aiohttp import ClientTimeout
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(
+                API_URL,
+                params={"token": token, "market_zone": zone},
+                timeout=ClientTimeout(total=30),
+            ) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"HTTP {resp.status}")
+                payload = await resp.json(content_type=None)
+        except Exception as err:  # noqa: BLE001
+            if not self._energyforecast_warned:
+                _LOGGER.warning("Energyforecast-Abruf fehlgeschlagen: %s", err)
+                self._energyforecast_warned = True
+            if (
+                self._energyforecast_slots is not None
+                and self._energyforecast_token == token
+                and self._energyforecast_zone == zone
+            ):
+                self._energyforecast_at = now
+                return self._energyforecast_slots
+            return None
+
+        slots = slots_from_payload(payload)
+        if not slots:
+            if not self._energyforecast_warned:
+                _LOGGER.warning("Energyforecast-Antwort ohne nutzbare Preis-Slots")
+                self._energyforecast_warned = True
+            return None
+
+        self._energyforecast_warned = False
+        self._energyforecast_token = token
+        self._energyforecast_zone = zone
+        self._energyforecast_at = now
+        self._energyforecast_slots = slots
+        _LOGGER.debug(
+            "Energyforecast: %s Slots bis %s (%s)",
+            len(slots),
+            slots[-1].end.isoformat(),
+            zone,
+        )
+        return slots
 
     async def _async_fetch_tibber_curve(self, nickname: str | None, now: datetime) -> dict | None:
         if not self.hass.services.has_service("tibber", "get_prices"):

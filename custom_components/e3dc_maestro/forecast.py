@@ -1,4 +1,4 @@
-"""F1: 24-hour battery SoC forecast simulator.
+"""F1: 24/48-hour battery SoC forecast simulator.
 
 Uses the pure ``decide()`` function from the rule engine to step through
 the next 24 hours and estimate the battery state of charge trajectory,
@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Callable
 
 from .const import (
+    PHASE_EMERGENCY,
     PHASE_GRID_CHARGE,
     PHASE_MORNING_DISCHARGE,
     PHASE_RESERVE_PROTECTION,
@@ -368,8 +369,17 @@ def simulate_next_24h(
         ):
             headroom_wh = (decision.target_soc - current_soc) / 100.0 * capacity_wh
             bat_net_w = min(bat_net_w, max(0.0, headroom_wh / _STEP_H))
+        # Emergency charging only runs while SoC is below the charge threshold.
+        if phase == PHASE_EMERGENCY and bat_net_w > 0:
+            headroom_wh = (params.charge_threshold - current_soc) / 100.0 * capacity_wh
+            bat_net_w = min(bat_net_w, max(0.0, headroom_wh / _STEP_H))
         if fixed_reserve is not None and bat_net_w < 0 and current_soc >= fixed_reserve:
             floor_wh = (current_soc - fixed_reserve) / 100.0 * capacity_wh
+            bat_net_w = max(bat_net_w, -floor_wh / _STEP_H)
+        # Below the charge threshold emergency charging kicks in within one live
+        # cycle, so the battery effectively stops discharging there.
+        if bat_net_w < 0 and current_soc >= params.charge_threshold:
+            floor_wh = (current_soc - params.charge_threshold) / 100.0 * capacity_wh
             bat_net_w = max(bat_net_w, -floor_wh / _STEP_H)
 
         # ── SoC update (15-min step = 0.25 h) ──────────────────────────────

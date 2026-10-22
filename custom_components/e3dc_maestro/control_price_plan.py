@@ -44,6 +44,8 @@ class PricePlan:
     release: list[bool] = field(default_factory=list)           # Entladung erlaubt
     hold_discharge: list[bool] = field(default_factory=list)    # Entladung gezielt gesperrt
     soc_pct: list[float] = field(default_factory=list)          # SoC am Slot-Ende mit Plan
+    # Dieselben Entscheidungen mit erwartetem Verbrauch/PV (ohne Sicherheitsfaktoren).
+    expected_soc_pct: list[float] = field(default_factory=list)
     baseline_import_kwh: list[float] = field(default_factory=list)  # Netzbezug ohne Plan
     planned_import_kwh: list[float] = field(default_factory=list)   # Netzbezug mit Plan
     total_grid_charge_kwh: float = 0.0
@@ -319,6 +321,26 @@ def plan_price_charging(
     saving_eur = base_cost - (result["cost"] - model.terminal_value(plan_end))
     soc_trace = [s / capacity_kwh * 100.0 for s in result["stored_end"]]
 
+    expected = _Model(
+        slot_hours=slot_hours,
+        prices=prices,
+        net_kwh=[max(0.0, pv) - max(0.0, c) for pv, c in zip(pv_kwh, consumption_kwh)],
+        floor_kwh=floor_kwh,
+        ceil_kwh=ceil_kwh,
+        top_kwh=top_kwh,
+        max_charge_kw=max_charge_kw,
+        max_discharge_kw=max_discharge_kw,
+        efficiency=efficiency,
+        feed_in_price=feed_in_price,
+        wear_eur_per_kwh=wear_eur_per_kwh,
+        step_kwh=step_kwh,
+    )
+    s = stored0
+    expected_trace: list[float] = []
+    for i in range(n):
+        s = expected.flow(s, grid[i], result["release"][i], i)[0]
+        expected_trace.append(s / capacity_kwh * 100.0)
+
     charge_now = grid[0] > _EPS
     target: float | None = None
     if charge_now:
@@ -353,6 +375,7 @@ def plan_price_charging(
         release=result["release"],
         hold_discharge=result["hold"],
         soc_pct=soc_trace,
+        expected_soc_pct=expected_trace,
         baseline_import_kwh=base_imports,
         planned_import_kwh=result["imports"],
         total_grid_charge_kwh=total,

@@ -147,6 +147,7 @@ class CoordinatorForecastMixin:
                 )
                 + profile_source_tag("day2", pv_day2)
                 + (
+                    48,  # display forecast horizon (invalidate cache on change)
                     _forecast_power_bucket(self._forecast_house_ewma),
                     _forecast_power_bucket(self._forecast_battery_ewma),
                 )
@@ -202,6 +203,7 @@ class CoordinatorForecastMixin:
                         regelung_aktiv=_active,
                         pv_h_day2=_pv2,
                         consumption_h_day2=_cons if _pv2 is not None else None,
+                        horizon_h=48,
                         day2_from_calendar=_pv2 is not None,
                         consumption_anchor_w=_anchor,
                         battery_anchor_w=_batt,

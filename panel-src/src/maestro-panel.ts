@@ -170,7 +170,7 @@ class MaestroPanel extends LitElement {
   private _mobile = window.matchMedia(MOBILE).matches;
   private _mq = window.matchMedia(MOBILE);
   /** Phones start at 12 h so the forecast plot is readable; user can still pick 24. */
-  private _range = window.matchMedia(MOBILE).matches ? 12 : 24;
+  private _range = window.matchMedia(MOBILE).matches ? 12 : 48;
   private _showIst = true;
   private _forecastHidden = loadForecastHidden();
   private _settingsQuery = "";

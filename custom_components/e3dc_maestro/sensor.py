@@ -78,6 +78,31 @@ def _cost_simulation_attrs(coord: E3DCMaestroCoordinator, key: str) -> dict[str,
     }
 
 
+_DAY_STEPS = 96  # quarter-hours
+
+
+def _first_day(fc: Any, key: str) -> float | None:
+    """24-h summary of a forecast that may run 48 h (sensor names promise 24 h)."""
+    if fc is None:
+        return None
+    if len(fc.trajectory_soc) <= _DAY_STEPS:
+        if key == "self_sufficiency_pct":
+            return round(fc.self_sufficiency * 100, 1) if fc.self_sufficiency is not None else None
+        return getattr(fc, key)
+    soc = fc.trajectory_soc[:_DAY_STEPS]
+    if key == "min_soc":
+        return round(min(soc), 1)
+    if key == "max_soc":
+        return round(max(soc), 1)
+    draw_kwh = sum(-g for g in fc.trajectory_grid_w[:_DAY_STEPS] if g < 0) * 0.25 / 1000.0
+    if key == "grid_draw_kwh":
+        return round(draw_kwh, 3)
+    house_kwh = sum(fc.trajectory_house_w[:_DAY_STEPS]) * 0.25 / 1000.0
+    if house_kwh <= 0:
+        return None
+    return round(max(0.0, min(1.0, 1.0 - draw_kwh / house_kwh)) * 100, 1)
+
+
 @dataclass(frozen=True, kw_only=True)
 class MaestroSensorDescription(SensorEntityDescription):
     value_fn: Any = None
@@ -559,14 +584,14 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         name="Forecast: Min-SoC nächste 24h",
         icon="mdi:battery-arrow-down-outline",
         native_unit_of_measurement="%",
-        value_fn=lambda coord: coord.forecast.min_soc if coord.forecast else None,
+        value_fn=lambda coord: _first_day(coord.forecast, "min_soc"),
     ),
     MaestroSensorDescription(
         key="forecast_max_soc",
         name="Forecast: Max-SoC nächste 24h",
         icon="mdi:battery-arrow-up-outline",
         native_unit_of_measurement="%",
-        value_fn=lambda coord: coord.forecast.max_soc if coord.forecast else None,
+        value_fn=lambda coord: _first_day(coord.forecast, "max_soc"),
     ),
     MaestroSensorDescription(
         key="forecast_grid_draw_kwh",
@@ -574,18 +599,14 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         icon="mdi:transmission-tower-import",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        value_fn=lambda coord: coord.forecast.grid_draw_kwh if coord.forecast else None,
+        value_fn=lambda coord: _first_day(coord.forecast, "grid_draw_kwh"),
     ),
     MaestroSensorDescription(
         key="forecast_self_sufficiency",
         name="Forecast: Autarkie nächste 24h",
         icon="mdi:solar-panel",
         native_unit_of_measurement="%",
-        value_fn=lambda coord: (
-            round(coord.forecast.self_sufficiency * 100, 1)
-            if coord.forecast and coord.forecast.self_sufficiency is not None
-            else None
-        ),
+        value_fn=lambda coord: _first_day(coord.forecast, "self_sufficiency_pct"),
     ),
     # F2: Trajectory sensor (attributes used by ApexCharts)
     MaestroSensorDescription(
@@ -594,7 +615,7 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         icon="mdi:chart-line",
         native_unit_of_measurement="%",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coord: coord.forecast.min_soc if coord.forecast else None,
+        value_fn=lambda coord: _first_day(coord.forecast, "min_soc"),
     ),
     # F2: Diagnose-Sensor für Forecast-Datenqualität
     MaestroSensorDescription(
@@ -1025,6 +1046,9 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "message": snap.message,
                 "computed_at": snap.computed_at.isoformat() if snap.computed_at else None,
                 "known_until": snap.known_until.isoformat() if snap.known_until else None,
+                "provider_until": (
+                    snap.provider_until.isoformat() if snap.provider_until else None
+                ),
                 "charge_now": plan.charge_now if plan else None,
                 "hold_now": plan.hold_now if plan else None,
                 "target_soc_pct": plan.target_soc_pct if plan else None,
@@ -1093,28 +1117,28 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
             if fc is None:
                 return {"trajectory_points": [], "trajectory_soc": [], "trajectory_phases": []}
             # Pre-compute [timestamp_ms, soc] pairs so data_generator needs no JS date math.
-            # v0.3.0: trajectory has 96 quarter-hour entries (15-min spacing) instead of 24.
-            # Backward-compat: handle both lengths gracefully via len-based step calc.
+            # Quarter-hour steps: 96 = 24 h, 192 = 48 h. Legacy hourly = len 24.
             now_utc = dt_util.utcnow()
             n = len(fc.trajectory_soc)
-            # 24h total span → step_ms = 24h / n
-            step_ms = (24 * 3_600_000) // max(n, 1)
-            # Round base to the same grid the simulator used (15-min for n=96, 1h otherwise)
             if n >= 96:
+                step_ms = 15 * 60 * 1000
                 base = now_utc.replace(second=0, microsecond=0)
                 base = base.replace(minute=(base.minute // 15) * 15)
+                horizon_h = n // 4
             else:
+                step_ms = 60 * 60 * 1000
                 base = now_utc.replace(minute=0, second=0, microsecond=0)
+                horizon_h = n if n else 24
             base_ms = int(base.timestamp() * 1000)
             points = [
                 [base_ms + (i + 1) * step_ms, v]
                 for i, v in enumerate(fc.trajectory_soc)
             ]
+
             def _series(vals: list[float]) -> list[list[float]]:
-                # Only first 24 h (keeps attribute size small for 48 h horizons)
                 return [
                     [base_ms + (i + 1) * step_ms, v]
-                    for i, v in enumerate(vals[:96])
+                    for i, v in enumerate(vals)
                 ]
 
             return {
@@ -1125,6 +1149,7 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "battery_points": _series(fc.trajectory_battery_w),
                 "trajectory_soc": fc.trajectory_soc,
                 "trajectory_phases": fc.trajectory_phases,
+                "horizon_h": horizon_h,
                 "min_soc": fc.min_soc,
                 "max_soc": fc.max_soc,
                 "grid_draw_kwh": fc.grid_draw_kwh,

@@ -103,6 +103,11 @@ _SPECS: dict[str, _Spec] = {
     "battery_total_cycles": _n(500, 20000),
     "dynamic_tariff_enabled": ("bool",),
     "price_sensor": _entity(),
+    "energyforecast_token": ("text", 128),
+    "energyforecast_market_zone": (
+        "select",
+        ("DE-LU", "AT", "FR", "NL", "BE", "PL", "DK1", "DK2", "CH", "CZ", "HU", "SI"),
+    ),
     "cheap_threshold": _n(0, 1),
     "max_grid_charge_kwh": _n(0, 150),
     "low_slot_grid_charge_enabled": ("bool",),
@@ -305,7 +310,8 @@ def _check(spec: _Spec, value: Any, known) -> str | None:
     if kind == "time":
         return None if isinstance(value, str) and _TIME.match(value) else "time"
     if kind == "text":
-        return None if isinstance(value, str) and len(value) <= 64 else "text"
+        max_len = int(spec[1]) if len(spec) > 1 else 64
+        return None if isinstance(value, str) and len(value) <= max_len else "text"
     if kind == "action":
         return None if isinstance(value, dict) else "action"
     if kind == "slots":

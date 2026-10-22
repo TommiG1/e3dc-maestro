@@ -36,6 +36,7 @@ class PricePlanSnapshot:
     plan: PricePlan | None = None
     rows: list[dict[str, Any]] = field(default_factory=list)
     known_until: _dt.datetime | None = None
+    provider_until: _dt.datetime | None = None
     floor_pct: float | None = None
     ceiling_pct: float | None = None
     efficiency: float | None = None
@@ -115,6 +116,7 @@ def compute_price_plan(
     pv_today_w: Sequence[float] | None,
     pv_tomorrow_w: Sequence[float] | None,
     pv_hist_w: Sequence[float] | None,
+    provider_until: _dt.datetime | None = None,
 ) -> PricePlanSnapshot:
     def _snap(status: str, message: str, **extra: Any) -> PricePlanSnapshot:
         return PricePlanSnapshot(
@@ -213,10 +215,14 @@ def compute_price_plan(
             "hold": bool(plan.hold_discharge[i]),
             "release": bool(plan.release[i]),
             "soc_pct": round(plan.soc_pct[i], 1),
+            "soc_expected_pct": round(plan.expected_soc_pct[i], 1),
             "import_kwh": round(plan.planned_import_kwh[i], 3),
             "baseline_import_kwh": round(plan.baseline_import_kwh[i], 3),
             "consumption_kwh": round(consumption[i], 3),
             "pv_kwh": round(pv[i], 3),
+            "forecast": bool(
+                provider_until is not None and start >= provider_until
+            ),
         })
     return _snap(
         STATUS_OK,
@@ -224,6 +230,7 @@ def compute_price_plan(
         plan=plan,
         rows=rows,
         known_until=horizon.known_until,
+        provider_until=provider_until,
         terminal_need_kwh=terminal_need,
         terminal_price=end_price,
     )

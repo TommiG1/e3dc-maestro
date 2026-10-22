@@ -112,6 +112,9 @@ CONF_HT_SUN = "ht_sun"                                # bool
 # Config entry keys – dynamic tariffs (Step 5)
 CONF_DYNAMIC_TARIFF_ENABLED = "dynamic_tariff_enabled"
 CONF_PRICE_SENSOR = "price_sensor"                    # entity_id
+# Optional: Energyforecast.de verlängert die Preiskurve hinter Tibber/aWATTar.
+CONF_ENERGYFORECAST_TOKEN = "energyforecast_token"    # API-Token, leer = aus
+CONF_ENERGYFORECAST_MARKET_ZONE = "energyforecast_market_zone"  # z. B. DE-LU
 CONF_CHEAP_THRESHOLD = "cheap_threshold"              # €/kWh
 CONF_MAX_GRID_CHARGE_KWH = "max_grid_charge_kwh"      # Sicherheitsgrenze pro Tag, 0 = keine
 # Aktive Netzladung im low-Slot (NT-Fenster). Unabhängig vom tariff_mode:
@@ -396,6 +399,7 @@ DEFAULT_HT_OFF = 21
 DEFAULT_HT_MIN = 50
 DEFAULT_HT_SOCKEL = 10
 DEFAULT_CHEAP_THRESHOLD = 0.10
+DEFAULT_ENERGYFORECAST_MARKET_ZONE = "DE-LU"
 DEFAULT_MAX_GRID_CHARGE_KWH = 0.0
 DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED = False
 DEFAULT_LOW_SLOT_TARGET_SOC = 60.0

@@ -337,8 +337,15 @@ export interface Slot {
   hold: boolean;
   release: boolean;
   soc_pct: number;
+  /** Same plan decisions with expected load/PV (no safety factors) — what the chart shows. */
+  soc_expected_pct?: number;
   consumption_kwh: number;
+  /** True when the price comes from Energyforecast behind the tariff provider. */
+  forecast?: boolean;
 }
+
+export const slotSoc = (s: Pick<Slot, "soc_pct" | "soc_expected_pct">): number =>
+  Number.isFinite(s.soc_expected_pct) ? (s.soc_expected_pct as number) : s.soc_pct;
 
 export type SlotAction = "charge" | "hold" | "release";
 
@@ -356,8 +363,8 @@ export function parseSlots(v: unknown): Slot[] {
 /** Planned end-of-slot SoC from the price plan (forecast strategy preview, also in shadow mode). */
 export function planSocPoints(slots: Slot[]): Point[] {
   return slots
-    .filter((s) => Number.isFinite(s.soc_pct))
-    .map((s) => [Date.parse(s.start), s.soc_pct]);
+    .filter((s) => Number.isFinite(slotSoc(s)))
+    .map((s) => [Date.parse(s.start), slotSoc(s)]);
 }
 
 /**
@@ -371,6 +378,65 @@ export function chartSlots(slots: Slot[]): Slot[] {
   const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b);
   const median = gaps[Math.floor(gaps.length / 2)];
   return slots.filter((_, i) => i === slots.length - 1 || t[i + 1] - t[i] >= median * 0.5);
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+/** Keep native bars only when the plan is already ~hourly and not too long. */
+const FINE_GAP_MS = 45 * 60 * 1000;
+const MAX_NATIVE_BARS = 48;
+
+/**
+ * Chart/strip view of the plan: drop stubs, then bucket to ~1 h when Energyforecast
+ * (or similar) delivers quarter-hour slots — otherwise the bars become a comb.
+ */
+export function displaySlots(slots: Slot[]): Slot[] {
+  const cleaned = chartSlots(slots);
+  if (cleaned.length < 3) return cleaned;
+  const t = cleaned.map((s) => Date.parse(s.start));
+  const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b);
+  const median = gaps[Math.floor(gaps.length / 2)] ?? HOUR_MS;
+  if (median >= FINE_GAP_MS && cleaned.length <= MAX_NATIVE_BARS) return cleaned;
+  return bucketSlots(cleaned, HOUR_MS);
+}
+
+/** Merge consecutive slots into fixed time buckets for readable columns. */
+export function bucketSlots(slots: Slot[], bucketMs: number): Slot[] {
+  if (!slots.length || bucketMs <= 0) return slots;
+  const out: Slot[] = [];
+  let group: Slot[] = [];
+  let groupKey = Number.NaN;
+
+  const flush = () => {
+    if (!group.length) return;
+    const first = group[0];
+    const last = group[group.length - 1];
+    const price = group.reduce((sum, s) => sum + s.price, 0) / group.length;
+    const charge = group.reduce((sum, s) => sum + s.grid_charge_kwh, 0);
+    const consumption = group.reduce((sum, s) => sum + (s.consumption_kwh || 0), 0);
+    const hold = charge <= 0 && group.some((s) => s.hold);
+    out.push({
+      start: first.start,
+      start_local: first.start_local,
+      price,
+      grid_charge_kwh: charge,
+      hold,
+      release: !hold && charge <= 0,
+      soc_pct: last.soc_pct,
+      soc_expected_pct: last.soc_expected_pct,
+      consumption_kwh: consumption,
+      forecast: group.every((s) => !!s.forecast),
+    });
+    group = [];
+  };
+
+  for (const slot of slots) {
+    const key = Math.floor(Date.parse(slot.start) / bucketMs);
+    if (group.length && key !== groupKey) flush();
+    if (!group.length) groupKey = key;
+    group.push(slot);
+  }
+  flush();
+  return out;
 }
 
 export function priceExtremes(slots: Slot[]): { min: Slot; max: Slot } | undefined {

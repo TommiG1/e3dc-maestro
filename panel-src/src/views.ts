@@ -56,6 +56,7 @@ import {
   AUTONOMY_BAR_HOURS,
   batteryForecast,
   parseAutonomyHours,
+  displaySlots,
   parseSlots,
   parseTrajectory,
   phaseColor,
@@ -945,7 +946,7 @@ export function forecastView(c: Ctx): TemplateResult {
           <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
           ${c.mobile ? nothing : html`<button class="toggle" @click=${() => downloadCsv("maestro-prognose.csv", forecastCsv(traj))}>${t("exportCsv")}</button>`}
           <div class="seg" role="group">
-            ${[6, 12, 24].map(
+            ${[6, 12, 24, 48].map(
               (h) => html`<button class=${c.range === h ? "active" : ""} aria-pressed=${c.range === h} @click=${() => c.onRange(h)}>${t("hoursShort", { h })}</button>`,
             )}
           </div>
@@ -972,7 +973,10 @@ export function forecastView(c: Ctx): TemplateResult {
         )}
       ></maestro-chart>
       ${slots.length
-        ? html`<div class="strategy-strip" aria-label=${t("strategyStrip")}>
+        ? (() => {
+            const strip = displaySlots(slots);
+            const step = Math.max(1, Math.ceil(strip.length / (c.mobile ? 6 : 12)));
+            return html`<div class="strategy-strip" aria-label=${t("strategyStrip")}>
             <div class="strip-head">
               <h4>${t("strategyStrip")}</h4>
               <div class="legend">
@@ -982,7 +986,7 @@ export function forecastView(c: Ctx): TemplateResult {
               </div>
             </div>
             <div class="strip">
-              ${slots.map(
+              ${strip.map(
                 (s) =>
                   html`<div
                     class="slot ${slotAction(s)}"
@@ -990,10 +994,11 @@ export function forecastView(c: Ctx): TemplateResult {
                   ></div>`,
               )}
             </div>
-            <div class="strip-axis">${slots
-              .filter((_, i) => i % (c.mobile ? 6 : 4) === 0)
+            <div class="strip-axis">${strip
+              .filter((_, i) => i % step === 0)
               .map((s) => html`<span>${s.start_local}</span>`)}</div>
-          </div>`
+          </div>`;
+          })()
         : nothing}
       ${c.mobile
         ? nothing
@@ -1030,6 +1035,8 @@ function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | type
   const spread = n(a.min_spread);
   const wear = n(a.wear_eur_per_kwh);
   const safety = n(a.safety_factor);
+  const providerUntil = typeof a.provider_until === "string" ? c.fmt.dayTime(a.provider_until) : undefined;
+  const knownUntil = typeof a.known_until === "string" ? c.fmt.dayTime(a.known_until) : undefined;
   if (
     floor === undefined &&
     ceiling === undefined &&
@@ -1046,6 +1053,8 @@ function planDiagRows(c: Ctx, a: Record<string, unknown>): TemplateResult | type
     ${spread !== undefined ? planRow(t("planMinSpread"), `${fmt.n(spread * 100, 1)} ct/kWh`) : nothing}
     ${wear !== undefined ? planRow(t("planWear"), `${fmt.n(wear, 3)} €/kWh`) : nothing}
     ${safety !== undefined ? planRow(t("planSafety"), fmt.n(safety, 2)) : nothing}
+    ${providerUntil ? planRow(t("planProviderUntil"), providerUntil) : nothing}
+    ${providerUntil && knownUntil ? planRow(t("planForecastUntil"), knownUntil) : nothing}
   </div>`;
 }
 
@@ -1068,7 +1077,9 @@ export function planView(c: Ctx): TemplateResult {
       ${diag}
     </div>${controls}`;
   }
+  const bars = displaySlots(slots);
   const ext = priceExtremes(slots);
+  const hasForecast = slots.some((s) => s.forecast);
   const legend: [string, string][] = [
     [COLORS.gridOut, t("legendCharge")],
     [COLORS.pv, t("legendHold")],
@@ -1076,6 +1087,7 @@ export function planView(c: Ctx): TemplateResult {
   ];
   const known = typeof a.known_until === "string" ? c.fmt.dayTime(a.known_until) : "–";
   const slotText = (s: { price: number; start_local: string }) => `${c.fmt.n(s.price * 100)} ct · ${s.start_local}`;
+  const axisStep = Math.max(1, Math.ceil(bars.length / 12));
 
   return html`
     <div class="grid plan-top">
@@ -1086,6 +1098,9 @@ export function planView(c: Ctx): TemplateResult {
             <span class="badge forecast-badge">${a.shadow_mode ? t("planShadow") : t("planActive")}</span>
             <div class="legend">
               ${legend.map(([color, label]) => html`<span><i style="background:${color}"></i>${label}</span>`)}
+              ${hasForecast
+                ? html`<span><i style="background:rgba(34,211,238,0.38)"></i>${t("legendForecast")}</span>`
+                : nothing}
               <span><i style="background:#fff;height:2px;border-radius:0"></i>${t("legendPlanSoc")}</span>
             </div>
           </div>
@@ -1099,12 +1114,14 @@ export function planView(c: Ctx): TemplateResult {
         ${c.mobile
           ? nothing
           : html`<div class="strip">
-                ${slots.map(
+                ${bars.map(
                   (s) =>
-                    html`<div class="slot ${slotAction(s)}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
+                    html`<div class="slot ${slotAction(s)}${s.forecast ? " forecast" : ""}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
                 )}
               </div>
-              <div class="strip-axis">${slots.filter((_, i) => i % 4 === 0).map((s) => html`<span>${s.start_local}</span>`)}</div>`}
+              <div class="strip-axis">${bars
+                .filter((_, i) => i % axisStep === 0)
+                .map((s) => html`<span>${s.start_local}</span>`)}</div>`}
       </div>
       <div class="card plan-kpi">
         <div>

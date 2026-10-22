@@ -31,6 +31,8 @@ from .const import (
     CONF_CHARGE_TARGET,
     CONF_CHARGE_THRESHOLD,
     CONF_CHEAP_THRESHOLD,
+    CONF_ENERGYFORECAST_TOKEN,
+    CONF_ENERGYFORECAST_MARKET_ZONE,
     CONF_DYNAMIC_TARIFF_ENABLED,
     CONF_FEED_IN_LIMIT_PERCENT,
     CONF_FIXED_BUY_PRICE,
@@ -113,6 +115,7 @@ from .const import (
     DEFAULT_CHARGE_TARGET,
     DEFAULT_CHARGE_THRESHOLD,
     DEFAULT_CHEAP_THRESHOLD,
+    DEFAULT_ENERGYFORECAST_MARKET_ZONE,
     DEFAULT_FEED_IN_LIMIT_PERCENT,
     DEFAULT_HP_MAX_PRICE,
     DEFAULT_HP_MIN_PAUSE_MINUTES,
@@ -760,6 +763,30 @@ STEP_TARIFF_SCHEMA = vol.Schema(
         vol.Optional(CONF_BATTERY_TOTAL_CYCLES, default=DEFAULT_BATTERY_TOTAL_CYCLES): _number_selector(500, 20000, 100, "Zyklen"),
         vol.Required(CONF_DYNAMIC_TARIFF_ENABLED, default=False): selector.BooleanSelector(),
         vol.Optional(CONF_PRICE_SENSOR): _entity_selector(),
+        vol.Optional(CONF_ENERGYFORECAST_TOKEN, default=""): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        ),
+        vol.Optional(
+            CONF_ENERGYFORECAST_MARKET_ZONE, default=DEFAULT_ENERGYFORECAST_MARKET_ZONE
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    "DE-LU",
+                    "AT",
+                    "FR",
+                    "NL",
+                    "BE",
+                    "PL",
+                    "DK1",
+                    "DK2",
+                    "CH",
+                    "CZ",
+                    "HU",
+                    "SI",
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
         vol.Optional(CONF_CHEAP_THRESHOLD, default=DEFAULT_CHEAP_THRESHOLD): _number_selector(0.0, 1.0, 0.01, "€/kWh"),
         vol.Optional(CONF_MAX_GRID_CHARGE_KWH, default=DEFAULT_MAX_GRID_CHARGE_KWH): _number_selector(0, 150, 0.5, "kWh"),
         vol.Required(CONF_LOW_SLOT_GRID_CHARGE_ENABLED, default=DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED): selector.BooleanSelector(),

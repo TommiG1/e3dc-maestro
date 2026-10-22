@@ -4,9 +4,10 @@ import type { I18n } from "./i18n";
 import { calendarDay, type BalanceDay, type IstSeries } from "./history";
 import type { ThemeId } from "./theme";
 import {
-  chartSlots,
+  displaySlots,
   phaseBands,
   slotAction,
+  slotSoc,
   splitGrid,
   toKw,
   type Point,
@@ -70,6 +71,18 @@ export const ACTION_COLOR: Record<SlotAction, string> = {
   charge: COLORS.gridOut,
   hold: COLORS.pv,
   release: COLORS.bat,
+};
+
+/** Forecast slots keep the action colour but are drawn more transparent. */
+export const barFill = (s: Pick<Slot, "grid_charge_kwh" | "hold" | "forecast">): string => {
+  const base = ACTION_COLOR[slotAction(s)];
+  if (!s.forecast) return base;
+  const hex = base.replace("#", "");
+  if (hex.length !== 6) return base;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},0.38)`;
 };
 
 const chartBase = (): Obj => ({
@@ -427,7 +440,7 @@ export interface PlanInput {
 }
 
 export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput): Opts {
-  const slots = chartSlots(allSlots);
+  const slots = displaySlots(allSlots);
   const ts = (s: Slot) => Date.parse(s.start);
   const actionLabel = (s: Slot) => {
     const a = slotAction(s);
@@ -454,9 +467,9 @@ export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput):
       {
         name: i18n.t("slotPrice"),
         type: "column",
-        data: slots.map((s) => ({ x: ts(s), y: +(s.price * 100).toFixed(1), fillColor: ACTION_COLOR[slotAction(s)] })),
+        data: slots.map((s) => ({ x: ts(s), y: +(s.price * 100).toFixed(1), fillColor: barFill(s) })),
       },
-      { name: i18n.t("legendPlanSoc"), type: "line", data: slots.map((s) => ({ x: ts(s), y: s.soc_pct })) },
+      { name: i18n.t("legendPlanSoc"), type: "line", data: slots.map((s) => ({ x: ts(s), y: slotSoc(s) })) },
     ],
     colors: [COLORS.bat, COLORS.series],
     stroke: { width: [0, compact ? 2 : 2.5], curve: "stepline" },
@@ -501,9 +514,9 @@ export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput):
         return `<div style="padding:${compact ? "10px 12px" : "12px 14px"};min-width:${compact ? "160px" : "190px"};max-width:min(280px,90vw)">
           <div style="font-weight:700;margin-bottom:8px">${fmt.dayTime(s.start)}</div>
           ${row(i18n.t("slotPrice"), `${fmt.n(s.price * 100)} ct`)}
-          ${row(i18n.t("slotSoc"), `${fmt.n(s.soc_pct)} %`)}
+          ${row(i18n.t("slotSoc"), `${fmt.n(slotSoc(s))} %`)}
           ${row(i18n.t("slotConsumption"), `${fmt.n(s.consumption_kwh, 2)} kWh`)}
-          <div style="margin-top:8px;color:${ACTION_COLOR[slotAction(s)]};font-weight:600">${actionLabel(s)}</div></div>`;
+          <div style="margin-top:8px;color:${ACTION_COLOR[slotAction(s)]};font-weight:600">${actionLabel(s)}${s.forecast ? ` · ${i18n.t("legendForecast")}` : ""}</div></div>`;
       },
     },
     annotations: { xaxis: [nowMarker(i18n.t("now"), compact)] },

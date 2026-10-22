@@ -57,6 +57,7 @@ _HA_STUBS = [
     ("homeassistant.helpers.selector", {}),
     ("homeassistant.helpers.storage", {"Store": object}),
     ("homeassistant.helpers.update_coordinator", {}),
+    ("homeassistant.helpers.aiohttp_client", {"async_get_clientsession": lambda _hass: None}),
     ("homeassistant.components", {}),
     ("homeassistant.components.sensor", {}),
     ("homeassistant.components.binary_sensor", {}),
@@ -154,6 +155,9 @@ _sensor_mod.SensorEntity = type("SensorEntity", (), {"__init__": lambda self, *a
 sys.modules["homeassistant.util"].dt = sys.modules["homeassistant.util.dt"]  # type: ignore[attr-defined]
 sys.modules["homeassistant.helpers"].config_validation = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.helpers.config_validation"
+]
+sys.modules["homeassistant.helpers"].aiohttp_client = sys.modules[  # type: ignore[attr-defined]
+    "homeassistant.helpers.aiohttp_client"
 ]
 sys.modules["homeassistant.components"].websocket_api = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.components.websocket_api"
