@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.1-beta.9] – Energyforecast, 48‑h-Prognose und Plan-SoC (2026-10-22)
+
+> **Beta.** Enthält 0.5.1-beta.8. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.9.md](docs/release-notes/v0.5.1-beta.9.md).
+
 ### Neu
 - **Energyforecast.de** verlängert optional die Preiskurve hinter dem letzten Tibber-/aWATTar-Preis. API-Token und Marktzone unter Einstellungen → Netz und Tarif (eigener Block mit Kurzhinweis) oder Config-Flow. Hilfe: Netz und Tarif, Preisplan, FAQ „Energyforecast anbinden“. Echte Preise bleiben Quelle der Wahrheit; Prognose-Slots erscheinen im Preisplan blasser und sind im Tooltip gekennzeichnet. Netzentgelte im Energyforecast-Profil wie bei Tibber setzen (`total_ct_kwh`). Ohne Token bleibt der Restwert am Horizontende unverändert.
 - **SoC-Prognose über 48 h** statt 24 h (Zoom 6/12/24/48). Mit Solcast-Morgenprofil für Tag 2; sonst wiederholt das Tagesprofil. Die Sensoren Min-/Max-SoC, Netzbezug und Autarkie bleiben bei den nächsten 24 h; Entity-IDs ändern sich nicht.
@@ -18,6 +24,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ### Korrekturen
 - Prognose: Notladung unter der Ladeschwelle schießt nicht mehr um mehrere Prozent übers Ziel, und der Akku entlädt in der Vorschau nicht unter die Ladeschwelle. Vorher entstand ohne bekannte Preise für den Folgetag ein Sägezahn.
+
+### Hinweise
+- Neustart der Integration und hartes Neuladen des Browsers, damit Energyforecast, 48‑h-Prognose und Panel-Hilfe ankommen.
 
 ---
 
