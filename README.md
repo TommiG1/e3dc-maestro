@@ -61,14 +61,14 @@ E3DC Maestro runs entirely **local and without any cloud connection**. It extend
 | **Fast-charge floor** | Charges with full PV surplus until a configurable SoC floor (`fast_floor`) |
 | **Low-yield day (battery priority)** | On weak PV days, fills the battery before spreading / corridor pause; gated by remaining forecast vs. remaining need |
 | **Auto-optimisation** | Grid-search optimiser automatically selects the best daily strategy |
-| **24 h forecast simulation** | Predicted SoC trajectory plus live PV / house / grid / battery chart (last 24 h + next 24 h) |
-| **Dynamic tariffs** | Grid charging at low spot prices (Tibber, aWATTar) |
+| **48 h forecast simulation** | Predicted SoC trajectory plus live PV / house / grid / battery chart (zoom 6/12/24/48 h; KPI sensors stay at 24 h) |
+| **Dynamic tariffs / grid-charging strategy** | One choice: Off, time window, price threshold, Automatic or Expert (Tibber, aWATTar; optional Energyforecast.de) |
 | **Tariff slots** | Fixed time windows with custom charge/discharge rules |
 | **Wallbox control** | Current limiting for third-party wallboxes via EVCC/generic; optional discharge guard so EV load is covered from the battery instead of the grid |
 | **Heat-pump control** | On/off based on PV surplus with minimum run and pause times |
 | **Forced discharge** | Dashboard switch for manual discharge, e.g. before a Tibber low-price window |
-| **Maestro Cockpit** | Sidebar panel for onboarding, settings and operation, without custom cards: live energy flow, 24 h forecast, price plan, decision explanation, plant view and quick controls – [guide](#maestro-cockpit) |
-| **Control cockpit** | Live command centre with hero status, KPI tiles, active-now chips, 24 h phase history and "Why this decision?" |
+| **Maestro Cockpit** | Sidebar panel for onboarding, settings and operation, without custom cards: live energy flow, 48 h forecast, price plan, decision explanation, plant view, help (`?`) and quick controls – [guide](#maestro-cockpit) |
+| **Control cockpit** | Live command centre with hero status, KPI tiles, active-now chips, phase Gantt and "Why this decision?" |
 | **Decision explanation** | `sensor.e3dc_maestro_entscheidungserklarung` with a full plain-text explanation for every phase |
 | **Anti-flapping** | EWMA smoothing of PV/load (τ = 60 s, jump-reset at 2 kW) + feed-in-limit hysteresis + pv-delay cooldown to prevent rapid phase oscillation |
 | **Battery & PV Sizing Advisor (v0.3.7)** | 2D simulation (additional battery × additional PV) on historical hourly data — calculates savings, payback time, self-sufficiency and three recommendations (economic / technical / balanced) |
@@ -306,55 +306,30 @@ Delays the corridor charge start if today's remaining PV forecast is sufficient 
 
 ---
 
-### Step 6: Dynamic tariffs & tariff slots
+### Step 6: Grid-charging strategy, tariffs & price plan
 
-Charges the battery from the grid when the spot electricity price is cheap.
+Under **Settings → Grid and tariff**, a single **grid-charging strategy** decides whether and when the battery may charge from the grid — instead of many parallel switches:
+
+| Strategy | Effect |
+|---|---|
+| **Off** | Never from the grid, PV only |
+| **Time window** | Charges in tariff slots of class low up to the target |
+| **Below price threshold** | Charges once the price is at or under the threshold |
+| **Automatic** | Price plan with fixed values (efficiency 0.90, spread 0.03 €/kWh, safety factor 1.15) |
+| **Expert** | Same maths with your fine-tuning |
 
 | Parameter | Default | Description |
 |---|---|---|
-| **Dynamic tariffs** | off | Enables cheap grid charging |
-| **Price sensor (€/kWh)** | – | e.g. Tibber or aWATTar price sensor |
-| **Cheap threshold (€/kWh)** | 0.10 | Below this price, grid charging is triggered |
-| **Max. grid charge/day (kWh)** | 0 | Safety cap: Maestro stops grid charging after this much in one day. Target and forecast decide the amount. 0 = no cap |
-| **Active grid charge in low slot** | off | In a `low` slot, actively charges from the grid up to the target SoC — **regardless of tariff mode** (phase `grid_charge`). For classic off-peak (NT) windows |
-| **Grid charge target in low slot (% SoC)** | 60 | Target SoC charged from the grid inside a `low` slot. At most the hard SoC limit. Acts as upper bound when forecast-based |
-| **Forecast-based grid charge amount** | off | Instead of a fixed target SoC, charges only what the battery needs from the end of the window until the next cheap window (consumption profile × safety factor − PV forecast, plus reserve). Falls back to the fixed target without consumption profiles |
+| **Price sensor (€/kWh)** | – | e.g. Tibber or aWATTar (curve via `tibber.get_prices` or attributes) |
+| **Cheap threshold (€/kWh)** | 0.10 | Only for the “below threshold” strategy |
+| **Max. grid charge/day (kWh)** | 0 | Safety cap (not the planned daily amount). 0 = no cap |
+| **Charge target / forecast-based** | 60 % / off | Target SoC in the cheap window; forecast-based = only the need until the **next** cheap window |
+| **Hold discharge** | on | Once the target is reached, block discharge while the cheap window lasts |
+| **Energyforecast** | – | Optional API token + market zone (usually `DE-LU`): appends forecast slots after the last real price (free ≈ 2 days, Pro ≈ 6). Set grid fees/VAT in the Energyforecast account |
 
-> **Passive vs. active `low` slot:** Without this option the `low` class is
-> purely passive — it only lifts the PV-surplus ceiling, and only when
-> `tariff_mode=dynamic`. For a classic peak/off-peak contract (fixed tariff),
-> enable **Active grid charge in low slot** so the off-peak window is actually
-> used to recharge.
+Switching to Automatic/Expert starts in **shadow mode**. **Price plan controls the battery** applies charge and hold; without it the plan is visible but does not change the battery.
 
-### Price plan (beta)
-
-Uses the price curve (today + tomorrow), the PV forecast and your consumption
-profile to work out when **grid charging** and **holding discharge** pay off. The
-plan is visible as a sensor (`sensor.e3dc_maestro_preisplan`). The second switch,
-**Price plan controls the battery**, makes Maestro actually execute it – without
-it the plan stays display-only (shadow mode). It is calculated as long as
-**Price plan (shadow mode)** is switched on.
-
-**Setup** (Settings → Devices & services → E3DC Maestro → Configure):
-
-1. **Tariff & costs:** pick the price sensor (attributes `raw_today`/`raw_tomorrow`,
-   e.g. Nordpool, EPEX, aWATTar; the Tibber electricity-price sensor is enough, Maestro fetches the curve itself), feed-in tariff, battery
-   purchase cost and lifetime (cycles), max grid charge/day.
-2. **System parameters:** battery capacity, max charge power, inverter power.
-3. **PV forecast:** enable a forecast sensor (Solcast / Forecast.Solar) – without
-   one the plan falls back conservatively to history.
-4. **Season & charge corridor:** charge threshold and emergency reserve (floor of the plan).
-5. Enable **Calculate price plan** (switch **Price plan (shadow mode)**; “on” means: the plan is calculated but not yet executed) – also available in the dashboard.
-   Review the recommendations for a day or two (tab **Grid & Tariff**).
-6. Enable **Price plan controls the battery**: Maestro then charges from the grid in
-   cheap slots (phase `grid_charge`, reason "Preisplan: …") and blocks discharge when
-   saving energy for pricier slots pays off (phase `grid_hold`). Emergency charge,
-   feed-in limit, EVCC pause and curtailment guard take priority. If the price
-   sensor drops out (plan older than 20 min) Maestro falls back to normal control.
-
-Fine-tuning in the dashboard (tab **Grid & Tariff**): max target SoC (90 %),
-minimum price spread (0.03 €/kWh), efficiency (0.90), consumption safety factor
-(1.15). Full guide: **“Help for the price plan”** button in the dashboard.
+At the horizon end a **residual value** counts (overnight need ≤ 24 h at the cheapest of the last four hours) — attributes `terminal_need_kwh` / `terminal_price` on the plan sensor. Full copy: panel help (`?`) → Grid and tariff / Price plan / FAQ Energyforecast.
 
 ---
 
@@ -375,7 +350,8 @@ switch — you can wire up the sensor purely for clean statistics.
 | **Wallbox control** | off | Enables current-limiting logic |
 | **Wallbox type** | e3dc | `e3dc` = native E3DC wallbox (RSCP service); `generic` = openWB / EVCC / any wallbox via custom services |
 | **Wallbox power sensor** | – | Wattage sensor of the wallbox (e.g. `sensor.<device>_wallbox_consumption` or `sensor.openwb_chargepoint_4_ladeleistung`). Auto-detected. |
-| **Vehicle SoC sensor** | – | Percent sensor for the car’s state of charge (shown next to wallbox power in the energy flow). Often auto-detected for E3DC (`wallbox-soc`); otherwise pick EVCC/openWB/vehicle integration. |
+| **Vehicle SoC sensor** | – | Percent sensor for the car’s SoC (shown in the flow, e.g. `4.2 kW · 72 %`). E3DC often auto (`wallbox-soc`). Display only; saving **without** an integration reload. |
+| **Plug connected** | – | binary_sensor (openWB often `…_ladekabel`, E3DC `wallbox-plug`). Pins in the icon turn green. Without a sensor, charging counts as plugged. Saving without reload. The wallbox stays visible in the flow even without power. |
 | **House meter already includes wallbox** | auto | `false` for native E3DC wallbox (separate power meter); `true` for openWB on the grid meter. If on, Maestro subtracts the wallbox value from the house power. |
 | **Min. current (A)** | 6 | IEC-61851 minimum |
 | **Max. current (A)** | 16 | Maximum allowed charge current |
@@ -513,13 +489,15 @@ All entities appear under the device **E3DC Maestro** in *Settings → Devices &
 | `sensor.e3dc_maestro_forecast_max_soc_nachste_24h` | Forecast: Max SoC next 24h | % | Simulated maximum SoC |
 | `sensor.e3dc_maestro_forecast_netzbezug_nachste_24h` | Forecast: Grid draw next 24h | kWh | Simulated grid import |
 | `sensor.e3dc_maestro_forecast_autarkie_nachste_24h` | Forecast: Self-sufficiency next 24h | % | Simulated self-sufficiency rate |
-| `sensor.e3dc_maestro_forecast_soc_trajektorie_24h` | Forecast: SoC trajectory 24h | % | ApexCharts sensor with SoC and power points (`trajectory_points`, `pv_points`, `house_points`, `grid_points`, `battery_points`) |
+| `sensor.e3dc_maestro_forecast_soc_trajektorie_24h` | Forecast: SoC trajectory | % | Trajectory and power for the strategy preview (panel up to 48 h; entity name historical). Attributes include `trajectory_points`, `pv_points`, … |
+| `sensor.e3dc_maestro_additional_pv_power` | Extra PV power | W | Optional second producer in the energy flow |
+| `sensor.e3dc_maestro_pv_zusatz_heute` | Extra PV today | kWh | Day energy of the extra producer |
 | `sensor.e3dc_maestro_forecast_datenqualitat` | Forecast: Data quality | – | Shows whether consumption and PV profiles have sufficient data |
 | `sensor.e3dc_maestro_auto_aktive_strategie` | Auto: Active strategy | – | Shows whether auto-optimisation is active and which objective was chosen |
 | `sensor.e3dc_maestro_auto_geschatzte_einsparung` | Auto: Estimated savings | % | Simulated improvement vs. baseline |
 | `sensor.e3dc_maestro_soll_lade_limit` | Target charge limit | W | Currently set charge limit (e.g. 0 W when blocked, 3000 W during curtailment guard); `unknown` if no limit active |
 | `sensor.e3dc_maestro_soll_entlade_limit` | Target discharge limit | W | Currently set discharge limit (e.g. 0 W during EVCC pause); `unknown` if no limit active |
-| `sensor.e3dc_maestro_preisplan` | Price plan | – | Summary of the price plan (beta); slots, shadow mode and expected saving as attributes |
+| `sensor.e3dc_maestro_preisplan` | Price plan | – | Summary (slots, shadow mode, savings); incl. `terminal_need_kwh`, `terminal_price`, `soc_expected_pct` |
 | `sensor.e3dc_maestro_wallbox_leistung` | Wallbox power | W | Current wallbox charging power (see step 7) |
 | `sensor.e3dc_maestro_gesamtlast_haus_wallbox` | Total load (house + wallbox) | W | House power plus wallbox power |
 | `sensor.e3dc_maestro_wallbox_energie_heute` | Wallbox energy today | kWh | Energy charged into the wallbox today (usable in the Energy dashboard) |
@@ -845,10 +823,10 @@ in every look.
 
 | View | Content |
 |---|---|
-| **Live** | Energy flow (PV, house, grid, battery) with glowing particles whose speed follows the power. The Maestro logo sits in the middle, and the battery shows its fill level. Extra consumers can be shown. A click on a symbol opens the last 24 h. Plus state of charge with target SoC and autonomy, status chips and today's counters since midnight |
-| **Forecast** | SoC trajectory and power for the next 24 h with control phases, now marker and target SoC. Drag to zoom, overview bar below, 6/12/24 h. **Actuals** overlays the measured values of the last 6 h |
-| **Price plan** | Price per slot coloured by action (grid charge, hold battery, battery free), planned SoC, slot strip and key figures. Below that, the thresholds for a dynamic tariff and grid charging (cheap threshold, cheap-window target, daily budget, minimum spread, SoC cap). Clearly marked in shadow mode |
-| **Decision** | Current control phase with its reason, charge/discharge limit "target vs. sent" and the phase changes of the last 24 h |
+| **Live** | Energy flow (nodes, blob or house): PV including an optional extra node, house, grid, battery; consumers at the house (wallbox visible even when idle). Click opens history. Plus SoC, balance pulse (day/week/month/year) and day totals |
+| **Forecast** | Strategy preview up to **48 h** (zoom 6/12/24/48) with control phases, now marker and plan SoC (expected curve; planner stays cautious). KPI sensors stay at 24 h. **Actuals** can be overlaid |
+| **Price plan** | Price per slot (real + pale Energyforecast slots), action (grid charge / hold / free), planned SoC, key figures. Below: strategy and thresholds (cheap threshold, target, max grid charge/day as safety cap, spread, SoC cap). Marked in shadow mode |
+| **Decision** | Current phase with reason, target vs. sent, 24 h phase Gantt and control ladder |
 | **Plant** | Hero with mode, autarky, self-consumption, model, serial number and firmware. Rooms for grid, battery, PV, wallbox and RSCP switches. Phases L1–L3 as gauges plus a 24-hour curve when the E3DC integration sensors exist |
 | **Settings** | Tile overview of the control areas, plus **Setup** and a **Classic dashboard** tile that checks the required HACS cards (Mushroom Cards, ApexCharts Card) and creates the dashboard with one click (administrators) |
 
@@ -865,8 +843,9 @@ regulation active, predictive charging, PV forecast delay, price plan controls
 battery, price plan shadow mode and forced discharge with a power slider. Changes
 take effect **immediately** (same entities as in the dashboard). The slider only
 sends when released. The full configuration lives in the **Settings** view in
-the navigation; **Open all settings** in the sheet leads there. The long help
-pages stay in the optional classic dashboard at `/e3dc-maestro`.
+the navigation; **Open all settings** in the sheet leads there. Full **help**
+opens in the panel via **?** (search and chapters for Live, Forecast, Price plan,
+rules and FAQ). The classic dashboard at `/e3dc-maestro` remains optional.
 
 Below that, under **Display**, up to six consumers can be added to the energy
 flow (name, icon, power sensor). The icon is wallbox, heating rod, air

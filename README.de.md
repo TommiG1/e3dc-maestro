@@ -61,14 +61,14 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 | **Schnelllade-Boden** | Voller PV-Überschuss bis zu einem konfigurierbaren SoC-Floor (Phase `fast_floor`) |
 | **Schwacher-PV-Tag (Akku-Priorität)** | An ertragsschwachen Tagen den Akku vor Spreading/Korridor-Pause füllen; Gate über Restprognose vs. Restbedarf |
 | **Auto-Optimierung** | Grid-Search-Optimizer wählt täglich die beste Strategie automatisch |
-| **24h Forecast-Simulation** | Vorausberechnete SoC-Trajektorie plus Live-Chart PV / Haus / Netz / Akku (letzte + nächste 24 h) |
-| **Dynamische Tarife** | Netzladung bei günstigem Börsenstrompreis (Tibber, aWATTar) |
+| **48h Forecast-Simulation** | Vorausberechnete SoC-Trajektorie plus Live-Chart PV / Haus / Netz / Akku (Zoom 6/12/24/48 h; KPI-Sensoren bleiben bei 24 h) |
+| **Dynamische Tarife / Netzladung-Strategie** | Eine Auswahl: Aus, Zeitfenster, Preisschwelle, Automatisch oder Experte (Tibber, aWATTar; optional Energyforecast.de) |
 | **Tarif-Slots** | Feste Zeitfenster mit abweichenden Lade-/Entladeregeln |
 | **Wallbox-Regelung** | Strombegrenzung für Fremdwallboxen via EVCC/generisch; bei nativer E3DC-Wallbox nur sinnvoll für phasenübergreifende Koordination |
 | **Wärmepumpen-Regelung** | Ein/Aus nach PV-Überschuss mit Mindestlaufzeit und Mindestpause |
 | **Erzwungene Entladung** | Dashboard-Schalter für manuelle Entladung, z. B. um vor einem Tibber-Niedrigpreisfenster Kapazität zu schaffen |
-| **Maestro-Cockpit** | Panel in der Seitenleiste für Onboarding, Einstellungen und Betrieb, ohne Custom Cards: Live-Energiefluss, 24-h-Prognose, Preisplan, Entscheidungs-Erklärung, Anlage und Schnellsteuerung – [Anleitung](#maestro-cockpit) |
-| **Regelungs-Cockpit** | Live Command Center mit Hero-Status, KPI-Kacheln, „Aktiv jetzt"-Chips, 24 h Phasenverlauf und „Warum diese Entscheidung?" |
+| **Maestro-Cockpit** | Panel in der Seitenleiste für Onboarding, Einstellungen und Betrieb, ohne Custom Cards: Live-Energiefluss, 48-h-Prognose, Preisplan, Entscheidungs-Erklärung, Anlage, Hilfe (`?`) und Schnellsteuerung – [Anleitung](#maestro-cockpit) |
+| **Regelungs-Cockpit** | Live Command Center mit Hero-Status, KPI-Kacheln, „Aktiv jetzt"-Chips, Phasen-Gantt und „Warum diese Entscheidung?" |
 | **Entscheidungs-Erklärung** | Sensor `sensor.e3dc_maestro_entscheidungserklarung` mit vollständigem Erklärungssatz pro Regelphase |
 | **Anti-Flapping** | EWMA-Glättung von PV/Last (τ = 60 s, Jump-Reset bei 2 kW) + Feed-in-Limit-Hysterese + pv_delay-Cooldown verhindern schnelles Phasen-Pendeln |
 | **Battery & PV Sizing Advisor (v0.3.7)** | 2D-Simulation (Zusatz-Akku × Zusatz-PV) auf historischen Stundendaten — berechnet Einsparung, Amortisation, Autarkie und drei Empfehlungen (wirtschaftlich / technisch / ausgewogen) |
@@ -322,56 +322,30 @@ Verzögert den Ladestart des Korridors, wenn die heutige PV-Restprognose ausreic
 
 ---
 
-### Schritt 6: Dynamische Tarife & Tarif-Slots
+### Schritt 6: Netzladung-Strategie, Tarife & Preisplan
 
-Lädt den Akku aus dem Netz wenn der Börsenstrompreis günstig ist.
+Unter **Einstellungen → Netz und Tarif** steuert eine **Netzladung-Strategie**, ob und wann der Akku aus dem Netz laden darf — statt vieler paralleler Schalter:
+
+| Strategie | Wirkung |
+|---|---|
+| **Aus** | Nie aus dem Netz, nur PV |
+| **Zeitfenster** | Lädt in Tarif-Slots der Klasse Niedrig bis zum Ziel |
+| **Unter Preisschwelle** | Lädt, sobald der Preis ≤ Schwelle |
+| **Automatisch** | Preisplan mit festen Werten (Wirkungsgrad 0,90, Spanne 0,03 €/kWh, Sicherheitsfaktor 1,15) |
+| **Experte** | Dieselbe Rechnung mit deinen Feinwerten |
 
 | Parameter | Standard | Erläuterung |
 |---|---|---|
-| **Dynamische Tarife** | aus | Aktiviert günstig-Laden aus Netz |
-| **Preis-Sensor (€/kWh)** | – | z. B. Tibber oder aWATTar-Sensor |
-| **Günstig-Schwelle (€/kWh)** | 0.10 | Unter diesem Preis wird aus dem Netz geladen |
-| **Max. Netzladung/Tag (kWh)** | 0 | Sicherheitsgrenze: Nach so viel Netzladung an einem Tag stoppt Maestro. Die Menge bestimmen Ziel und Prognose. 0 = keine Grenze |
-| **Aktive Netzladung im low-Slot** | aus | Lädt in einem `low`-Slot aktiv aus dem Netz bis zum Ziel-SoC – **unabhängig vom Tarif-Modus** (Phase `grid_charge`). Für klassische NT-Fenster |
-| **Netzlade-Ziel im low-Slot (% SoC)** | 60 | Ziel-SoC, bis zu dem im `low`-Slot aus dem Netz geladen wird. Höchstens die harte SoC-Grenze. Bei prognosebasierter Menge = Obergrenze |
-| **Netzlade-Menge prognosebasiert** | aus | Statt festem Ziel-SoC wird nur so viel nachgeladen, wie der Akku vom Ende des Fensters bis zum nächsten günstigen Fenster braucht (Verbrauchsprofil × Sicherheitsfaktor − PV-Prognose, plus Reserve). Ohne Verbrauchsprofile gilt der feste Ziel-SoC |
-| **Entladung im low-Slot nach Ziel sperren** | an | Ist das Netzlade-Ziel erreicht, sperrt Maestro die Entladung (Phase `grid_hold`), das Haus läuft aus dem günstigen Netz. Verhindert Lade-/Entlade-Schwingen um den Ziel-SoC |
+| **Preis-Sensor (€/kWh)** | – | z. B. Tibber oder aWATTar (Kurve über `tibber.get_prices` bzw. Attribute) |
+| **Günstig-Schwelle (€/kWh)** | 0.10 | Nur für die Strategie „Unter Preisschwelle“ |
+| **Max. Netzladung/Tag (kWh)** | 0 | Sicherheitsgrenze (nicht die geplante Tagesmenge). 0 = keine Grenze |
+| **Netzlade-Ziel / prognosebasiert** | 60 % / aus | Ziel-SoC im günstigen Fenster; prognosebasiert = nur Bedarf bis zum **nächsten** günstigen Fenster |
+| **Entladung halten** | an | Nach Erreichen des Ziels Entladung im günstigen Fenster sperren |
+| **Energyforecast** | – | Optional API-Token + Marktzone (meist `DE-LU`): hängt Prognose-Slots hinter dem letzten echten Preis an (frei ≈ 2 Tage, Pro ≈ 6). Netzentgelte/MwSt. im Energyforecast-Konto setzen |
 
-> **`low`-Slot ohne aktive Netzladung:** Ohne diese Option ist die Klasse `low`
-> rein passiv – sie erlaubt Netzladung nur, wenn zusätzlich `tariff_mode=dynamic`
-> gesetzt ist und eine andere Phase ohnehin laden will. Für ein klassisches
-> HT/NT-Modell (fester Tarif) aktiviere **Aktive Netzladung im low-Slot**, damit
-> das NT-Fenster wirklich zum Nachladen genutzt wird.
+Ein Wechsel in Automatisch/Experte startet im **Schattenmodus**. Der Schalter **Preisplan steuert Akku** setzt Laden und Halten erst um. Ohne ihn bleibt der Plan sichtbar, ändert den Akku aber nicht.
 
-### Preisplan (Beta)
-
-Berechnet aus der Preiskurve (heute + morgen), der PV-Prognose und deinem
-Verbrauchsprofil, wann sich **Netzladung** und **Entladung halten** lohnen. Der
-Plan ist als Sensor sichtbar (`sensor.e3dc_maestro_preisplan`). Mit dem zweiten
-Schalter **Preisplan steuert Akku** setzt Maestro ihn tatsächlich um – ohne
-diesen Schalter bleibt er reine Anzeige (Schattenmodus). Berechnet wird er, solange
-**Preisplan (Schattenmodus)** eingeschaltet ist.
-
-**Einrichtung** (Einstellungen → Geräte & Dienste → E3DC Maestro → Konfigurieren):
-
-1. **Tarif & Kosten:** Preis-Sensor wählen (Attribute `raw_today`/`raw_tomorrow`,
-   z. B. Nordpool, EPEX, aWATTar; der Tibber-Strompreis-Sensor reicht, die Kurve holt Maestro selbst), Einspeisevergütung,
-   Akku-Anschaffungskosten und Lebensdauer (Zyklen), Max. Netzladung/Tag.
-2. **Systemparameter:** Akku-Kapazität, max. Ladeleistung, Wechselrichter-Leistung.
-3. **PV-Prognose:** Prognose-Sensor (Solcast / Forecast.Solar) aktivieren – ohne
-   rechnet der Plan konservativ mit der Historie.
-4. **Saison & Ladekorridor:** Ladeschwelle und Notstromreserve (Untergrenze des Plans).
-5. **Preisplan berechnen** einschalten (Schalter **Preisplan (Schattenmodus)**; „an“ heißt: Plan wird berechnet, aber noch nicht umgesetzt) – auch im Dashboard. Ein bis
-   zwei Tage die Empfehlungen im Dashboard prüfen (Tab **Netz & Tarif**).
-6. **Preisplan steuert Akku** einschalten: Maestro lädt dann in günstigen Slots aus
-   dem Netz (Phase `grid_charge`, Grund „Preisplan: …“) und sperrt die Entladung,
-   wenn sich das Aufsparen für teurere Slots lohnt (Phase `grid_hold`).
-   Notfallladung, Einspeisebegrenzung, EVCC-Sperre und Abregelschutz haben Vorrang.
-   Fällt der Preis-Sensor aus (Plan älter als 20 min), regelt Maestro wie gewohnt.
-
-Feinjustierung im Dashboard (Tab **Netz & Tarif**): Ziel-SoC-Obergrenze (90 %),
-Mindest-Preisspanne (0,03 €/kWh), Wirkungsgrad (0,90), Verbrauchs-Sicherheitsfaktor
-(1,15). Ausführliche Anleitung: Button **„Hilfe zum Preisplan“** im Dashboard.
+Am Horizontende zählt ein **Restwert** (Nachtbedarf ≤ 24 h zum günstigsten Preis der letzten vier Stunden) — Attribute `terminal_need_kwh` / `terminal_price` am Preissensor. Ausführliche Texte: Panel-Hilfe (`?`) → Netz und Tarif / Preisplan / FAQ Energyforecast.
 
 ---
 
@@ -396,7 +370,8 @@ kannst du den Powersensor einbinden, um saubere Statistiken zu erhalten.
 | **Wallbox-Regelung** | aus | Aktiviert die Strombegrenzungs-Logik |
 | **Wallbox-Typ** | e3dc | `e3dc` = integrierte E3DC-Wallbox (RSCP-Service); `generic` = openWB / EVCC / beliebige Wallbox via custom-Services |
 | **Wallbox-Powersensor** | – | W-Sensor des Wallbox-Verbrauchs (z. B. `sensor.<gerät>_wallbox_consumption` oder `sensor.openwb_chargepoint_4_ladeleistung`). Auto-erkannt. |
-| **Fahrzeug-SoC-Sensor** | – | %-Sensor für den Fahrzeug-Ladestand (Anzeige im Energiefluss neben der Wallbox-Leistung). Bei E3DC-Wallbox oft auto-erkannt (`wallbox-soc`); sonst EVCC/openWB/Fahrzeug-Integration wählen. |
+| **Fahrzeug-SoC-Sensor** | – | %-Sensor für den Fahrzeug-Ladestand (Anzeige im Fluss, z. B. `4,2 kW · 72 %`). E3DC oft auto (`wallbox-soc`). Nur Anzeige; Speichern **ohne** Integrations-Neustart. |
+| **Stecker angesteckt** | – | binary_sensor (openWB oft `…_ladekabel`, E3DC `wallbox-plug`). Pins im Symbol werden grün. Ohne Sensor gilt „lädt“ als angesteckt. Speichern ohne Neustart. Die Wallbox bleibt im Fluss sichtbar, auch ohne Leistung. |
 | **Hausverbrauchszähler enthält die Wallbox bereits** | Auto | `false` bei E3DC-Wallbox (eigener Powermeter); `true` bei openWB am EVU-Hauptzähler. Ist die Option aktiv, wird der Wallbox-Wert vom Hausverbrauch abgezogen. |
 | **Minimalstrom (A)** | 6 | IEC-61851-Minimum |
 | **Maximalstrom (A)** | 16 | Maximal erlaubter Ladestrom |
@@ -550,13 +525,15 @@ Diese Sensoren sind nach der Installation direkt sichtbar und nutzbar.
 | `sensor.e3dc_maestro_forecast_max_soc_nachste_24h` | Forecast: Max-SoC nächste 24h | % | Simulierter maximaler SoC |
 | `sensor.e3dc_maestro_forecast_netzbezug_nachste_24h` | Forecast: Netzbezug nächste 24h | kWh | Simulierter Netzbezug |
 | `sensor.e3dc_maestro_forecast_autarkie_nachste_24h` | Forecast: Autarkie nächste 24h | % | Simulierte Autarkiequote |
-| `sensor.e3dc_maestro_forecast_soc_trajektorie_24h` | Forecast: SoC-Trajektorie 24h | % | ApexCharts-Sensor mit SoC- und Leistungs-Punkten (`trajectory_points`, `pv_points`, `house_points`, `grid_points`, `battery_points`) |
+| `sensor.e3dc_maestro_forecast_soc_trajektorie_24h` | Forecast: SoC-Trajektorie | % | Trajektorie und Leistungen für die Strategie-Vorschau (Panel bis 48 h; Entity-Name historisch). Attribute u. a. `trajectory_points`, `pv_points`, … |
+| `sensor.e3dc_maestro_additional_pv_power` | Zusatz-PV-Leistung | W | Optionaler zweiter Erzeuger im Energiefluss |
+| `sensor.e3dc_maestro_pv_zusatz_heute` | PV-Zusatz heute | kWh | Tagesenergie des Zusatz-Erzeugers |
 | `sensor.e3dc_maestro_forecast_datenqualitat` | Forecast: Datenqualität | – | Zeigt ob Verbrauchs- und PV-Profil ausreichend Daten haben |
 | `sensor.e3dc_maestro_auto_aktive_strategie` | Auto: Aktive Strategie | – | Zeigt ob Auto-Optimierung aktiv und welches Ziel gewählt wurde |
 | `sensor.e3dc_maestro_auto_geschatzte_einsparung` | Auto: Geschätzte Einsparung | % | Simulierte Verbesserung gegenüber Baseline |
 | `sensor.e3dc_maestro_soll_lade_limit` | Soll-Lade-Limit | W | Aktuell von Maestro gesetztes Ladelimit (z. B. 0 W bei Ladesperre, 3000 W bei Curtailment Guard); `unknown` wenn kein Limit aktiv |
 | `sensor.e3dc_maestro_soll_entlade_limit` | Soll-Entlade-Limit | W | Aktuell von Maestro gesetztes Entladelimit (z. B. 0 W bei EVCC-Pause); `unknown` wenn kein Limit aktiv |
-| `sensor.e3dc_maestro_preisplan` | Preisplan | – | Zusammenfassung des Preisplans (Beta); Slots, Schattenmodus und erwartete Ersparnis als Attribute |
+| `sensor.e3dc_maestro_preisplan` | Preisplan | – | Zusammenfassung (Slots, Schattenmodus, Ersparnis); u. a. `terminal_need_kwh`, `terminal_price`, `soc_expected_pct` |
 | `sensor.e3dc_maestro_wallbox_leistung` | Wallbox-Leistung | W | Aktuelle Wallbox-Ladeleistung (siehe Schritt 7) |
 | `sensor.e3dc_maestro_gesamtlast_haus_wallbox` | Gesamtlast (Haus + Wallbox) | W | Hausleistung plus Wallbox-Leistung |
 | `sensor.e3dc_maestro_wallbox_energie_heute` | Wallbox-Energie heute | kWh | Heute in die Wallbox geladene Energie (Energy-Dashboard-tauglich) |
@@ -892,10 +869,10 @@ bleiben in allen Looks dieselben.
 
 | Ansicht | Inhalt |
 |---|---|
-| **Live** | Energiefluss (PV, Haus, Netz, Akku) mit leuchtenden Teilchen, deren Tempo mit der Leistung mitgeht. In der Mitte das Maestro-Logo, der Akku zeigt den Füllstand. Zusätzliche Verbraucher lassen sich einblenden. Ein Klick auf ein Symbol öffnet den Verlauf der letzten 24 h. Dazu Ladezustand mit Ziel-SoC und Autonomie, Status-Chips und Tageswerte seit Mitternacht |
-| **Prognose** | SoC-Trajektorie und Leistungen der nächsten 24 h mit Regelphasen, Jetzt-Marker und Ziel-SoC. Ziehen zum Zoomen, Übersichtsleiste darunter, 6/12/24 h. **Ist-Verlauf** blendet die gemessenen Werte der letzten 6 h ein |
-| **Preisplan** | Strompreis je Slot, eingefärbt nach Aktion (Netzladung, Akku halten, Akku frei), geplanter SoC, Slot-Leiste und Kennzahlen. Darunter die Schwellwerte für dynamischen Tarif und Netzladung (Günstig-Schwelle, Ziel im günstigen Fenster, Tagesbudget, Mindest-Preisspanne, SoC-Obergrenze). Im Schattenmodus deutlich markiert |
-| **Entscheidung** | Aktuelle Regelphase mit Begründung, Lade-/Entladelimit „Soll vs. gesendet“ und der Verlauf der Phasenwechsel der letzten 24 h |
+| **Live** | Energiefluss (Knoten, Blob oder Haus): PV inkl. optionalem Zusatz-Knoten, Haus, Netz, Akku; Verbraucher am Haus (Wallbox auch idle sichtbar). Klick öffnet den Verlauf. Dazu Ladezustand, Bilanzpuls (Tag/Woche/Monat/Jahr) und Tageswerte |
+| **Prognose** | Strategie-Vorschau bis **48 h** (Zoom 6/12/24/48) mit Regelphasen, Jetzt-Marker und Plan-SoC (erwartete Kurve; Planer bleibt vorsichtig). KPI-Sensoren bleiben bei 24 h. **Ist-Verlauf** einblendbar |
+| **Preisplan** | Strompreis je Slot (echte + blasse Energyforecast-Slots), Aktion (Netzladung / Halten / frei), geplanter SoC, Kennzahlen. Darunter Strategie und Schwellen (Günstig-Schwelle, Ziel, Max. Netzladung/Tag als Sicherheitsgrenze, Spanne, SoC-Obergrenze). Im Schattenmodus markiert |
+| **Entscheidung** | Aktuelle Phase mit Begründung, Soll vs. gesendet, 24-h-Phasen-Gantt und Regelungsleiter |
 | **Anlage** | Hero mit Modus, Autarkie, Eigenverbrauch, Modell, Seriennummer und Firmware. Räume Netz, Akku, PV, Wallbox und RSCP-Schalter. Phasen L1–L3 als Gauge plus 24-Stunden-Verlauf, sofern die Sensoren der E3DC-Integration vorhanden sind |
 | **Einstellungen** | Kachelübersicht der Regelbereiche, dazu **Einrichtung** und die Kachel **Classic-Dashboard**: prüft die benötigten HACS-Karten (Mushroom Cards, ApexCharts Card) und legt das Dashboard mit einem Klick an (Administratoren) |
 
@@ -913,8 +890,9 @@ Preisplan steuert Akku, Preisplan-Schattenmodus und Erzwungene Entladung mit
 Leistungsregler. Änderungen wirken **sofort** auf die Regelung (gleiche Entitäten
 wie im Dashboard). Der Leistungsregler sendet erst beim Loslassen.
 Die vollständige Konfiguration liegt in der Ansicht **Einstellungen** in der
-Navigation; **Alle Einstellungen öffnen** im Sheet führt dorthin. Die langen
-Hilfetexte liegen weiter im optionalen Classic-Dashboard unter `/e3dc-maestro`.
+Navigation; **Alle Einstellungen öffnen** im Sheet führt dorthin. Die ausführliche
+**Hilfe** öffnest du im Panel über **?** (Suche und Kapitel zu Live, Prognose,
+Preisplan, Regeln und FAQ). Das Classic-Dashboard unter `/e3dc-maestro` bleibt optional.
 
 Darunter, unter **Anzeige**, lassen sich bis zu sechs Verbraucher für den
 Energiefluss eintragen (Name, Symbol, Leistungssensor). Das Symbol ist
