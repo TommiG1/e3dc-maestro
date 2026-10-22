@@ -1,6 +1,16 @@
-# main ist das letzte stabile Release
+# main ist das zuletzt veröffentlichte Release
 
-`main` entspricht dem zuletzt veröffentlichten stabilen Release. Neue Arbeit startet nicht auf `main`.
+`main` entspricht dem Tip des zuletzt veröffentlichten Releases (stabil oder Beta). Tags und GitHub-Releases entstehen nur von `main`, nie von einem Feature-Branch.
+
+## Warum (HACS)
+
+HACS nimmt bei Pre-Releases die **erste** Pre-Release aus der GitHub-REST-Liste — nicht die höchste Versionsnummer. Releases, deren Tags nicht auf dem Default-Branch liegen, oder ältere Betas mit „höherem“ Sortierschlüssel (z. B. `beta.9` vor `beta.10`) verdecken neuere Betas. Deshalb: zuerst nach `main` mergen, dann taggen/releasen, und nach dem Publish prüfen:
+
+```bash
+gh api 'repos/TommiG1/hacs-e3dc-maestro/releases?per_page=5' --jq '.[].tag_name'
+```
+
+Die neueste Beta muss Zeile 1 sein. Sonst ältere Beta-**Releases** (nicht Tags) löschen, die darüber stehen.
 
 ## Fixes
 
@@ -11,11 +21,11 @@
 ## Features
 
 - Eigener Branch ab `main` (`feat/…`).
-- Nicht nach `main` mergen und nicht taggen, solange das Feature nicht selbst release-reif ist.
-- Die Live-HA darf vom Feature-Branch per Datei-Kopie geprüft werden. Das ist kein Merge und kein Release.
+- Live-HA darf vom Feature-Branch per Deploy geprüft werden — das ist kein Merge und kein Release.
+- Zum Beta-/Stable-Release: Feature-Branch nach `main` mergen (FF wenn möglich), **dann** auf `main` Version setzen, taggen und `gh release create --target main` (Betas mit `--prerelease`).
 
 ## Nicht tun
 
-- Feature-Commits direkt auf `main`, auch nicht „kurz mit“ einem Fix.
-- `manifest.json` auf einem Feature-Branch anheben.
-- Tags von einem Feature-Branch setzen.
+- Feature-Commits direkt auf `main`, auch nicht „kurz mit“ einem Fix — außer beim bewussten Release-Merge.
+- `manifest.json` auf einem Feature-Branch final anheben und von dort taggen.
+- Tags oder GitHub-Releases von einem Feature-Branch setzen (`--target feat/…`).
