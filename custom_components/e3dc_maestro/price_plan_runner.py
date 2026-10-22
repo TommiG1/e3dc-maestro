@@ -16,6 +16,11 @@ from .price_curve import PriceHorizon
 PV_SAFETY_FACTOR = 0.8
 # Ohne Prognose für morgen wird das historische Mittel nochmals abgeschwächt.
 PV_HISTORIC_FACTOR = 0.7
+# Restwert am Horizontende: günstigster Preis der letzten Stunden der Kurve,
+# Bedarf bis zur ersten PV-Deckung danach (höchstens einen Tag).
+TERMINAL_PRICE_HOURS = 4.0
+TERMINAL_STEP_H = 0.25
+TERMINAL_MAX_H = 24.0
 
 STATUS_OK = "ok"
 STATUS_NO_PRICES = "no_prices"
@@ -37,6 +42,8 @@ class PricePlanSnapshot:
     min_spread: float | None = None
     wear_eur_per_kwh: float | None = None
     safety_factor: float | None = None
+    terminal_need_kwh: float | None = None
+    terminal_price: float | None = None
 
     @property
     def summary(self) -> str:
@@ -74,6 +81,18 @@ def profile_w_at(profile_w: Sequence[float] | None, when: _dt.datetime) -> float
 def _slot_kwh(profile_w: Sequence[float] | None, start: _dt.datetime, hours: float) -> float:
     mid = start + _dt.timedelta(hours=hours / 2.0)
     return max(0.0, profile_w_at(profile_w, mid)) / 1000.0 * hours
+
+
+def terminal_price(horizon: PriceHorizon) -> float:
+    """Günstigster Preis in den letzten ``TERMINAL_PRICE_HOURS`` der Kurve."""
+    tail: list[float] = []
+    hours = 0.0
+    for h, price in zip(reversed(horizon.slot_hours), reversed(horizon.prices)):
+        if hours >= TERMINAL_PRICE_HOURS:
+            break
+        tail.append(price)
+        hours += h
+    return max(0.0, min(tail)) if tail else 0.0
 
 
 def compute_price_plan(
@@ -123,25 +142,43 @@ def compute_price_plan(
         return _snap(STATUS_NO_PROFILE, "Noch keine Verbrauchsstatistik")
 
     local_today = now.date()
+
+    def energy(start: _dt.datetime, hours: float) -> tuple[float, float]:
+        if cons_ok:
+            cons = _slot_kwh(cons_profile_w, start, hours)
+        else:
+            cons = max(0.0, house_power_w) / 1000.0 * hours
+        day_offset = (start + _dt.timedelta(hours=hours / 2.0)).date() - local_today
+        if day_offset.days <= 0:
+            profile, factor = (pv_today_w, 1.0) if pv_today_w else (pv_hist_w, PV_HISTORIC_FACTOR)
+        elif day_offset.days == 1 and pv_tomorrow_w:
+            profile, factor = pv_tomorrow_w, 1.0
+        else:
+            profile, factor = pv_hist_w, PV_HISTORIC_FACTOR
+        return cons, _slot_kwh(profile, start, hours) * factor
+
     consumption: list[float] = []
     pv: list[float] = []
     starts: list[_dt.datetime] = []
     cursor = now
     for hours in horizon.slot_hours:
         starts.append(cursor)
-        if cons_ok:
-            consumption.append(_slot_kwh(cons_profile_w, cursor, hours))
-        else:
-            consumption.append(max(0.0, house_power_w) / 1000.0 * hours)
-        day_offset = (cursor + _dt.timedelta(hours=hours / 2.0)).date() - local_today
-        if day_offset.days <= 0:
-            profile, factor = (pv_today_w, 1.0) if pv_today_w else (pv_hist_w, PV_HISTORIC_FACTOR)
-        else:
-            profile, factor = (
-                (pv_tomorrow_w, 1.0) if pv_tomorrow_w else (pv_hist_w, PV_HISTORIC_FACTOR)
-            )
-        pv.append(_slot_kwh(profile, cursor, hours) * factor)
+        cons, pv_kwh = energy(cursor, hours)
+        consumption.append(cons)
+        pv.append(pv_kwh)
         cursor = cursor + _dt.timedelta(hours=hours)
+
+    terminal_need = 0.0
+    elapsed = 0.0
+    while elapsed < TERMINAL_MAX_H:
+        cons, pv_kwh = energy(cursor, TERMINAL_STEP_H)
+        deficit = cons * safety_factor - pv_kwh * PV_SAFETY_FACTOR
+        if deficit <= 0.0:
+            break
+        terminal_need += deficit
+        cursor = cursor + _dt.timedelta(hours=TERMINAL_STEP_H)
+        elapsed += TERMINAL_STEP_H
+    end_price = terminal_price(horizon)
 
     plan = plan_price_charging(
         slot_hours=horizon.slot_hours,
@@ -161,6 +198,8 @@ def compute_price_plan(
         feed_in_price=feed_in_price,
         consumption_safety_factor=safety_factor,
         pv_factor=PV_SAFETY_FACTOR,
+        terminal_need_kwh=terminal_need,
+        terminal_price=end_price,
     )
 
     rows = []
@@ -185,4 +224,6 @@ def compute_price_plan(
         plan=plan,
         rows=rows,
         known_until=horizon.known_until,
+        terminal_need_kwh=terminal_need,
+        terminal_price=end_price,
     )

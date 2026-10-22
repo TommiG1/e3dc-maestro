@@ -1036,6 +1036,10 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "min_spread": snap.min_spread,
                 "wear_eur_per_kwh": snap.wear_eur_per_kwh,
                 "safety_factor": snap.safety_factor,
+                "terminal_need_kwh": (
+                    round(snap.terminal_need_kwh, 2) if snap.terminal_need_kwh is not None else None
+                ),
+                "terminal_price": snap.terminal_price,
                 "plan_slots": snap.rows,
             }
         if key == "autonomy_time":

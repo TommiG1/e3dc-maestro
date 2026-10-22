@@ -72,6 +72,8 @@ class _Model:
         feed_in_price: float,
         wear_eur_per_kwh: float,
         step_kwh: float,
+        terminal_need_kwh: float = 0.0,
+        terminal_price: float = 0.0,
     ) -> None:
         self.h = slot_hours
         self.p = prices
@@ -84,8 +86,14 @@ class _Model:
         self.eta = efficiency
         self.feed = feed_in_price
         self.wear = wear_eur_per_kwh
+        self.terminal_need = max(0.0, terminal_need_kwh)
+        self.terminal_price = max(0.0, terminal_price)
         self.levels = max(2, int(round(top_kwh / max(0.05, step_kwh))))
         self.q = top_kwh / self.levels if top_kwh > 0 else 1.0
+
+    def terminal_value(self, s: float) -> float:
+        """Restwert (€) des Akkuinhalts am Horizontende: vermiedener Bezug nach dem Horizont."""
+        return self.terminal_price * min(max(0.0, s - self.floor), self.terminal_need)
 
     def a_options(self, i: int, budget_left: float) -> list[float]:
         max_a = min(self.max_charge_kw * self.h[i], max(0.0, budget_left))
@@ -131,7 +139,8 @@ class _Model:
 
     def backward(self, penalty: float, budget_left: float) -> list[list[float]]:
         """Wertfunktion V[i][k] (minimale Restkosten) für alle Slots rückwärts."""
-        v: list[list[float]] = [[0.0] * (self.levels + 1) for _ in range(self.n + 1)]
+        v: list[list[float]] = [[0.0] * (self.levels + 1) for _ in range(self.n)]
+        v.append([-self.terminal_value(k * self.q) for k in range(self.levels + 1)])
         for i in range(self.n - 1, -1, -1):
             nxt = v[i + 1]
             cur = v[i]
@@ -202,7 +211,7 @@ class _Model:
             "total": sum(grid),
         }
 
-    def baseline(self, stored0: float) -> tuple[float, list[float]]:
+    def baseline(self, stored0: float) -> tuple[float, list[float], float]:
         """Verhalten ohne Plan: keine Netzladung, Entladung immer freigegeben."""
         s = stored0
         cost = 0.0
@@ -211,7 +220,7 @@ class _Model:
             s, imp, _, c, _ = self.flow(s, 0.0, True, i)
             cost += c
             imports.append(imp)
-        return cost, imports
+        return cost, imports, s
 
 
 def plan_price_charging(
@@ -234,6 +243,8 @@ def plan_price_charging(
     consumption_safety_factor: float = 1.0,
     pv_factor: float = 1.0,
     step_kwh: float = 0.25,
+    terminal_need_kwh: float = 0.0,
+    terminal_price: float = 0.0,
 ) -> PricePlan:
     """Plant Netzladung und Entladesperre je Slot. Slot 0 ist der aktuelle (Rest-)Slot.
 
@@ -242,7 +253,9 @@ def plan_price_charging(
     PV mit ``pv_factor`` (< 1 = konservativ, z. B. P10/P50) skaliert.
     ``min_spread`` ist die mindestens geforderte Netto-Ersparnis in €/kWh
     je geladener Netz-kWh (nach Wirkungsgrad und Verschleiß).
-    Energien am Horizontende haben keinen Restwert (konservativ).
+    Nutzbare Energie über dem Boden ist am Horizontende ``terminal_price``
+    €/kWh wert, aber höchstens ``terminal_need_kwh`` (Bedarf nach dem
+    Horizont); darüber hinaus hat sie keinen Restwert.
     """
     n = len(slot_hours)
     if (
@@ -278,9 +291,12 @@ def plan_price_charging(
         feed_in_price=feed_in_price,
         wear_eur_per_kwh=wear_eur_per_kwh,
         step_kwh=step_kwh,
+        terminal_need_kwh=terminal_need_kwh,
+        terminal_price=terminal_price,
     )
     budget = max(0.0, budget_kwh)
-    base_cost, base_imports = model.baseline(stored0)
+    base_cost, base_imports, base_end = model.baseline(stored0)
+    base_cost -= model.terminal_value(base_end)
 
     # Lösung ohne Budgetdruck; reicht das Budget nicht, wird per Schattenpreis
     # (Strafe je geladener Netz-kWh) auf das Budget heruntergeregelt.
@@ -299,7 +315,8 @@ def plan_price_charging(
 
     grid = result["grid"]
     total = result["total"]
-    saving_eur = base_cost - result["cost"]
+    plan_end = result["stored_end"][-1] if result["stored_end"] else stored0
+    saving_eur = base_cost - (result["cost"] - model.terminal_value(plan_end))
     soc_trace = [s / capacity_kwh * 100.0 for s in result["stored_end"]]
 
     charge_now = grid[0] > _EPS

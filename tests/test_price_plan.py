@@ -200,6 +200,28 @@ class TestPricePlanHold:
         )
         assert mismatch.total_grid_charge_kwh == 0
 
+    def test_terminal_value_charges_for_night(self):
+        """Mittags 27 ct, abends 45 ct, Kurve endet um Mitternacht: Nachtbedarf mitladen."""
+        prices = [0.27] * 3 + [0.45] * 10 + [0.40]
+        kw = dict(soc_pct=5.0, efficiency=0.9, min_spread=0.03)
+        without = _plan(prices, 0.5, **kw)
+        with_end = _plan(prices, 0.5, terminal_need_kwh=2.0, terminal_price=0.40, **kw)
+        assert without.soc_pct[-1] == pytest.approx(5.0, abs=1.0)
+        assert with_end.total_grid_charge_kwh > without.total_grid_charge_kwh + 2.0
+        assert with_end.soc_pct[-1] == pytest.approx(25.0, abs=3.0)
+        assert all(g == 0 for g in with_end.grid_charge_kwh[3:])
+        assert with_end.expected_saving_eur > 0
+
+    def test_terminal_value_below_charge_cost_is_ignored(self):
+        """Restpreis 30 ct deckt 27 ct / 0,9 + 3 ct nicht → kein Mehrladen."""
+        prices = [0.27] * 3 + [0.45] * 10 + [0.40]
+        kw = dict(soc_pct=5.0, efficiency=0.9, min_spread=0.03)
+        without = _plan(prices, 0.5, **kw)
+        cheap_end = _plan(prices, 0.5, terminal_need_kwh=2.0, terminal_price=0.30, **kw)
+        assert cheap_end.total_grid_charge_kwh == pytest.approx(
+            without.total_grid_charge_kwh, abs=0.3
+        )
+
     def test_quarter_hour_slots(self):
         """15-Minuten-Slots (96/Tag) funktionieren wie Stundenslots."""
         prices = []

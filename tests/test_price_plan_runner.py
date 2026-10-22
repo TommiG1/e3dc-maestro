@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
+
 from custom_components.e3dc_maestro.price_curve import read_price_horizon
 from custom_components.e3dc_maestro.price_plan_runner import (
     STATUS_NO_PRICES,
@@ -11,6 +13,7 @@ from custom_components.e3dc_maestro.price_plan_runner import (
     STATUS_OK,
     compute_price_plan,
     profile_w_at,
+    terminal_price,
 )
 
 TZ = dt.timezone(dt.timedelta(hours=2))
@@ -118,6 +121,21 @@ class TestPlanFromCurve:
         snap = _run(self._curve(), pv_hist_w=hist)
         tomorrow_row = next(r for r in snap.rows if r["start"].startswith("2026-10-10T12"))
         assert abs(tomorrow_row["pv_kwh"] - 0.7) < 1e-6
+
+    def test_terminal_need_until_morning_pv(self):
+        # Kurve endet heute 24:00; PV (hist × 0,7 × 0,8) deckt ab 08:00 lokal (06 UTC)
+        hist = [0.0] * 6 + [2000.0] * 8 + [0.0] * 10
+        snap = _run(_horizon(), pv_hist_w=hist)
+        assert snap.terminal_need_kwh == pytest.approx(8 * 0.4)
+        assert snap.terminal_price == pytest.approx(0.3)
+
+    def test_terminal_need_capped_without_pv(self):
+        snap = _run(_horizon(), safety_factor=1.2)
+        assert snap.terminal_need_kwh == pytest.approx(24 * 0.4 * 1.2)
+
+    def test_terminal_price_is_min_of_curve_tail(self):
+        today = [0.30] * 20 + [0.45, 0.38, 0.42, 0.50]
+        assert terminal_price(_horizon(today)) == pytest.approx(0.38)
 
     def test_pv_forecast_used_for_tomorrow(self):
         snap = _run(self._curve(), pv_tomorrow_w=[2000.0] * 24, pv_hist_w=[1000.0] * 24)
