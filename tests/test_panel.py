@@ -36,6 +36,7 @@ async def test_register_panel_once_for_all_users(ha_frontend):
     kwargs = register.await_args.kwargs
     assert kwargs["frontend_url_path"] == "maestro-cockpit"
     assert kwargs["webcomponent_name"] == "e3dc-maestro-panel"
+    assert kwargs["sidebar_title"] == "E3DC Maestro Cockpit"
     assert kwargs["require_admin"] is False
     # The file content follows the version, so a new build is a new address for the app cache.
     prefix = f"/{DOMAIN}/frontend/panel/maestro-panel.js?v={VERSION}-"
@@ -56,6 +57,25 @@ async def test_register_panel_again_when_script_url_changes(ha_frontend, monkeyp
     remove.assert_called_once_with(hass, "maestro-cockpit")
     assert register.await_count == 2
     assert register.await_args.kwargs["module_url"].endswith("v=new")
+
+
+@pytest.mark.asyncio
+async def test_register_panel_again_when_sidebar_title_changes(ha_frontend):
+    from homeassistant.config_entries import ConfigEntryState
+
+    register, remove = ha_frontend
+    entry = SimpleNamespace(state=ConfigEntryState.LOADED, options={})
+    hass = SimpleNamespace(
+        data={},
+        config_entries=SimpleNamespace(async_entries=lambda _domain: [entry]),
+    )
+    await panel.async_register_panel(hass)
+    assert register.await_args.kwargs["sidebar_title"] == "E3DC Maestro Cockpit"
+    entry.options = {"sidebar_title": "Hausakku"}
+    await panel.async_register_panel(hass)
+    remove.assert_called_once_with(hass, "maestro-cockpit")
+    assert register.await_count == 2
+    assert register.await_args.kwargs["sidebar_title"] == "Hausakku"
 
 
 @pytest.mark.asyncio

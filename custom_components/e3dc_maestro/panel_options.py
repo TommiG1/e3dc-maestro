@@ -197,6 +197,8 @@ _SPECS: dict[str, _Spec] = {
     "sizing_pv_step_kwp": _n(0.5, 10),
     # Display only. Stored on the entry so every browser shows the same flow.
     "flow_consumers": ("consumers",),
+    # Sidebar label for the cockpit panel (empty = default "E3DC Maestro Cockpit").
+    "sidebar_title": ("text", 40),
 }
 
 # Display-only: cockpit reads these from entry options; no coordinator reload.
@@ -204,6 +206,7 @@ _DISPLAY_OPTIONS = frozenset({
     "flow_consumers",
     "wallbox_soc_sensor",
     "wallbox_plug_entity",
+    "sidebar_title",
 })
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
 _CONSUMER_ENTITY = re.compile(r"wallbox|evcc|easee|go-?e", re.IGNORECASE)
@@ -351,6 +354,11 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             else:
                 cleaned[key] = None
             continue
+        if spec[0] == "text" and isinstance(value, str):
+            value = value.strip()
+            if not value:
+                cleaned[key] = None
+                continue
         if spec[0] == "consumers":
             parsed, reason = _flow_consumers(value, known)
             if reason:
@@ -417,7 +425,11 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
     if display:
         _store_options(hass, entry, coordinator, display, reload=False)
     if not live:
-        return {"entry_id": entry.entry_id, "reloaded": False}
+        return {
+            "entry_id": entry.entry_id,
+            "reloaded": False,
+            "sidebar_title_changed": "sidebar_title" in display,
+        }
     cleaned = live
     needs_reload = coordinator is None or any(
         not hasattr(getattr(coordinator, "_params", None), key) for key in cleaned
@@ -432,10 +444,18 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
         if coordinator is not None:
             coordinator._skip_reload = False
         hass.config_entries.async_update_entry(entry, options=new_options)
-        return {"entry_id": entry.entry_id, "reloaded": True}
+        return {
+            "entry_id": entry.entry_id,
+            "reloaded": True,
+            "sidebar_title_changed": "sidebar_title" in display,
+        }
     for key, value in cleaned.items():
         coordinator.update_param(key, value)
-    return {"entry_id": entry.entry_id, "reloaded": False}
+    return {
+        "entry_id": entry.entry_id,
+        "reloaded": False,
+        "sidebar_title_changed": "sidebar_title" in display,
+    }
 
 
 def panel_options_payload(hass: HomeAssistant) -> dict[str, Any]:
@@ -464,4 +484,8 @@ def ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, An
     except PanelOptionsError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
         return
+    if result.get("sidebar_title_changed"):
+        from .panel import async_register_panel
+
+        hass.async_create_task(async_register_panel(hass))
     connection.send_result(msg["id"], result)

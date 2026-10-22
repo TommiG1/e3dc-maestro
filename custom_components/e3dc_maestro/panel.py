@@ -40,6 +40,9 @@ _LOGGER = logging.getLogger(__name__)
 # "e3dc-maestro" is taken by the Lovelace strategy dashboard.
 PANEL_URL_PATH = "maestro-cockpit"
 PANEL_COMPONENT = "e3dc-maestro-panel"
+# Distinct from the classic Lovelace title "E3DC Maestro" (path e3dc-maestro).
+# Overridable via entry option ``sidebar_title`` (Settings → Appearance).
+PANEL_SIDEBAR_TITLE = "E3DC Maestro Cockpit"
 # Served by the static path registered in dashboard_frontend.async_setup_frontend.
 _PANEL_MODULE = f"/{DOMAIN}/frontend/panel/maestro-panel.js"
 _PANEL_FLAG = f"{DOMAIN}_panel_registered"
@@ -570,11 +573,29 @@ async def _ws_energy_apply(hass: HomeAssistant, connection: Any, msg: dict[str, 
     connection.send_result(msg["id"], await async_energy_dashboard_apply(hass, msg["mode"]))
 
 
+def effective_sidebar_title(hass: HomeAssistant) -> str:
+    """Sidebar label: entry option ``sidebar_title``, else the default."""
+    config_entries = getattr(hass, "config_entries", None)
+    if config_entries is None:
+        return PANEL_SIDEBAR_TITLE
+    entries = config_entries.async_entries(DOMAIN)
+    entry = next((item for item in entries if item.state == ConfigEntryState.LOADED), None)
+    if entry is None:
+        return PANEL_SIDEBAR_TITLE
+    raw = entry.options.get("sidebar_title")
+    if isinstance(raw, str):
+        cleaned = raw.strip()
+        if cleaned:
+            return cleaned[:40]
+    return PANEL_SIDEBAR_TITLE
+
+
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Add the Maestro panel to the sidebar (for all users).
 
-    Re-registers when the script content changed, so a HACS update or a live
-    deploy gets a new module URL without clearing the browser cache.
+    Re-registers when the script content or sidebar title changed, so a HACS
+    update, live deploy, or rename gets a fresh sidebar entry without clearing
+    the browser cache.
 
     Never raises: a panel problem must not keep the control loop from starting.
     """
@@ -588,8 +609,11 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_energy_apply)
         hass.data[_WS_FLAG] = True
     module_url = panel_module_url()
+    title = effective_sidebar_title(hass)
+    # Include title so a rename re-registers even when the JS hash is unchanged.
+    fingerprint = (module_url, title)
     registered = hass.data.get(_PANEL_FLAG)
-    if registered == module_url:
+    if registered == fingerprint:
         return
     if registered:
         frontend.async_remove_panel(hass, PANEL_URL_PATH)
@@ -599,7 +623,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             hass,
             frontend_url_path=PANEL_URL_PATH,
             webcomponent_name=PANEL_COMPONENT,
-            sidebar_title="Maestro",
+            sidebar_title=title,
             sidebar_icon="mdi:battery-charging-high",
             module_url=module_url,
             require_admin=False,
@@ -607,7 +631,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     except ValueError as err:
         _LOGGER.warning("E3DC Maestro: Cockpit-Panel nicht registriert: %s", err)
         return
-    hass.data[_PANEL_FLAG] = module_url
+    hass.data[_PANEL_FLAG] = fingerprint
 
 
 def async_unregister_panel(hass: HomeAssistant) -> None:

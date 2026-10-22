@@ -1,5 +1,10 @@
 # Entwurf – noch kein Release
 
+## Cockpit
+
+- Sidebar-Titel **E3DC Maestro Cockpit** (vorher „Maestro“), damit er sich vom Classic-Dashboard **E3DC Maestro** unterscheidet. Pfad bleibt `/maestro-cockpit`.
+- Unter **Einstellungen → Darstellung** optionaler **Name in der Seitenleiste** (leer = Default). Speichern ohne Integrations-Neustart; gilt für alle Nutzer, nur Administratoren.
+
 ## Wallbox
 
 - Optionaler **Fahrzeug-SoC-Sensor** (`wallbox_soc_sensor`): erscheint im Energiefluss neben der Wallbox-Leistung (z. B. `4,2 kW · 72 %`). Bei E3DC wird `wallbox-soc` automatisch erkannt; sonst Sensor aus EVCC/openWB/Fahrzeug-Integration wählen. Nur Anzeige — die Regelung bleibt unverändert.

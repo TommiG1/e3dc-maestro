@@ -139,6 +139,19 @@ def test_flow_consumers_are_stored_without_a_reload():
     ]
 
 
+def test_sidebar_title_is_stored_without_a_reload():
+    params = SimpleNamespace(battery_capacity_kwh=10)
+    hass, entry, written, _ = _hass({}, set(), params)
+    result = apply_panel_options(hass, {"sidebar_title": "  Hausakku  "})
+    assert result["reloaded"] is False
+    assert result["sidebar_title_changed"] is True
+    assert written == []
+    assert entry.options["sidebar_title"] == "Hausakku"
+    cleared = apply_panel_options(hass, {"sidebar_title": "   "})
+    assert cleared["sidebar_title_changed"] is True
+    assert "sidebar_title" not in entry.options
+
+
 def test_flow_consumers_reject_an_unknown_entity():
     hass, _, _, _ = _hass({}, set(), SimpleNamespace())
     with pytest.raises(PanelOptionsError) as err:

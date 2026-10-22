@@ -830,10 +830,13 @@ Maestro entscheidet **jeden Tick** (Standard: 30 s) in absteigender Priorität. 
 <a id="maestro-cockpit-sidebar-panel-beta"></a>
 
 Seit **0.5.0** ist das Cockpit der normale Weg, vom Onboarding bis zum Betrieb.
-Es erscheint nach dem Update und einem Neustart von Home Assistant als **Maestro**
-in der Seitenleiste (Adresse `/maestro-cockpit`). Es braucht **keine Custom Cards**.
-Alle Einstellungen liegen hier. Das Classic-Dashboard und das Moderne Dashboard
-sind optional und nur noch da, wenn du die alten Lovelace-Ansichten behalten willst.
+Es erscheint nach dem Update und einem Neustart von Home Assistant als
+**E3DC Maestro Cockpit** in der Seitenleiste (Adresse `/maestro-cockpit`). Unter
+**Einstellungen → Darstellung** kannst du den Namen ändern (leer = Default). Das
+Classic-Dashboard behält den Titel **E3DC Maestro**. Es braucht **keine Custom
+Cards**. Alle Einstellungen liegen hier. Das Classic-Dashboard und das Moderne
+Dashboard sind optional und nur noch da, wenn du die alten Lovelace-Ansichten
+behalten willst.
 
 ### Erste Schritte
 

@@ -1150,6 +1150,8 @@ export function planControls(c: StrategyCtx & { planTuneOpen: boolean; onToggleP
   </div>`;
 }
 
+const DEFAULT_SIDEBAR_TITLE = "E3DC Maestro Cockpit";
+
 function lookView(c: SettingsCtx): TemplateResult {
   const { t } = c.i18n;
   const copy: Record<ThemeId, { title: Key; hint: Key }> = {
@@ -1163,6 +1165,9 @@ function lookView(c: SettingsCtx): TemplateResult {
     city: { title: "flowStyleCity", hint: "flowStyleCityHint" },
   };
   const showBanner = !c.alertBannerHidden;
+  const sidebarTitle =
+    typeof c.options.options.sidebar_title === "string" ? (c.options.options.sidebar_title as string) : "";
+  const titleLocked = !c.options.isAdmin;
   return html`<p class="hint">${t("setLookHint")}</p>
   ${c.themePreviewing ? html`<p class="hint theme-preview-banner">${t("themePreviewHint")}</p>` : nothing}
   <div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
@@ -1188,6 +1193,22 @@ function lookView(c: SettingsCtx): TemplateResult {
         <span class="txt"><b>${t(copy[id].title)}</b><span>${t(copy[id].hint)}</span></span>
       </button>`,
     )}
+  </div>
+  <h3 class="look-flow-title">${t("sidebarTitle")}</h3>
+  <p class="hint">${t("sidebarTitleHint")}</p>
+  <div class="ctrl setting-row look-sidebar">
+    <input
+      type="text"
+      aria-label=${t("sidebarTitle")}
+      maxlength="40"
+      placeholder=${DEFAULT_SIDEBAR_TITLE}
+      .value=${sidebarTitle}
+      ?disabled=${titleLocked || c.pending.has("sidebar_title")}
+      @change=${(e: Event) => {
+        const next = (e.target as HTMLInputElement).value.trim();
+        c.options.onChange("sidebar_title", next || null);
+      }}
+    />
   </div>
   <h3 class="look-flow-title">${t("flowStyleTitle")}</h3>
   <p class="hint">${t("flowStyleHint")}</p>

@@ -784,8 +784,10 @@ Maestro decides **every tick** (default: 30 s) in descending priority. The first
 <a id="maestro-cockpit-sidebar-panel-beta"></a>
 
 Since **0.5.0** the cockpit is the normal path, from onboarding through daily
-operation. After updating and restarting Home Assistant it appears as **Maestro**
-in the sidebar (path `/maestro-cockpit`). It needs **no custom cards**. Every
+operation. After updating and restarting Home Assistant it appears as
+**E3DC Maestro Cockpit** in the sidebar (path `/maestro-cockpit`). Under
+**Settings → Appearance** you can change the name (empty = default). The classic
+dashboard keeps the title **E3DC Maestro**. It needs **no custom cards**. Every
 setting lives here. The classic dashboard and the modern dashboard are optional
 and only there if you want to keep the old Lovelace views.
 

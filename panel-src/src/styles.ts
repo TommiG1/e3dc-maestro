@@ -2332,6 +2332,23 @@ export const styles = css`
   .look-banner {
     margin-top: 20px;
   }
+  .look-sidebar {
+    margin-top: 4px;
+  }
+  .look-sidebar input {
+    width: 100%;
+    max-width: 28rem;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--stroke-strong);
+    background: var(--field);
+    color: var(--text);
+    font: 600 14px Inter, system-ui, sans-serif;
+  }
+  .look-sidebar input:disabled {
+    opacity: 0.55;
+  }
   .dec-extra {
     grid-template-columns: repeat(3, 1fr);
   }
