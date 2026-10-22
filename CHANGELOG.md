@@ -11,6 +11,25 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.1-beta.10] – Wallbox-Anzeige und Sidebar-Titel (2026-10-22)
+
+> **Beta.** Enthält 0.5.1-beta.9. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.10.md](docs/release-notes/v0.5.1-beta.10.md).
+
+### Neu
+- **Fahrzeug-SoC** und **Stecker-Status** an der Wallbox im Energiefluss (Anzeige, Speichern ohne Reload). Wallbox bleibt auch ohne Ladeleistung sichtbar.
+- Sidebar-Default **E3DC Maestro Cockpit**; unter Darstellung optional umbenennbar (Issue #20).
+
+### Korrekturen
+- PV-Zusatz-Cluster, Overflow mit Zeitstempel-Skew, Wallbox-Idle ohne Phantom-Last (echte 0 W).
+
+### Dokumentation
+- Hilfe und README (DE/EN) an beta.7–9 und die neuen Anzeigen angeglichen.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+
+---
+
 ## [0.5.1-beta.9] – Energyforecast, 48‑h-Prognose und Plan-SoC (2026-10-22)
 
 > **Beta.** Enthält 0.5.1-beta.8. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.9.md](docs/release-notes/v0.5.1-beta.9.md).
