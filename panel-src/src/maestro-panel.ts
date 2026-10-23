@@ -1367,6 +1367,7 @@ class MaestroPanel extends LitElement {
         this._forecastZoom = [from, to];
         this.requestUpdate();
       },
+      onForecastLayout: () => this._syncStrategyStrip(),
       onToggleForecastSeries: (key: ForecastPowerKey) => {
         // SoC (+ shadow overlays) always stay — power series may all be hidden.
         const next = new Set(this._forecastHidden);
@@ -1817,26 +1818,32 @@ class MaestroPanel extends LitElement {
       this._forecastZoom = [win.from, win.to];
       el.zoomX(win.from, win.to);
     }
-    this._syncStrategyStripInset();
+    this._syncStrategyStrip();
   }
 
-  /** Match the Preisplan strip to the Apex plot area (y-axis gutters). */
-  private _syncStrategyStripInset(): void {
-    const chart = this.renderRoot.querySelector("#fc-main");
-    const track = this.renderRoot.querySelector<HTMLElement>(".strategy-strip .strip-track");
-    if (!chart || !track) return;
-    const grid =
-      chart.querySelector(".apexcharts-grid") ??
-      chart.querySelector(".apexcharts-inner") ??
-      chart.querySelector(".apexcharts-svg");
-    if (!grid) return;
-    const cr = chart.getBoundingClientRect();
-    const gr = grid.getBoundingClientRect();
-    if (!(cr.width > 0) || !(gr.width > 0)) return;
-    const left = Math.max(0, Math.round(gr.left - cr.left));
-    const right = Math.max(0, Math.round(cr.right - gr.right));
-    track.style.marginLeft = `${left}px`;
-    track.style.marginRight = `${right}px`;
+  /**
+   * Align the Preisplan strip to the Apex plot: same pixel width/inset and the
+   * same x-window Apex is actually showing (not a CSS guess).
+   */
+  private _syncStrategyStrip(): void {
+    const run = () => {
+      const chart = this.renderRoot.querySelector<MaestroChart>("#fc-main");
+      const track = this.renderRoot.querySelector<HTMLElement>(".strategy-strip .strip-track");
+      if (!chart || !track) return;
+      const m = chart.plotMetrics();
+      if (!m) return;
+      track.style.marginLeft = `${Math.round(m.left)}px`;
+      track.style.width = `${Math.round(m.width)}px`;
+      track.style.maxWidth = `${Math.round(m.width)}px`;
+      track.style.marginRight = "auto";
+      const cur = this._forecastZoom;
+      if (!cur || Math.abs(cur[0] - m.minX) > 1 || Math.abs(cur[1] - m.maxX) > 1) {
+        this._forecastZoom = [m.minX, m.maxX];
+        this.requestUpdate();
+      }
+    };
+    // Apex finishes layout after zoom/render — wait two frames.
+    requestAnimationFrame(() => requestAnimationFrame(run));
   }
 }
 

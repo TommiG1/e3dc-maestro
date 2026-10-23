@@ -68,7 +68,6 @@ import {
   planStripSegments,
   priceExtremes,
   slotAction,
-  stripAxisTicks,
   timelineBands,
   type PlanEmptyKind,
   type Point,
@@ -104,6 +103,7 @@ export interface Ctx {
   /** Visible forecast chart x-window (ms); follows range buttons and brush zoom. */
   forecastZoom?: [number, number];
   onForecastZoom: (from: number, to: number) => void;
+  onForecastLayout: () => void;
   /** Forecast power series the user hid (SoC stays). */
   forecastHidden: ReadonlySet<ForecastPowerKey>;
   onToggleForecastSeries: (key: ForecastPowerKey) => void;
@@ -958,7 +958,6 @@ export function forecastView(c: Ctx): TemplateResult {
         istStart: c.ist?.pv[0]?.[0] ?? c.ist?.soc[0]?.[0],
       });
   const stripSegs = slots.length ? planStripSegments(slots, win.from, win.to) : [];
-  const stripTicks = stripSegs.length ? stripAxisTicks(win.from, win.to, c.mobile ? 6 : 10) : [];
 
   return html`
     <div class="card forecast-card">
@@ -1037,6 +1036,7 @@ export function forecastView(c: Ctx): TemplateResult {
               fmt: c.fmt,
               i18n: c.i18n,
               onZoom: c.onForecastZoom,
+              onLayout: c.onForecastLayout,
             }),
         )}
       ></maestro-chart>
@@ -1057,13 +1057,10 @@ export function forecastView(c: Ctx): TemplateResult {
                     s.action === "charge" ? t("legendCharge") : s.action === "hold" ? t("legendHold") : t("legendRelease");
                   return html`<div
                     class="slot ${s.action}"
-                    style="left:${s.leftPct}%;width:${s.widthPct}%"
+                    style="left:${s.leftPct}%;width:${Math.max(s.widthPct, 0.15)}%"
                     title="${s.startLocal} · ${c.fmt.n(s.price * 100)} ct · ${actionLabel}"
                   ></div>`;
                 })}
-              </div>
-              <div class="strip-axis timed">
-                ${stripTicks.map((tick) => html`<span style="left:${tick.leftPct}%">${tick.text}</span>`)}
               </div>
             </div>
           </div>`

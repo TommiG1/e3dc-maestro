@@ -21,7 +21,6 @@ import {
   planSocPoints,
   planStripSegments,
   priceExtremes,
-  stripAxisTicks,
   slotAction,
   splitGrid,
   timelineBands,
@@ -415,7 +414,6 @@ describe("price plan", () => {
     );
     expect(win.from).toBe(Date.parse("2026-10-16T06:00:00+02:00"));
     expect(win.to).toBe(Date.parse("2026-10-17T00:00:00+02:00"));
-    expect(stripAxisTicks(from, to, 8).map((t) => t.text)).toContain("12:00");
   });
 });
 

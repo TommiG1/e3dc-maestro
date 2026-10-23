@@ -9,7 +9,24 @@ interface ChartApi {
   updateSeries(series: unknown, animate?: boolean): Promise<unknown>;
   zoomX(min: number, max: number): void;
   destroy(): void;
+  /** Apex internals — used to align HTML overlays to the plot area. */
+  w?: {
+    globals?: {
+      translateX?: number;
+      gridWidth?: number;
+      svgWidth?: number;
+      minX?: number;
+      maxX?: number;
+    };
+  };
 }
+
+export type PlotMetrics = {
+  left: number;
+  width: number;
+  minX: number;
+  maxX: number;
+};
 
 interface ApexStatic {
   new (el: HTMLElement, o: Opts): ChartApi;
@@ -115,6 +132,27 @@ export class MaestroChart extends LitElement {
   zoomX(min: number, max: number): void {
     this._zoom = [min, max];
     this._chart?.zoomX(min, max);
+  }
+
+  /** Pixel inset of the plot area and the currently visible x-window. */
+  plotMetrics(): PlotMetrics | undefined {
+    const g = this._chart?.w?.globals;
+    if (!g) return undefined;
+    const left = g.translateX;
+    const width = g.gridWidth;
+    const minX = g.minX;
+    const maxX = g.maxX;
+    if (
+      typeof left !== "number" ||
+      typeof width !== "number" ||
+      typeof minX !== "number" ||
+      typeof maxX !== "number" ||
+      !(width > 0) ||
+      !(maxX > minX)
+    ) {
+      return undefined;
+    }
+    return { left, width, minX, maxX };
   }
 
   private async _apply(): Promise<void> {

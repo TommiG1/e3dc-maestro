@@ -2673,12 +2673,14 @@ export const styles = css`
   }
   .strategy-strip .strip-track {
     margin-top: 10px;
+    box-sizing: border-box;
   }
   .strategy-strip .strip.timed {
     position: relative;
     display: block;
     height: 34px;
     margin-top: 0;
+    width: 100%;
   }
   .strategy-strip .strip.timed .slot {
     position: absolute;
@@ -2691,12 +2693,15 @@ export const styles = css`
     display: block;
     height: 16px;
     margin-top: 6px;
+    width: 100%;
   }
   .strategy-strip .strip-axis.timed span {
     position: absolute;
     top: 0;
     transform: translateX(-50%);
     white-space: nowrap;
+    font: 500 11px ui-monospace, monospace;
+    color: var(--faint);
   }
   .plan-top {
     grid-template-columns: 2fr 1fr;

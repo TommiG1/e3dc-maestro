@@ -433,14 +433,14 @@ export interface StripSegment {
 export function planStripSegments(slots: Slot[], from: number, to: number): StripSegment[] {
   const span = to - from;
   if (!(span > 0) || slots.length < 1) return [];
-  const cleaned = chartSlots(slots);
+  // Keep raw slots (incl. short stubs) — absolute layout maps them to thin slices.
   const out: StripSegment[] = [];
-  for (let i = 0; i < cleaned.length; i++) {
-    const s = cleaned[i];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
     const t0 = Date.parse(s.start);
     if (!Number.isFinite(t0)) continue;
-    const hours = slotHours(cleaned, i);
-    const t1Raw = i + 1 < cleaned.length ? Date.parse(cleaned[i + 1].start) : t0 + hours * 3600e3;
+    const hours = slotHours(slots, i);
+    const t1Raw = i + 1 < slots.length ? Date.parse(slots[i + 1].start) : t0 + hours * 3600e3;
     const t1 = Number.isFinite(t1Raw) && t1Raw > t0 ? t1Raw : t0 + hours * 3600e3;
     const a = Math.max(t0, from);
     const b = Math.min(t1, to);
