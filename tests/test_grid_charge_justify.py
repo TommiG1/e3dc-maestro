@@ -4,11 +4,13 @@ from __future__ import annotations
 from custom_components.e3dc_maestro.const import (
     PHASE_CORRIDOR,
     PHASE_EMERGENCY,
+    PHASE_GRID_CHARGE,
     PHASE_RESERVE_PROTECTION,
     TARIFF_MODE_DYNAMIC,
     TARIFF_MODE_FIXED,
 )
 from custom_components.e3dc_maestro.grid_charge_justify import (
+    JUSTIFIED_GRID_CHARGE_PHASES,
     grid_to_battery_charge_attrs,
     is_unjustified_grid_charge,
     unjustified_grid_charge_kwh,
@@ -36,6 +38,24 @@ def test_emergency_phase_never_alarms() -> None:
         justified_kwh=0.0,
         last_phase=PHASE_EMERGENCY,
     )
+
+
+def test_cheap_slot_grid_charge_is_justified() -> None:
+    assert PHASE_GRID_CHARGE in JUSTIFIED_GRID_CHARGE_PHASES
+    assert not is_unjustified_grid_charge(
+        tariff_mode=TARIFF_MODE_FIXED,
+        total_kwh=7.5,
+        justified_kwh=0.0,
+        last_phase=PHASE_GRID_CHARGE,
+    )
+    attrs = grid_to_battery_charge_attrs(
+        total_kwh=7.5,
+        justified_kwh=7.5,
+        last_phase=PHASE_GRID_CHARGE,
+        tariff_mode=TARIFF_MODE_FIXED,
+        fixed_reserve_enabled=True,
+    )
+    assert attrs["charge_reason"] == "grid_charge"
 
 
 def test_fully_justified_day_ok() -> None:

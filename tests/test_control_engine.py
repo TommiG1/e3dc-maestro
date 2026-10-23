@@ -228,6 +228,76 @@ class TestHTProtection:
         decision = decide(state, params, _now(1, 15, 10))
         assert decision.phase != PHASE_HT_PROTECTION
 
+    def test_forecast_based_uses_planning_floor_not_seasonal(self):
+        # Issue #27: prognosebasierte Netzladung plant bis zum Planungsboden.
+        # SoC 30 % wäre unter saisonalem ht_min≈50, aber über Ladeschwelle 10
+        # → Akku darf im HT weiter das Haus decken.
+        state = MaestroState(soc=30, pv_power=0, house_power=1000, grid_power=0, battery_power=0)
+        params = MaestroParams(
+            **{
+                **DEFAULT_PARAMS.__dict__,
+                "ht_min": 50,
+                "ht_sockel": 10,
+                "charge_threshold": 10,
+                "seasonal_reserve_enabled": False,
+                "low_slot_grid_charge_enabled": True,
+                "low_slot_forecast_based": True,
+            }
+        )
+        decision = decide(state, params, _now(1, 15, 10))
+        assert decision.phase != PHASE_HT_PROTECTION
+
+    def test_forecast_based_still_locks_at_planning_floor(self):
+        state = MaestroState(soc=8, pv_power=0, house_power=1000, grid_power=0, battery_power=0)
+        params = MaestroParams(
+            **{
+                **DEFAULT_PARAMS.__dict__,
+                "ht_min": 50,
+                "charge_threshold": 10,
+                "seasonal_reserve_enabled": False,
+                "low_slot_grid_charge_enabled": True,
+                "low_slot_forecast_based": True,
+            }
+        )
+        # SoC 8 % < Ladeschwelle 10 → Emergency greift vor HT.
+        decision = decide(state, params, _now(1, 15, 10))
+        assert decision.phase == PHASE_EMERGENCY
+
+        state = MaestroState(soc=10, pv_power=0, house_power=1000, grid_power=0, battery_power=0)
+        decision = decide(state, params, _now(1, 15, 10))
+        assert decision.phase == PHASE_HT_PROTECTION
+        assert "Planungsboden" in decision.reason
+
+    def test_forecast_based_keeps_explicit_slot_override(self):
+        from custom_components.e3dc_maestro.control_engine import (
+            TariffSchedule,
+            TariffSlot,
+            TARIFF_HIGH,
+        )
+
+        slot = TariffSlot(
+            weekdays=frozenset(range(7)),
+            start_h=5,
+            end_h=21,
+            class_=TARIFF_HIGH,
+            min_reserve_soc=70.0,
+        )
+        params = MaestroParams(
+            **{
+                **DEFAULT_PARAMS.__dict__,
+                "ht_enabled": False,
+                "charge_threshold": 10,
+                "seasonal_reserve_enabled": False,
+                "low_slot_grid_charge_enabled": True,
+                "low_slot_forecast_based": True,
+                "tariff_schedule": TariffSchedule(slots=[slot]),
+            }
+        )
+        state = MaestroState(soc=60, pv_power=0, house_power=1000, grid_power=0, battery_power=0)
+        decision = decide(state, params, _now(1, 15, 10))
+        assert decision.phase == PHASE_HT_PROTECTION
+        assert "Slot-Override" in decision.reason
+
 
 class TestCorridor:
     def test_charges_when_soc_below_target(self):

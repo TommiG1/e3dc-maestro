@@ -380,7 +380,12 @@ const gridBatDelta = (
   if (reason === "justified" && on(E.fixedReserve)) {
     return t("kpiGridBatReserve");
   }
-  if (reason === "justified" || reason === "curtailment" || reason === "feed_in_limit") {
+  if (
+    reason === "justified" ||
+    reason === "curtailment" ||
+    reason === "feed_in_limit" ||
+    reason === "grid_charge"
+  ) {
     return t("kpiGridBatJustified");
   }
   return t("kpiGridBatSub");

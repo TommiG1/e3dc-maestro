@@ -7,6 +7,7 @@ from .const import (
     PHASE_CURTAILMENT_GUARD,
     PHASE_EMERGENCY,
     PHASE_FEED_IN_LIMIT,
+    PHASE_GRID_CHARGE,
     PHASE_RESERVE_PROTECTION,
     TARIFF_MODE_FIXED,
     UNJUSTIFIED_GRID_CHARGE_THRESHOLD_KWH,
@@ -19,6 +20,7 @@ JUSTIFIED_GRID_CHARGE_PHASES: frozenset[str] = frozenset(
         PHASE_EMERGENCY,
         PHASE_CURTAILMENT_GUARD,
         PHASE_FEED_IN_LIMIT,
+        PHASE_GRID_CHARGE,
     }
 )
 
@@ -27,6 +29,7 @@ _PHASE_REASON: dict[str, str] = {
     PHASE_EMERGENCY: "emergency",
     PHASE_CURTAILMENT_GUARD: "curtailment",
     PHASE_FEED_IN_LIMIT: "feed_in_limit",
+    PHASE_GRID_CHARGE: "grid_charge",
 }
 
 

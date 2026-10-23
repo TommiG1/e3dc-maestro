@@ -1559,6 +1559,16 @@ def _decide_core(
         if slot_floor is not None:
             ht_min = slot_floor
             ht_min_source = "Slot-Override"
+        elif (
+            params.low_slot_grid_charge_enabled
+            and params.low_slot_forecast_based
+        ):
+            # Issue #27: Die Bridge plant bis zum Notstrom-/Ladeschwellen-Boden.
+            # Eine höhere saisonale/adaptive HT-Sperre würde denselben Energie-
+            # sockel hinter die teure Phase schieben. Expliziter Slot-Override
+            # bleibt Vorrang.
+            ht_min = reserve_floor_soc(state, params, now)
+            ht_min_source = "Planungsboden"
         elif adaptive_floor is not None:
             ht_min = adaptive_floor
             ht_min_source = "verbrauchsadaptiv"

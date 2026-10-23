@@ -11,6 +11,19 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.2-beta.1] – HT-Schutz und Netzladung (#27) (2026-10-23)
+
+> **Beta.** Enthält 0.5.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.1.md](docs/release-notes/v0.5.2-beta.1.md).
+
+### Korrekturen
+- Bei prognosebasierter Netzladung sperrt der HT-Schutz nur noch auf dem Planungsboden (Ladeschwelle/Notstrom), nicht auf der höheren saisonalen/adaptiven HT-Reserve (#27).
+- Geplante NT-Netzladung (`grid_charge`) gilt nicht mehr als „Netzladung ohne Rechtfertigung“.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+
+---
+
 ## [0.5.1] – Cockpit, Netzladung und Preisplan (2026-10-22)
 
 Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release-notes/v0.5.1.md](docs/release-notes/v0.5.1.md).
