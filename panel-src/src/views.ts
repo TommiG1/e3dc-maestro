@@ -58,14 +58,17 @@ import {
   batteryForecast,
   parseAutonomyHours,
   displaySlots,
+  forecastWindow,
   parseSlots,
   parseTrajectory,
   phaseColor,
   planEmptyKind,
   planImportKwPoints,
   planSocPoints,
+  planStripSegments,
   priceExtremes,
   slotAction,
+  stripAxisTicks,
   timelineBands,
   type PlanEmptyKind,
   type Point,
@@ -98,6 +101,9 @@ export interface Ctx {
   showIst: boolean;
   onRange: (hours: number) => void;
   onToggleIst: () => void;
+  /** Visible forecast chart x-window (ms); follows range buttons and brush zoom. */
+  forecastZoom?: [number, number];
+  onForecastZoom: (from: number, to: number) => void;
   /** Forecast power series the user hid (SoC stays). */
   forecastHidden: ReadonlySet<ForecastPowerKey>;
   onToggleForecastSeries: (key: ForecastPowerKey) => void;
@@ -945,6 +951,14 @@ export function forecastView(c: Ctx): TemplateResult {
     html`<div class="card stat"><h3>${label}</h3><div class="v">${value}</div></div>`;
   const hiddenKey = [...c.forecastHidden].sort().join(",");
   const socToggleLabel = planShadow ? t("legendSocExpected") : usePlanSoc ? t("legendPlanSoc") : t("legendSoc");
+  const win = c.forecastZoom
+    ? { from: c.forecastZoom[0], to: c.forecastZoom[1] }
+    : forecastWindow(traj, c.range, {
+        showIst: c.showIst,
+        istStart: c.ist?.pv[0]?.[0] ?? c.ist?.soc[0]?.[0],
+      });
+  const stripSegs = slots.length ? planStripSegments(slots, win.from, win.to) : [];
+  const stripTicks = stripSegs.length ? stripAxisTicks(win.from, win.to, c.mobile ? 6 : 10) : [];
 
   return html`
     <div class="card forecast-card">
@@ -1022,14 +1036,12 @@ export function forecastView(c: Ctx): TemplateResult {
               compact: c.mobile,
               fmt: c.fmt,
               i18n: c.i18n,
+              onZoom: c.onForecastZoom,
             }),
         )}
       ></maestro-chart>
-      ${slots.length
-        ? (() => {
-            const strip = displaySlots(slots);
-            const step = Math.max(1, Math.ceil(strip.length / (c.mobile ? 6 : 12)));
-            return html`<div class="strategy-strip" aria-label=${t("strategyStrip")}>
+      ${stripSegs.length
+        ? html`<div class="strategy-strip" aria-label=${t("strategyStrip")}>
             <div class="strip-head">
               <h4>${t("strategyStrip")}</h4>
               <div class="legend">
@@ -1038,20 +1050,23 @@ export function forecastView(c: Ctx): TemplateResult {
                 <span><i style="background:${COLORS.bat}"></i>${t("legendRelease")}</span>
               </div>
             </div>
-            <div class="strip">
-              ${strip.map(
-                (s) =>
-                  html`<div
-                    class="slot ${slotAction(s)}"
-                    title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct · ${slotAction(s) === "charge" ? t("legendCharge") : slotAction(s) === "hold" ? t("legendHold") : t("legendRelease")}"
-                  ></div>`,
-              )}
+            <div class="strip-track">
+              <div class="strip timed">
+                ${stripSegs.map((s) => {
+                  const actionLabel =
+                    s.action === "charge" ? t("legendCharge") : s.action === "hold" ? t("legendHold") : t("legendRelease");
+                  return html`<div
+                    class="slot ${s.action}"
+                    style="left:${s.leftPct}%;width:${s.widthPct}%"
+                    title="${s.startLocal} · ${c.fmt.n(s.price * 100)} ct · ${actionLabel}"
+                  ></div>`;
+                })}
+              </div>
+              <div class="strip-axis timed">
+                ${stripTicks.map((tick) => html`<span style="left:${tick.leftPct}%">${tick.text}</span>`)}
+              </div>
             </div>
-            <div class="strip-axis">${strip
-              .filter((_, i) => i % step === 0)
-              .map((s) => html`<span>${s.start_local}</span>`)}</div>
-          </div>`;
-          })()
+          </div>`
         : nothing}
       ${c.mobile
         ? nothing

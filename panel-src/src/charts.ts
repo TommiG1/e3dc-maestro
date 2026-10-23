@@ -264,11 +264,13 @@ export interface ForecastInput {
   hiddenPower?: ReadonlySet<ForecastPowerKey>;
   /** Narrow screens: less chrome, more plot width. */
   compact?: boolean;
+  /** Fired when the user zooms / brushes the forecast chart. */
+  onZoom?: (from: number, to: number) => void;
   fmt: Fmt;
   i18n: I18n;
 }
 
-export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShadowSoc, hideExpectedSoc, hideShadowImport, planImport, ist, showIst, hiddenPower, compact, fmt, i18n }: ForecastInput): Opts {
+export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShadowSoc, hideExpectedSoc, hideShadowImport, planImport, ist, showIst, hiddenPower, compact, onZoom, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
   const hasPlanSoc = !!planSoc && planSoc.length >= 2;
   // Shadow: plan does not actuate — keep real trajectory (cyan); optionally overlay plan SoC.
@@ -479,6 +481,15 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShad
       zoom: { enabled: true, type: "x" },
       toolbar: { show: false, autoSelected: "zoom" },
       parentHeightOffset: compact ? 0 : undefined,
+      events: onZoom
+        ? {
+            zoomed: (_ctx: unknown, opts?: { xaxis?: { min?: number; max?: number } }) => {
+              const min = opts?.xaxis?.min;
+              const max = opts?.xaxis?.max;
+              if (typeof min === "number" && typeof max === "number" && max > min) onZoom(min, max);
+            },
+          }
+        : undefined,
     },
     grid: {
       padding: compact

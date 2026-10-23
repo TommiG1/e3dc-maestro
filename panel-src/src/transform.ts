@@ -407,6 +407,79 @@ export function planImportKwPoints(slots: Slot[]): Point[] {
   return out;
 }
 
+/** Same x-window the forecast chart zooms to (Ist may extend before the trajectory). */
+export function forecastWindow(
+  traj: Pick<Trajectory, "trajectory_points">,
+  rangeHours: number,
+  opts?: { istStart?: number; showIst?: boolean },
+): { from: number; to: number } {
+  const pts = traj.trajectory_points;
+  const x0 = pts[0][0];
+  const x1 = pts[pts.length - 1][0];
+  const from = opts?.showIst && opts.istStart !== undefined ? Math.min(x0, opts.istStart) : x0;
+  const to = Math.min(x1, x0 + Math.max(1, rangeHours) * 3600e3);
+  return { from, to: Math.max(to, from + 60e3) };
+}
+
+export interface StripSegment {
+  leftPct: number;
+  widthPct: number;
+  action: SlotAction;
+  startLocal: string;
+  price: number;
+}
+
+/** Time-aligned strip segments for the visible chart window (percent of width). */
+export function planStripSegments(slots: Slot[], from: number, to: number): StripSegment[] {
+  const span = to - from;
+  if (!(span > 0) || slots.length < 1) return [];
+  const cleaned = chartSlots(slots);
+  const out: StripSegment[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const s = cleaned[i];
+    const t0 = Date.parse(s.start);
+    if (!Number.isFinite(t0)) continue;
+    const hours = slotHours(cleaned, i);
+    const t1Raw = i + 1 < cleaned.length ? Date.parse(cleaned[i + 1].start) : t0 + hours * 3600e3;
+    const t1 = Number.isFinite(t1Raw) && t1Raw > t0 ? t1Raw : t0 + hours * 3600e3;
+    const a = Math.max(t0, from);
+    const b = Math.min(t1, to);
+    if (!(b > a)) continue;
+    out.push({
+      leftPct: ((a - from) / span) * 100,
+      widthPct: ((b - a) / span) * 100,
+      action: slotAction(s),
+      startLocal: s.start_local,
+      price: s.price,
+    });
+  }
+  return out;
+}
+
+/** Tick labels for the strip axis, aligned to local clock hours. */
+export function stripAxisTicks(from: number, to: number, maxTicks = 10): { leftPct: number; text: string }[] {
+  const span = to - from;
+  if (!(span > 0)) return [];
+  const hours = span / 3600e3;
+  const stepH = hours <= 8 ? 1 : hours <= 16 ? 2 : hours <= 30 ? 3 : 6;
+  const stepMs = stepH * 3600e3;
+  const start = new Date(from);
+  start.setMinutes(0, 0, 0);
+  let t = start.getTime();
+  const rem = ((start.getHours() % stepH) + stepH) % stepH;
+  if (rem !== 0) t += (stepH - rem) * 3600e3;
+  if (t < from) t += stepMs;
+  const out: { leftPct: number; text: string }[] = [];
+  for (; t <= to + 1 && out.length < maxTicks; t += stepMs) {
+    if (t < from - 1) continue;
+    const d = new Date(t);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    out.push({ leftPct: ((t - from) / span) * 100, text: `${hh}:${mm}` });
+  }
+  return out;
+}
+
 /**
  * Drop transitional slots (e.g. the partial slot "now until the next price boundary"):
  * a datetime bar chart sizes every bar by the smallest x distance, so a 5-minute stub

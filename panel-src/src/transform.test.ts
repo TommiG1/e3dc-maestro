@@ -16,9 +16,12 @@ import {
   phaseBands,
   phaseColor,
   planEmptyKind,
+  forecastWindow,
   planImportKwPoints,
   planSocPoints,
+  planStripSegments,
   priceExtremes,
+  stripAxisTicks,
   slotAction,
   splitGrid,
   timelineBands,
@@ -384,6 +387,35 @@ describe("price plan", () => {
       [Date.parse("2026-10-16T14:00:00+02:00"), 0.2],
     ]);
     expect(planImportKwPoints([])).toEqual([]);
+  });
+
+  it("aligns strip segments to the chart time window", () => {
+    const from = Date.parse("2026-10-16T10:00:00+02:00");
+    const to = Date.parse("2026-10-16T14:00:00+02:00");
+    const slots = parseSlots([
+      slot(0.2, { start: "2026-10-16T11:00:00+02:00", start_local: "11:00", hours: 1, grid_charge_kwh: 1 }),
+      slot(0.3, { start: "2026-10-16T12:00:00+02:00", start_local: "12:00", hours: 1, hold: true }),
+      slot(0.4, { start: "2026-10-16T13:00:00+02:00", start_local: "13:00", hours: 1 }),
+    ]);
+    const segs = planStripSegments(slots, from, to);
+    expect(segs).toHaveLength(3);
+    expect(segs[0].leftPct).toBeCloseTo(25, 5);
+    expect(segs[0].widthPct).toBeCloseTo(25, 5);
+    expect(segs[0].action).toBe("charge");
+    expect(segs[1].action).toBe("hold");
+    const win = forecastWindow(
+      {
+        trajectory_points: [
+          [Date.parse("2026-10-16T12:00:00+02:00"), 20],
+          [Date.parse("2026-10-18T12:00:00+02:00"), 40],
+        ],
+      },
+      12,
+      { showIst: true, istStart: Date.parse("2026-10-16T06:00:00+02:00") },
+    );
+    expect(win.from).toBe(Date.parse("2026-10-16T06:00:00+02:00"));
+    expect(win.to).toBe(Date.parse("2026-10-17T00:00:00+02:00"));
+    expect(stripAxisTicks(from, to, 8).map((t) => t.text)).toContain("12:00");
   });
 });
 

@@ -96,7 +96,7 @@ import {
   type LookPrefs,
 } from "./look-prefs";
 import { isDarkTheme, loadTheme, saveTheme, type ThemeId } from "./theme";
-import { parseTrajectory, type Point, type TimelineItem } from "./transform";
+import { forecastWindow, parseTrajectory, type Point, type TimelineItem } from "./transform";
 
 const NODE_META = {
   pv: { entity: "pv" as const, color: "#fbbf24", label: "nodePv" as const },
@@ -195,6 +195,7 @@ class MaestroPanel extends LitElement {
   private _hideShadowSoc = loadShadowSocHidden();
   private _hideExpectedSoc = loadExpectedSocHidden();
   private _hideShadowImport = loadShadowImportHidden();
+  private _forecastZoom?: [number, number];
   private _settingsQuery = "";
   private _sparks?: Record<SparkKey, Point[]>;
   private _ist?: IstSeries;
@@ -1342,18 +1343,29 @@ class MaestroPanel extends LitElement {
       timeline: this._timeline,
       range: this._range,
       showIst: this._showIst,
+      forecastZoom: this._forecastZoom,
       forecastHidden: this._forecastHidden,
       hideShadowSoc: this._hideShadowSoc,
       hideExpectedSoc: this._hideExpectedSoc,
       hideShadowImport: this._hideShadowImport,
       onRange: (h) => {
         this._range = h;
+        this._zoomKey = undefined;
+        this._forecastZoom = undefined;
         this.requestUpdate();
       },
       onToggleIst: () => {
         this._showIst = !this._showIst;
+        this._zoomKey = undefined;
+        this._forecastZoom = undefined;
         this.requestUpdate();
         void this._ensureHistory();
+      },
+      onForecastZoom: (from, to) => {
+        const cur = this._forecastZoom;
+        if (cur && Math.abs(cur[0] - from) < 1 && Math.abs(cur[1] - to) < 1) return;
+        this._forecastZoom = [from, to];
+        this.requestUpdate();
       },
       onToggleForecastSeries: (key: ForecastPowerKey) => {
         // SoC (+ shadow overlays) always stay — power series may all be hidden.
@@ -1795,13 +1807,36 @@ class MaestroPanel extends LitElement {
     const el = this.renderRoot.querySelector<MaestroChart>("#fc-main");
     if (!traj || !el) return;
     // Re-zoom only when the window inputs change, never on live updates (keeps the user's drag-zoom).
-    const x0 = traj.trajectory_points[0][0];
-    const x1 = traj.trajectory_points[traj.trajectory_points.length - 1][0];
-    const from = this._showIst && this._ist?.pv.length ? Math.min(x0, this._ist.pv[0][0]) : x0;
-    const key = `${this._range}|${from}|${x0}`;
-    if (key === this._zoomKey) return;
-    this._zoomKey = key;
-    el.zoomX(from, Math.min(x1, x0 + this._range * 3600e3));
+    const win = forecastWindow(traj, this._range, {
+      showIst: this._showIst,
+      istStart: this._ist?.pv[0]?.[0] ?? this._ist?.soc[0]?.[0],
+    });
+    const key = `${this._range}|${win.from}|${win.to}`;
+    if (key !== this._zoomKey) {
+      this._zoomKey = key;
+      this._forecastZoom = [win.from, win.to];
+      el.zoomX(win.from, win.to);
+    }
+    this._syncStrategyStripInset();
+  }
+
+  /** Match the Preisplan strip to the Apex plot area (y-axis gutters). */
+  private _syncStrategyStripInset(): void {
+    const chart = this.renderRoot.querySelector("#fc-main");
+    const track = this.renderRoot.querySelector<HTMLElement>(".strategy-strip .strip-track");
+    if (!chart || !track) return;
+    const grid =
+      chart.querySelector(".apexcharts-grid") ??
+      chart.querySelector(".apexcharts-inner") ??
+      chart.querySelector(".apexcharts-svg");
+    if (!grid) return;
+    const cr = chart.getBoundingClientRect();
+    const gr = grid.getBoundingClientRect();
+    if (!(cr.width > 0) || !(gr.width > 0)) return;
+    const left = Math.max(0, Math.round(gr.left - cr.left));
+    const right = Math.max(0, Math.round(cr.right - gr.right));
+    track.style.marginLeft = `${left}px`;
+    track.style.marginRight = `${right}px`;
   }
 }
 
