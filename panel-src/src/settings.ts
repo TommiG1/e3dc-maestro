@@ -13,6 +13,7 @@ import { pauseStatus } from "./pause";
 import { sliderField } from "./slider-field";
 import "./setting-tip";
 import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
+import { CORNERS, DENSITIES, type CornersId, type DensityId } from "./look-prefs";
 import { THEMES, type ThemeId } from "./theme";
 
 /** One labelled block inside a settings area. */
@@ -426,6 +427,12 @@ export interface SettingsCtx {
   themePreviewing: boolean;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
+  motion: boolean;
+  onMotion: (on: boolean) => void;
+  density: DensityId;
+  onDensity: (density: DensityId) => void;
+  corners: CornersId;
+  onCorners: (corners: CornersId) => void;
   /** When true the live alert banner stays hidden; chips still show the same info. */
   alertBannerHidden: boolean;
   onAlertBannerHidden: (hidden: boolean) => void;
@@ -1158,6 +1165,10 @@ function lookView(c: SettingsCtx): TemplateResult {
     dark: { title: "themeDark", hint: "themeDarkHint" },
     classic: { title: "themeClassic", hint: "themeClassicHint" },
     e3dc: { title: "themeE3dc", hint: "themeE3dcHint" },
+    oled: { title: "themeOled", hint: "themeOledHint" },
+    amber: { title: "themeAmber", hint: "themeAmberHint" },
+    leitstand: { title: "themeLeitstand", hint: "themeLeitstandHint" },
+    tibber: { title: "themeTibber", hint: "themeTibberHint" },
   };
   const flowCopy: Record<FlowStyleId, { title: Key; hint: Key }> = {
     nodes: { title: "flowStyleNodes", hint: "flowStyleNodesHint" },
@@ -1169,7 +1180,7 @@ function lookView(c: SettingsCtx): TemplateResult {
     typeof c.options.options.sidebar_title === "string" ? (c.options.options.sidebar_title as string) : "";
   const titleLocked = !c.options.isAdmin;
   return html`<p class="hint">${t("setLookHint")}</p>
-  ${c.themePreviewing ? html`<p class="hint theme-preview-banner">${t("themePreviewHint")}</p>` : nothing}
+  <p class="hint theme-preview-banner ${c.themePreviewing ? "on" : ""}" aria-live="polite">${c.themePreviewing ? t("themePreviewHint") : ""}</p>
   <div class="theme-choices" role="radiogroup" aria-label=${t("setLook")}>
     ${THEMES.map(
       (id) => html`<button
@@ -1193,6 +1204,53 @@ function lookView(c: SettingsCtx): TemplateResult {
         <span class="txt"><b>${t(copy[id].title)}</b><span>${t(copy[id].hint)}</span></span>
       </button>`,
     )}
+  </div>
+  <div class="look-row">
+    <div class="txt"><b>${t("lookMotion")}</b><span>${t("lookMotionHint")}</span></div>
+    <button
+      class="switch ${c.motion ? "on" : ""}"
+      role="switch"
+      aria-checked=${c.motion}
+      aria-label=${t("lookMotion")}
+      @click=${() => c.onMotion(!c.motion)}
+    ></button>
+  </div>
+  <h3 class="look-flow-title">${t("lookDensity")}</h3>
+  <p class="hint">${t("lookDensityHint")}</p>
+  <div class="look-seg" role="radiogroup" aria-label=${t("lookDensity")}>
+    ${DENSITIES.map((id) => {
+      const label: Record<DensityId, Key> = {
+        compact: "lookDensityCompact",
+        normal: "lookDensityNormal",
+        airy: "lookDensityAiry",
+      };
+      return html`<button
+        type="button"
+        class=${c.density === id ? "on" : ""}
+        role="radio"
+        aria-checked=${c.density === id}
+        @click=${() => c.onDensity(id)}
+      >${t(label[id])}</button>`;
+    })}
+  </div>
+  <h3 class="look-flow-title">${t("lookCorners")}</h3>
+  <p class="hint">${t("lookCornersHint")}</p>
+  <div class="look-seg" role="radiogroup" aria-label=${t("lookCorners")}>
+    ${CORNERS.map((id) => {
+      const label: Record<CornersId, Key> = {
+        auto: "lookCornersAuto",
+        soft: "lookCornersSoft",
+        medium: "lookCornersMedium",
+        sharp: "lookCornersSharp",
+      };
+      return html`<button
+        type="button"
+        class=${c.corners === id ? "on" : ""}
+        role="radio"
+        aria-checked=${c.corners === id}
+        @click=${() => c.onCorners(id)}
+      >${t(label[id])}</button>`;
+    })}
   </div>
   <h3 class="look-flow-title">${t("sidebarTitle")}</h3>
   <p class="hint">${t("sidebarTitleHint")}</p>

@@ -28,7 +28,8 @@ import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
 import { ladderView } from "./ladder";
-import type { ThemeId } from "./theme";
+import type { CornersId, DensityId } from "./look-prefs";
+import { flowNeedsOutline, type ThemeId } from "./theme";
 import type { Fmt } from "./format";
 import type { I18n } from "./i18n";
 import { calendarPopover } from "./calendar-popover";
@@ -61,6 +62,7 @@ import {
   parseTrajectory,
   phaseColor,
   planEmptyKind,
+  planImportKwPoints,
   planSocPoints,
   priceExtremes,
   slotAction,
@@ -99,6 +101,15 @@ export interface Ctx {
   /** Forecast power series the user hid (SoC stays). */
   forecastHidden: ReadonlySet<ForecastPowerKey>;
   onToggleForecastSeries: (key: ForecastPowerKey) => void;
+  /** Shadow-mode plan SoC hidden from the forecast chart. */
+  hideShadowSoc: boolean;
+  onToggleHideShadowSoc: () => void;
+  /** Primary / expected SoC hidden. */
+  hideExpectedSoc: boolean;
+  onToggleHideExpectedSoc: () => void;
+  /** Shadow-mode plan grid import hidden. */
+  hideShadowImport: boolean;
+  onToggleHideShadowImport: () => void;
   consumers: FlowConsumer[];
   consumerOverflow: boolean;
   onEditConsumers: () => void;
@@ -164,6 +175,11 @@ export interface Ctx {
   themePreviewing: boolean;
   flowStyle: FlowStyleId;
   onFlowStyle: (style: FlowStyleId) => void;
+  onMotion: (on: boolean) => void;
+  density: DensityId;
+  onDensity: (density: DensityId) => void;
+  corners: CornersId;
+  onCorners: (corners: CornersId) => void;
   alertBannerHidden: boolean;
   onAlertBannerHidden: (hidden: boolean) => void;
   batteryStyle: BatteryStyleId;
@@ -666,7 +682,7 @@ export function liveView(c: Ctx): TemplateResult {
             motion: c.motion,
             onSelect: c.onFlowNode,
             compact: c.mobile,
-            outline: c.theme !== "dark",
+            outline: flowNeedsOutline(c.theme),
             fmt: c.fmt,
             i18n: c.i18n,
           })}
@@ -914,28 +930,56 @@ export function forecastView(c: Ctx): TemplateResult {
   const planAttrs = attrs(c, E.plan);
   const slots = parseSlots(planAttrs.plan_slots);
   const planSoc = planSocPoints(slots);
+  const planImport = planImportKwPoints(slots);
   const usePlanSoc = planSoc.length >= 2;
   const planControlling = planAttrs.controlling === true;
+  const planShadow = usePlanSoc && !planControlling;
   const titleKey = usePlanSoc ? "chartTitleStrategy" : "chartTitle";
-  const socLabel = !usePlanSoc
-    ? t("legendSoc")
-    : planControlling
-      ? t("legendPlanSoc")
-      : t("legendPlanSocShadow");
-  const socMin = usePlanSoc ? Math.min(...planSoc.map((p) => p[1])) : n(a.min_soc);
-  const socMax = usePlanSoc ? Math.max(...planSoc.map((p) => p[1])) : n(a.max_soc);
+  // Shadow: real trajectory stays primary; plan SoC is the compare curve.
+  // Controlling: plan SoC is what will happen.
+  const socMin =
+    usePlanSoc && planControlling ? Math.min(...planSoc.map((p) => p[1])) : n(a.min_soc);
+  const socMax =
+    usePlanSoc && planControlling ? Math.max(...planSoc.map((p) => p[1])) : n(a.max_soc);
   const stat = (label: string, value: TemplateResult | string) =>
     html`<div class="card stat"><h3>${label}</h3><div class="v">${value}</div></div>`;
   const hiddenKey = [...c.forecastHidden].sort().join(",");
+  const socToggleLabel = planShadow ? t("legendSocExpected") : usePlanSoc ? t("legendPlanSoc") : t("legendSoc");
 
   return html`
     <div class="card forecast-card">
       <div class="chart-head">
         <div class="grow">
           <h3>${t(titleKey)}</h3>
-          ${usePlanSoc ? html`<span class="badge forecast-badge">${planControlling ? t("planActive") : t("planShadow")}</span>` : nothing}
+          ${usePlanSoc
+            ? html`<span class="badge forecast-badge">${planControlling ? t("planActive") : t("planShadow")}</span>`
+            : nothing}
           <div class="legend" role="group" aria-label=${t("legendToggleHint")}>
-            <span class="legend-fixed"><i style="background:${COLORS.bat}"></i>${socLabel}</span>
+            <button
+              type="button"
+              class="legend-toggle ${c.hideExpectedSoc ? "off" : ""}"
+              aria-pressed=${!c.hideExpectedSoc}
+              title=${t("legendToggleHint")}
+              @click=${() => c.onToggleHideExpectedSoc()}
+            ><i style="background:${COLORS.bat}"></i>${socToggleLabel}</button>
+            ${planShadow
+              ? html`<button
+                    type="button"
+                    class="legend-toggle ${c.hideShadowSoc ? "off" : ""}"
+                    aria-pressed=${!c.hideShadowSoc}
+                    title=${t("legendToggleHint")}
+                    @click=${() => c.onToggleHideShadowSoc()}
+                  ><i style="background:${COLORS.accent2};height:2px;border-radius:0"></i>${t("legendPlanSocShadow")}</button>
+                  ${planImport.length >= 2
+                    ? html`<button
+                        type="button"
+                        class="legend-toggle ${c.hideShadowImport ? "off" : ""}"
+                        aria-pressed=${!c.hideShadowImport}
+                        title=${t("legendToggleHint")}
+                        @click=${() => c.onToggleHideShadowImport()}
+                      ><i style="background:${COLORS.gridIn};height:2px;border-radius:0;opacity:0.85"></i>${t("legendImportShadow")}</button>`
+                    : nothing}`
+              : nothing}
             ${POWER_LEGEND.map(
               ({ key, color, label }) => html`<button
                 type="button"
@@ -961,13 +1005,17 @@ export function forecastView(c: Ctx): TemplateResult {
         id="fc-main"
         .options=${memo(
           "forecast",
-          [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, hiddenKey, c.mobile, c.fmt.loc],
+          [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, hiddenKey, c.hideShadowSoc, c.hideExpectedSoc, c.hideShadowImport, c.mobile, c.fmt.loc],
           () =>
             forecastOptions({
               traj,
               targetSoc: num(st(c, E.targetSoc)),
               planSoc: usePlanSoc ? planSoc : undefined,
-              planShadow: usePlanSoc && !planControlling,
+              planShadow,
+              hideShadowSoc: c.hideShadowSoc,
+              hideExpectedSoc: c.hideExpectedSoc,
+              hideShadowImport: c.hideShadowImport,
+              planImport: planShadow && planImport.length >= 2 ? planImport : undefined,
               ist: c.ist,
               showIst: c.showIst,
               hiddenPower: c.forecastHidden,

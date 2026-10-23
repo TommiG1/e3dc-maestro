@@ -16,6 +16,7 @@ import {
   phaseBands,
   phaseColor,
   planEmptyKind,
+  planImportKwPoints,
   planSocPoints,
   priceExtremes,
   slotAction,
@@ -357,6 +358,32 @@ describe("price plan", () => {
       [Date.parse("2026-10-16T13:00:00+02:00"), 55],
     ]);
     expect(planSocPoints([])).toEqual([]);
+  });
+
+  it("maps plan slots to stepped grid-import kW including grid charge", () => {
+    const slots = parseSlots([
+      slot(0.2, {
+        start: "2026-10-16T12:00:00+02:00",
+        start_local: "12:00",
+        hours: 1,
+        import_kwh: 0.5,
+        grid_charge_kwh: 1.5,
+      }),
+      slot(0.3, {
+        start: "2026-10-16T13:00:00+02:00",
+        start_local: "13:00",
+        hours: 1,
+        import_kwh: 0.2,
+        grid_charge_kwh: 0,
+      }),
+    ]);
+    expect(planImportKwPoints(slots)).toEqual([
+      [Date.parse("2026-10-16T12:00:00+02:00"), 2],
+      [Date.parse("2026-10-16T13:00:00+02:00"), 2],
+      [Date.parse("2026-10-16T13:00:00+02:00"), 0.2],
+      [Date.parse("2026-10-16T14:00:00+02:00"), 0.2],
+    ]);
+    expect(planImportKwPoints([])).toEqual([]);
   });
 });
 

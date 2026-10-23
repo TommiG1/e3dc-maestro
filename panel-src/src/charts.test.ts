@@ -154,7 +154,47 @@ describe("forecastOptions", () => {
     expect(bands.filter((b) => b.label?.orientation === "vertical")).toHaveLength(0);
   });
 
-  it("labels shadow plan SoC", () => {
+  it("shows expected SoC, shadow plan SoC and planned import side by side", () => {
+    useChartTheme("dark");
+    const planImport = [
+      [Date.parse("2026-10-21T12:00:00Z"), 2],
+      [Date.parse("2026-10-21T13:00:00Z"), 2],
+    ] as [number, number][];
+    const opts = forecastOptions({
+      traj: traj(),
+      targetSoc: undefined,
+      planSoc: [
+        [Date.parse("2026-10-21T12:00:00Z"), 50],
+        [Date.parse("2026-10-21T13:00:00Z"), 70],
+      ],
+      planShadow: true,
+      planImport,
+      ist: undefined,
+      showIst: false,
+      hiddenPower: new Set(["pv", "house"]),
+      fmt: makeFmt("de"),
+      i18n: makeI18n("de"),
+    });
+    const series = opts.series as { name: string; data: unknown }[];
+    expect(series.map((s) => s.name)).toEqual([
+      "Netzbezug",
+      "Einspeisung",
+      "Netzbezug · Schatten",
+      "SoC erwartet",
+      "SoC geplant · Schatten",
+    ]);
+    expect(series[2]?.data).toEqual(planImport);
+    expect(series[3]?.data).toEqual(traj().trajectory_points);
+    const colors = opts.colors as string[];
+    expect(colors[2]).toBe("#f87171");
+    expect(colors[3]).toBe("#22d3ee");
+    expect(colors[4]).toBe("#818cf8");
+    const stroke = opts.stroke as { dashArray: number[]; curve: string[] };
+    expect(stroke.dashArray[2]).toBe(6);
+    expect(stroke.curve[2]).toBe("stepline");
+  });
+
+  it("hides expected SoC while keeping shadow plan SoC", () => {
     useChartTheme("dark");
     const opts = forecastOptions({
       traj: traj(),
@@ -164,14 +204,70 @@ describe("forecastOptions", () => {
         [Date.parse("2026-10-21T13:00:00Z"), 70],
       ],
       planShadow: true,
+      hideExpectedSoc: true,
       ist: undefined,
       showIst: false,
-      hiddenPower: new Set(["pv", "house", "import"]),
+      hiddenPower: new Set(["pv", "house", "import", "feed"]),
       fmt: makeFmt("de"),
       i18n: makeI18n("de"),
     });
     const series = opts.series as { name: string }[];
-    expect(series.map((s) => s.name)).toEqual(["Einspeisung", "SoC geplant · Schatten"]);
+    expect(series.map((s) => s.name)).toEqual(["SoC geplant · Schatten"]);
+  });
+
+  it("toggles shadow import independently of shadow SoC", () => {
+    useChartTheme("dark");
+    const planImport = [
+      [Date.parse("2026-10-21T12:00:00Z"), 2],
+      [Date.parse("2026-10-21T13:00:00Z"), 2],
+    ] as [number, number][];
+    const opts = forecastOptions({
+      traj: traj(),
+      targetSoc: undefined,
+      planSoc: [
+        [Date.parse("2026-10-21T12:00:00Z"), 50],
+        [Date.parse("2026-10-21T13:00:00Z"), 70],
+      ],
+      planShadow: true,
+      planImport,
+      hideExpectedSoc: true,
+      hideShadowSoc: true,
+      hideShadowImport: false,
+      ist: undefined,
+      showIst: false,
+      hiddenPower: new Set(["pv", "house", "import", "feed"]),
+      fmt: makeFmt("de"),
+      i18n: makeI18n("de"),
+    });
+    const series = opts.series as { name: string }[];
+    expect(series.map((s) => s.name)).toEqual(["Netzbezug · Schatten"]);
+  });
+
+  it("allows hiding every series", () => {
+    useChartTheme("dark");
+    const opts = forecastOptions({
+      traj: traj(),
+      targetSoc: 90,
+      planSoc: [
+        [Date.parse("2026-10-21T12:00:00Z"), 50],
+        [Date.parse("2026-10-21T13:00:00Z"), 70],
+      ],
+      planShadow: true,
+      planImport: [
+        [Date.parse("2026-10-21T12:00:00Z"), 2],
+        [Date.parse("2026-10-21T13:00:00Z"), 2],
+      ],
+      hideExpectedSoc: true,
+      hideShadowSoc: true,
+      hideShadowImport: true,
+      ist: undefined,
+      showIst: false,
+      hiddenPower: new Set(["pv", "house", "import", "feed"]),
+      fmt: makeFmt("de"),
+      i18n: makeI18n("de"),
+    });
+    expect((opts.series as unknown[]).length).toBe(0);
+    expect((opts.annotations as { yaxis: unknown[] }).yaxis).toEqual([]);
   });
 
   it("uses plan SoC label when plan points are provided", () => {

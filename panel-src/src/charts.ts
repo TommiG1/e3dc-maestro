@@ -24,6 +24,10 @@ const SURFACES: Record<ThemeId, Surface> = {
   dark: { text: "#e8edf7", muted: "#8b96ad", faint: "#5a6580", bg: "#070b14", grid: "rgba(255,255,255,0.06)", series: "#ffffff", track: "rgba(255,255,255,0.06)", mode: "dark" as const },
   classic: { text: "#152033", muted: "#5b6b80", faint: "#8b97a8", bg: "#eef2f6", grid: "rgba(21,32,51,0.08)", series: "#152033", track: "rgba(21,32,51,0.08)", mode: "light" as const },
   e3dc: { text: "#4a4a4a", muted: "#6e767c", faint: "#a4aaae", bg: "#f7f7f7", grid: "rgba(30,37,43,0.08)", series: "#4a4a4a", track: "rgba(30,37,43,0.08)", mode: "light" as const },
+  oled: { text: "#e8e8e8", muted: "#9a9a9a", faint: "#5c5c5c", bg: "#000000", grid: "rgba(255,255,255,0.08)", series: "#ffffff", track: "rgba(255,255,255,0.08)", mode: "dark" as const },
+  amber: { text: "#f3e7d8", muted: "#b39a80", faint: "#7a6450", bg: "#140e0a", grid: "rgba(243,231,216,0.08)", series: "#f3e7d8", track: "rgba(243,231,216,0.08)", mode: "dark" as const },
+  leitstand: { text: "#d7e0e6", muted: "#8a9aa6", faint: "#556570", bg: "#0a0e12", grid: "rgba(215,224,230,0.1)", series: "#d7e0e6", track: "rgba(215,224,230,0.1)", mode: "dark" as const },
+  tibber: { text: "#e6eef8", muted: "#8b9bb8", faint: "#5a6a88", bg: "#0b1020", grid: "rgba(230,238,248,0.08)", series: "#e6eef8", track: "rgba(230,238,248,0.08)", mode: "dark" as const },
 };
 
 let surface: Surface = SURFACES.dark;
@@ -197,16 +201,66 @@ export function saveForecastHidden(hidden: ReadonlySet<ForecastPowerKey>): void 
   localStorage.setItem(FORECAST_HIDDEN_KEY, JSON.stringify([...hidden]));
 }
 
+const SHADOW_SOC_HIDDEN_KEY = "e3dc-maestro.shadow-soc-hidden.v1";
+
+export function loadShadowSocHidden(): boolean {
+  try {
+    return localStorage.getItem(SHADOW_SOC_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShadowSocHidden(hidden: boolean): void {
+  localStorage.setItem(SHADOW_SOC_HIDDEN_KEY, hidden ? "1" : "0");
+}
+
+const EXPECTED_SOC_HIDDEN_KEY = "e3dc-maestro.expected-soc-hidden.v1";
+
+export function loadExpectedSocHidden(): boolean {
+  try {
+    return localStorage.getItem(EXPECTED_SOC_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveExpectedSocHidden(hidden: boolean): void {
+  localStorage.setItem(EXPECTED_SOC_HIDDEN_KEY, hidden ? "1" : "0");
+}
+
+const SHADOW_IMPORT_HIDDEN_KEY = "e3dc-maestro.shadow-import-hidden.v1";
+
+export function loadShadowImportHidden(): boolean {
+  try {
+    return localStorage.getItem(SHADOW_IMPORT_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShadowImportHidden(hidden: boolean): void {
+  localStorage.setItem(SHADOW_IMPORT_HIDDEN_KEY, hidden ? "1" : "0");
+}
+
 export interface ForecastInput {
   traj: Trajectory;
   targetSoc: number | undefined;
-  /** When set (price-plan slots with SoC), replaces the generic SoC trajectory. */
+  /** When set (price-plan slots with SoC), replaces the generic SoC trajectory — except in shadow mode. */
   planSoc: Point[] | undefined;
-  /** Plan exists but does not control the battery yet. */
+  /** Plan exists but does not control the battery: show trajectory + plan SoC side by side. */
   planShadow?: boolean;
+  /** Hide the simulated plan SoC while still in shadow mode. */
+  hideShadowSoc?: boolean;
+  /** Hide the expected / primary SoC series. */
+  hideExpectedSoc?: boolean;
+  /** Hide the simulated plan grid-import overlay. */
+  hideShadowImport?: boolean;
+  /** Planned grid draw (kW) from price-plan slots — shown beside real import in shadow mode. */
+  planImport?: Point[];
   ist: IstSeries | undefined;
   showIst: boolean;
-  /** Power series to omit; SoC always stays. */
+  /** Power series to omit. */
   hiddenPower?: ReadonlySet<ForecastPowerKey>;
   /** Narrow screens: less chrome, more plot width. */
   compact?: boolean;
@@ -214,13 +268,21 @@ export interface ForecastInput {
   i18n: I18n;
 }
 
-export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, showIst, hiddenPower, compact, fmt, i18n }: ForecastInput): Opts {
+export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShadowSoc, hideExpectedSoc, hideShadowImport, planImport, ist, showIst, hiddenPower, compact, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
-  const usePlanSoc = !!planSoc && planSoc.length >= 2;
-  const socSeries = usePlanSoc ? planSoc : traj.trajectory_points;
-  const socName = usePlanSoc
-    ? i18n.t(planShadow ? "legendPlanSocShadow" : "legendPlanSoc")
-    : i18n.t("legendSoc");
+  const hasPlanSoc = !!planSoc && planSoc.length >= 2;
+  // Shadow: plan does not actuate — keep real trajectory (cyan); optionally overlay plan SoC.
+  // Controlling: plan SoC is the forecast that will happen.
+  const inShadow = hasPlanSoc && !!planShadow;
+  const showShadowSoc = inShadow && !hideShadowSoc && !!planSoc;
+  const showExpectedSoc = !hideExpectedSoc;
+  const showShadowCompare = showShadowSoc; // used below for axis / ist bridge
+  const expectedSeries = inShadow || !hasPlanSoc ? traj.trajectory_points : planSoc!;
+  const expectedName = inShadow
+    ? i18n.t("legendSocExpected")
+    : hasPlanSoc
+      ? i18n.t("legendPlanSoc")
+      : i18n.t("legendSoc");
   const hidden = hiddenPower ?? new Set<ForecastPowerKey>();
   const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
     const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: compact ? 0.08 : 0.05 };
@@ -256,12 +318,15 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
     { key: "feed", name: i18n.t("legendFeed"), type: "area", data: exp, color: COLORS.gridOut, width: 1.5, dash: 0, fill: "gradient" },
   ];
   const visible = powerDefs.filter((d) => !hidden.has(d.key));
-  const powerAxisName = visible[0]?.name ?? i18n.t("legendPv");
+  const showPlanImport = inShadow && !hideShadowImport && !!planImport && planImport.length >= 2;
+  const planImportName = i18n.t("legendImportShadow");
+  const powerAxisName = visible[0]?.name ?? (showPlanImport ? planImportName : i18n.t("legendPv"));
 
   const series: Obj[] = visible.map((d) => ({ name: d.name, type: d.type, data: d.data }));
   const colors: string[] = visible.map((d) => d.color);
   const widths: number[] = visible.map((d) => d.width);
   const dashes: number[] = visible.map((d) => d.dash);
+  const curves: string[] = visible.map(() => "smooth");
   const fillTypes: string[] = visible.map((d) => d.fill);
   const kwLabels = {
     formatter: (v: number) => fmt.n(v, compact ? 0 : 1),
@@ -280,27 +345,79 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
       : { seriesName: powerAxisName, show: false },
   );
 
-  const socIndex = series.length;
-  series.push({ name: socName, type: "line", data: socSeries });
-  colors.push(COLORS.bat);
-  widths.push(compact ? 2.75 : 3.5);
-  dashes.push(0);
-  fillTypes.push("solid");
-  yaxis.push({
-    seriesName: socName,
-    opposite: visible.length > 0,
-    min: 0,
-    max: 100,
-    tickAmount: compact ? 4 : 5,
-    title: compact ? { text: undefined } : { text: "SoC %" },
-    labels: {
-      formatter: (v: number) => `${Math.round(v)}%`,
-      style: compact ? { fontSize: "10px" } : undefined,
-      offsetX: compact ? 2 : 0,
-    },
-  });
+  // Shadow import stays even when the real import series is hidden — that's the point of the compare.
+  if (showPlanImport && planImport) {
+    const ownKwAxis = visible.length === 0;
+    series.push({ name: planImportName, type: "line", data: planImport });
+    colors.push(COLORS.gridIn);
+    widths.push(compact ? 1.75 : 2);
+    dashes.push(6);
+    curves.push("stepline");
+    fillTypes.push("solid");
+    yaxis.push(
+      ownKwAxis
+        ? {
+            seriesName: powerAxisName,
+            min: 0,
+            tickAmount: compact ? 4 : undefined,
+            title: compact ? { text: undefined } : { text: "kW" },
+            labels: kwLabels,
+          }
+        : { seriesName: powerAxisName, show: false },
+    );
+  }
 
-  const socPctIndexes = new Set<number>([socIndex]);
+  const socAxisName = showExpectedSoc
+    ? expectedName
+    : showShadowCompare
+      ? i18n.t("legendPlanSocShadow")
+      : expectedName;
+  const socPctIndexes = new Set<number>();
+  let socIndex = -1;
+
+  const pushSocAxis = (name: string, data: Point[], color: string, width: number, dash: number, primary: boolean) => {
+    const idx = series.length;
+    series.push({ name, type: "line", data });
+    colors.push(color);
+    widths.push(width);
+    dashes.push(dash);
+    curves.push("smooth");
+    fillTypes.push("solid");
+    socPctIndexes.add(idx);
+    if (primary) {
+      socIndex = idx;
+      yaxis.push({
+        seriesName: socAxisName,
+        opposite: visible.length > 0 || showPlanImport,
+        min: 0,
+        max: 100,
+        tickAmount: compact ? 4 : 5,
+        title: compact ? { text: undefined } : { text: "SoC %" },
+        labels: {
+          formatter: (v: number) => `${Math.round(v)}%`,
+          style: compact ? { fontSize: "10px" } : undefined,
+          offsetX: compact ? 2 : 0,
+        },
+      });
+    } else {
+      yaxis.push({ seriesName: socAxisName, opposite: true, min: 0, max: 100, show: false });
+    }
+  };
+
+  if (showExpectedSoc) {
+    pushSocAxis(expectedName, expectedSeries, COLORS.bat, compact ? 2.75 : 3.5, 0, true);
+  }
+  if (showShadowSoc && planSoc) {
+    pushSocAxis(
+      i18n.t("legendPlanSocShadow"),
+      planSoc,
+      COLORS.accent2,
+      compact ? 2 : 2.5,
+      6,
+      !showExpectedSoc,
+    );
+  }
+
   let actualFrom = -1;
   if (showIst && ist && (ist.pv.length > 1 || ist.house.length > 1 || ist.soc.length > 1)) {
     actualFrom = series.length;
@@ -315,10 +432,28 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
       colors.push(color);
       widths.push(1.5);
       dashes.push(0);
+      curves.push("smooth");
       fillTypes.push("solid");
-      if (onSocAxis) {
+      if (onSocAxis && socIndex >= 0) {
         socPctIndexes.add(series.length - 1);
-        yaxis.push({ seriesName: socName, opposite: true, min: 0, max: 100, show: false });
+        yaxis.push({ seriesName: socAxisName, opposite: true, min: 0, max: 100, show: false });
+      } else if (onSocAxis) {
+        // No forecast SoC left — still plot Ist on a SoC axis.
+        socIndex = series.length - 1;
+        socPctIndexes.add(socIndex);
+        yaxis.push({
+          seriesName: name,
+          opposite: visible.length > 0 || showPlanImport,
+          min: 0,
+          max: 100,
+          tickAmount: compact ? 4 : 5,
+          title: compact ? { text: undefined } : { text: "SoC %" },
+          labels: {
+            formatter: (v: number) => `${Math.round(v)}%`,
+            style: compact ? { fontSize: "10px" } : undefined,
+            offsetX: compact ? 2 : 0,
+          },
+        });
       } else {
         yaxis.push({ seriesName: powerAxisName, show: false });
       }
@@ -330,7 +465,8 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
       pushActual(`${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, toKw(bridge(ist.house, traj.house_points)), COLORS.house, false);
     }
     if (ist.soc.length > 1) {
-      pushActual(`${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, bridge(ist.soc, socSeries), COLORS.bat, true);
+      const bridgeTo = showExpectedSoc ? expectedSeries : showShadowCompare && planSoc ? planSoc : expectedSeries;
+      pushActual(`${i18n.t("legendSoc")} ${i18n.t("legendActual")}`, bridge(ist.soc, bridgeTo), COLORS.bat, true);
     }
   }
 
@@ -351,7 +487,7 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
     },
     series,
     colors,
-    stroke: { width: widths, curve: "smooth", dashArray: dashes },
+    stroke: { width: widths, curve: curves, dashArray: dashes },
     fill: {
       type: fillTypes,
       gradient: { opacityFrom: 0.45, opacityTo: 0.02 },
@@ -377,7 +513,7 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, ist, sho
     annotations: {
       xaxis: [...bands, nowMarker(i18n.t("now"), compact)],
       yaxis:
-        targetSoc === undefined
+        targetSoc === undefined || socIndex < 0
           ? []
           : [
               {

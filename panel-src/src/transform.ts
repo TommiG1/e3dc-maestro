@@ -340,6 +340,10 @@ export interface Slot {
   /** Same plan decisions with expected load/PV (no safety factors) — what the chart shows. */
   soc_expected_pct?: number;
   consumption_kwh: number;
+  /** Slot length in hours (from the planner). */
+  hours?: number;
+  /** House-deficit import with the plan (excludes intentional grid charge). */
+  import_kwh?: number;
   /** True when the price comes from Energyforecast behind the tariff provider. */
   forecast?: boolean;
 }
@@ -365,6 +369,42 @@ export function planSocPoints(slots: Slot[]): Point[] {
   return slots
     .filter((s) => Number.isFinite(slotSoc(s)))
     .map((s) => [Date.parse(s.start), slotSoc(s)]);
+}
+
+/** Slot duration in hours — prefer planner `hours`, else gap to the next start. */
+function slotHours(slots: Slot[], i: number): number {
+  const s = slots[i];
+  if (typeof s.hours === "number" && Number.isFinite(s.hours) && s.hours > 0) return s.hours;
+  if (i + 1 < slots.length) {
+    const gap = (Date.parse(slots[i + 1].start) - Date.parse(s.start)) / 3600e3;
+    if (gap > 0) return gap;
+  }
+  return 1;
+}
+
+/**
+ * Planned grid draw in kW for the shadow/plan overlay: house import + intentional
+ * grid charge, as a step series (start→end of each slot).
+ */
+export function planImportKwPoints(slots: Slot[]): Point[] {
+  const out: Point[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    const hours = slotHours(slots, i);
+    const importKwh = typeof s.import_kwh === "number" && Number.isFinite(s.import_kwh) ? s.import_kwh : 0;
+    const chargeKwh = typeof s.grid_charge_kwh === "number" && Number.isFinite(s.grid_charge_kwh) ? s.grid_charge_kwh : 0;
+    const kw = (importKwh + chargeKwh) / hours;
+    if (!Number.isFinite(kw)) continue;
+    const t0 = Date.parse(s.start);
+    if (!Number.isFinite(t0)) continue;
+    const t1 = i + 1 < slots.length ? Date.parse(slots[i + 1].start) : t0 + hours * 3600e3;
+    if (!Number.isFinite(t1) || t1 <= t0) {
+      out.push([t0, kw]);
+      continue;
+    }
+    out.push([t0, kw], [t1, kw]);
+  }
+  return out;
 }
 
 /**

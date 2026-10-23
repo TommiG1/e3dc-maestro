@@ -29,10 +29,15 @@ import {
 import { controlsSheet } from "./controls";
 import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import {
-  FORECAST_POWER_KEYS,
+  loadExpectedSocHidden,
   loadForecastHidden,
+  loadShadowImportHidden,
+  loadShadowSocHidden,
   powerHistoryOptions,
+  saveExpectedSocHidden,
   saveForecastHidden,
+  saveShadowImportHidden,
+  saveShadowSocHidden,
   useChartTheme,
   type ForecastPowerKey,
 } from "./charts";
@@ -83,7 +88,14 @@ import {
 } from "./alert-banner";
 import { loadBatteryStyle, saveBatteryStyle, type BatteryStyleId } from "./battery-style";
 import { loadFlowStyle, saveFlowStyle, type FlowStyleId } from "./flow-style";
-import { loadTheme, saveTheme, type ThemeId } from "./theme";
+import {
+  loadLookPrefs,
+  saveLookPrefs,
+  type CornersId,
+  type DensityId,
+  type LookPrefs,
+} from "./look-prefs";
+import { isDarkTheme, loadTheme, saveTheme, type ThemeId } from "./theme";
 import { parseTrajectory, type Point, type TimelineItem } from "./transform";
 
 const NODE_META = {
@@ -180,6 +192,9 @@ class MaestroPanel extends LitElement {
   private _range = window.matchMedia(MOBILE).matches ? 12 : 48;
   private _showIst = true;
   private _forecastHidden = loadForecastHidden();
+  private _hideShadowSoc = loadShadowSocHidden();
+  private _hideExpectedSoc = loadExpectedSocHidden();
+  private _hideShadowImport = loadShadowImportHidden();
   private _settingsQuery = "";
   private _sparks?: Record<SparkKey, Point[]>;
   private _ist?: IstSeries;
@@ -193,7 +208,8 @@ class MaestroPanel extends LitElement {
   private _zoomKey?: string;
   private _timer?: number;
   private _flowRaf = 0;
-  private _motion = true;
+  private _lookPrefs: LookPrefs = loadLookPrefs();
+  private _motion = this._lookPrefs.motion;
   private _hist?: { name: string; color: string; entityId: string };
   private _histPoints?: Point[];
   private _histState: "loading" | "ready" | "empty" | "error" = "loading";
@@ -305,7 +321,6 @@ class MaestroPanel extends LitElement {
     if (this._screen === "settings" && rawGroup && this._settingsGroup && rawGroup !== this._settingsGroup) {
       history.replaceState(null, "", `#settings/${this._settingsGroup}`);
     }
-    this._motion = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (this._motion) this._flowRaf = requestAnimationFrame(this._animateFlows);
   }
 
@@ -334,6 +349,10 @@ class MaestroPanel extends LitElement {
   };
 
   private _animateFlows = (now: number) => {
+    if (!this._motion) {
+      this._flowRaf = 0;
+      return;
+    }
     placeElectrons(this.renderRoot.querySelectorAll(".electron"), now);
     this._flowRaf = requestAnimationFrame(this._animateFlows);
   };
@@ -773,9 +792,34 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
-  /** Quick toggle in the top bar: dark ↔ myE3DC (classic counts as light). */
+  private _persistLookPrefs(patch: Partial<LookPrefs>): void {
+    this._lookPrefs = { ...this._lookPrefs, ...patch };
+    saveLookPrefs(this._lookPrefs);
+    this.requestUpdate();
+  }
+
+  private _setMotion(on: boolean): void {
+    this._motion = on;
+    this._persistLookPrefs({ motion: on });
+    if (on) {
+      if (!this._flowRaf) this._flowRaf = requestAnimationFrame(this._animateFlows);
+    } else {
+      cancelAnimationFrame(this._flowRaf);
+      this._flowRaf = 0;
+    }
+  }
+
+  private _setDensity(density: DensityId): void {
+    this._persistLookPrefs({ density });
+  }
+
+  private _setCorners(corners: CornersId): void {
+    this._persistLookPrefs({ corners });
+  }
+
+  /** Quick toggle in the top bar: any night look ↔ myE3DC. */
   private _toggleLightDark(): void {
-    this._setTheme(this._theme === "dark" ? "e3dc" : "dark");
+    this._setTheme(isDarkTheme(this._theme) ? "e3dc" : "dark");
   }
 
   private _previewTheme(theme: ThemeId | undefined): void {
@@ -1299,6 +1343,9 @@ class MaestroPanel extends LitElement {
       range: this._range,
       showIst: this._showIst,
       forecastHidden: this._forecastHidden,
+      hideShadowSoc: this._hideShadowSoc,
+      hideExpectedSoc: this._hideExpectedSoc,
+      hideShadowImport: this._hideShadowImport,
       onRange: (h) => {
         this._range = h;
         this.requestUpdate();
@@ -1309,12 +1356,27 @@ class MaestroPanel extends LitElement {
         void this._ensureHistory();
       },
       onToggleForecastSeries: (key: ForecastPowerKey) => {
+        // SoC (+ shadow overlays) always stay — power series may all be hidden.
         const next = new Set(this._forecastHidden);
         if (next.has(key)) next.delete(key);
-        else if (next.size < FORECAST_POWER_KEYS.length - 1) next.add(key);
-        else return;
+        else next.add(key);
         this._forecastHidden = next;
         saveForecastHidden(next);
+        this.requestUpdate();
+      },
+      onToggleHideShadowSoc: () => {
+        this._hideShadowSoc = !this._hideShadowSoc;
+        saveShadowSocHidden(this._hideShadowSoc);
+        this.requestUpdate();
+      },
+      onToggleHideExpectedSoc: () => {
+        this._hideExpectedSoc = !this._hideExpectedSoc;
+        saveExpectedSocHidden(this._hideExpectedSoc);
+        this.requestUpdate();
+      },
+      onToggleHideShadowImport: () => {
+        this._hideShadowImport = !this._hideShadowImport;
+        saveShadowImportHidden(this._hideShadowImport);
         this.requestUpdate();
       },
       consumers: this._flowConsumers(hass),
@@ -1330,6 +1392,7 @@ class MaestroPanel extends LitElement {
       onPlaceConsumer: (id, place) => this._placeConsumer(id, place),
       onFlowNode: (key) => this._openFlow(key),
       motion: this._motion,
+      onMotion: (on) => this._setMotion(on),
       collapsed: this._collapsed,
       onToggleGroup: (id) => {
         const next = new Set(this._collapsed);
@@ -1446,6 +1509,10 @@ class MaestroPanel extends LitElement {
       onShowLadder: () => this._showLadder(),
       flowStyle: this._flowStyle,
       onFlowStyle: (style) => this._setFlowStyle(style),
+      density: this._lookPrefs.density,
+      onDensity: (density) => this._setDensity(density),
+      corners: this._lookPrefs.corners,
+      onCorners: (corners) => this._setCorners(corners),
       alertBannerHidden: this._bannerHidden,
       onAlertBannerHidden: (hidden) => this._setBannerHidden(hidden),
       batteryStyle: this._batteryStyle,
@@ -1530,10 +1597,10 @@ class MaestroPanel extends LitElement {
             <button
               type="button"
               class="menu theme-toggle"
-              aria-label=${this._theme === "dark" ? t("themeToggleToLight") : t("themeToggleToDark")}
-              title=${this._theme === "dark" ? t("themeToggleToLight") : t("themeToggleToDark")}
+              aria-label=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
+              title=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
               @click=${() => this._toggleLightDark()}
-            >${icon(this._theme === "dark" ? SUN_ICON : MOON_ICON)}</button>
+            >${icon(isDarkTheme(this._theme) ? SUN_ICON : MOON_ICON)}</button>
             <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
             <button type="button" class="pill hide-sm" @click=${() => this._openPause()}>
               <span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}
@@ -1675,6 +1742,10 @@ class MaestroPanel extends LitElement {
   protected willUpdate(): void {
     const theme = this._themePreview ?? this._theme;
     if (this.getAttribute("theme") !== theme) this.setAttribute("theme", theme);
+    const { density, corners } = this._lookPrefs;
+    if (this.getAttribute("density") !== density) this.setAttribute("density", density);
+    if (corners === "auto") this.removeAttribute("corners");
+    else if (this.getAttribute("corners") !== corners) this.setAttribute("corners", corners);
     if (this._hass) {
       // Drop confirmed keys that cleared so the same alarm can show again later.
       this._syncAlertDismissed(activeAlertKeys(this._hass));
