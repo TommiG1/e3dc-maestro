@@ -2703,6 +2703,14 @@ export const styles = css`
     font: 500 11px ui-monospace, monospace;
     color: var(--faint);
   }
+  /* Price-plan page: slot strip under the chart, no title row. */
+  .plan-slots-strip {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .plan-slots-strip .strip-track {
+    margin-top: 0;
+  }
   .plan-top {
     grid-template-columns: 2fr 1fr;
   }

@@ -364,11 +364,33 @@ export function parseSlots(v: unknown): Slot[] {
   );
 }
 
-/** Planned end-of-slot SoC from the price plan (forecast strategy preview, also in shadow mode). */
+/**
+ * Planned SoC for the forecast chart. Slot `soc_pct` / `soc_expected_pct` are
+ * end-of-slot values — plot them at the slot end (and carry the previous end
+ * to this slot’s start) so Netzladung within the slot lines up with the rise.
+ */
 export function planSocPoints(slots: Slot[]): Point[] {
-  return slots
-    .filter((s) => Number.isFinite(slotSoc(s)))
-    .map((s) => [Date.parse(s.start), slotSoc(s)]);
+  const out: Point[] = [];
+  let prevEnd: number | undefined;
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    const endSoc = slotSoc(s);
+    if (!Number.isFinite(endSoc)) continue;
+    const t0 = Date.parse(s.start);
+    if (!Number.isFinite(t0)) continue;
+    const hours = slotHours(slots, i);
+    const t1 = i + 1 < slots.length ? Date.parse(slots[i + 1].start) : t0 + hours * 3600e3;
+    if (prevEnd === undefined) {
+      // No prior sample: hold this end-SoC from t0 (flat overnight / first slot).
+      out.push([t0, endSoc]);
+    } else {
+      const last = out[out.length - 1];
+      if (!last || last[0] !== t0 || last[1] !== prevEnd) out.push([t0, prevEnd]);
+    }
+    if (Number.isFinite(t1) && t1 > t0) out.push([t1, endSoc]);
+    prevEnd = endSoc;
+  }
+  return out;
 }
 
 /** Slot duration in hours — prefer planner `hours`, else gap to the next start. */
@@ -427,6 +449,19 @@ export interface StripSegment {
   action: SlotAction;
   startLocal: string;
   price: number;
+  forecast?: boolean;
+}
+
+/** Full x-window of a price-plan chart (first slot start → last slot end). */
+export function planWindow(slots: Slot[]): { from: number; to: number } {
+  if (slots.length < 1) return { from: 0, to: 1 };
+  const from = Date.parse(slots[0].start);
+  if (!Number.isFinite(from)) return { from: 0, to: 1 };
+  const last = slots.length - 1;
+  const t0 = Date.parse(slots[last].start);
+  const hours = slotHours(slots, last);
+  const to = Number.isFinite(t0) ? t0 + hours * 3600e3 : from + 3600e3;
+  return { from, to: Math.max(to, from + 60e3) };
 }
 
 /** Time-aligned strip segments for the visible chart window (percent of width). */
@@ -451,6 +486,7 @@ export function planStripSegments(slots: Slot[], from: number, to: number): Stri
       action: slotAction(s),
       startLocal: s.start_local,
       price: s.price,
+      forecast: !!s.forecast,
     });
   }
   return out;

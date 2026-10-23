@@ -196,6 +196,7 @@ class MaestroPanel extends LitElement {
   private _hideExpectedSoc = loadExpectedSocHidden();
   private _hideShadowImport = loadShadowImportHidden();
   private _forecastZoom?: [number, number];
+  private _planZoom?: [number, number];
   private _settingsQuery = "";
   private _sparks?: Record<SparkKey, Point[]>;
   private _ist?: IstSeries;
@@ -869,6 +870,7 @@ class MaestroPanel extends LitElement {
     this._settingsGroup = undefined;
     this._plantGroup = undefined;
     this._zoomKey = undefined;
+    this._planZoom = undefined;
     this._error = undefined;
     history.replaceState(null, "", `#${screen}`);
     this.requestUpdate();
@@ -1348,6 +1350,7 @@ class MaestroPanel extends LitElement {
       hideShadowSoc: this._hideShadowSoc,
       hideExpectedSoc: this._hideExpectedSoc,
       hideShadowImport: this._hideShadowImport,
+      planZoom: this._planZoom,
       onRange: (h) => {
         this._range = h;
         this._zoomKey = undefined;
@@ -1367,7 +1370,14 @@ class MaestroPanel extends LitElement {
         this._forecastZoom = [from, to];
         this.requestUpdate();
       },
-      onForecastLayout: () => this._syncStrategyStrip(),
+      onForecastLayout: () => this._syncPlotStrips(),
+      onPlanZoom: (from, to) => {
+        const cur = this._planZoom;
+        if (cur && Math.abs(cur[0] - from) < 1 && Math.abs(cur[1] - to) < 1) return;
+        this._planZoom = [from, to];
+        this.requestUpdate();
+      },
+      onPlanLayout: () => this._syncPlotStrips(),
       onToggleForecastSeries: (key: ForecastPowerKey) => {
         // SoC (+ shadow overlays) always stay — power series may all be hidden.
         const next = new Set(this._forecastHidden);
@@ -1803,47 +1813,99 @@ class MaestroPanel extends LitElement {
       this._scrollHelp(anchor);
       this.renderRoot.querySelector<HTMLInputElement>(".help-query")?.focus({ preventScroll: true });
     }
-    if (this._screen !== "forecast" || !this._hass) return;
-    const traj = parseTrajectory(this._hass.states[E.trajectory]?.attributes);
-    const el = this.renderRoot.querySelector<MaestroChart>("#fc-main");
-    if (!traj || !el) return;
-    // Re-zoom only when the window inputs change, never on live updates (keeps the user's drag-zoom).
-    const win = forecastWindow(traj, this._range, {
-      showIst: this._showIst,
-      istStart: this._ist?.pv[0]?.[0] ?? this._ist?.soc[0]?.[0],
-    });
-    const key = `${this._range}|${win.from}|${win.to}`;
-    if (key !== this._zoomKey) {
-      this._zoomKey = key;
-      this._forecastZoom = [win.from, win.to];
-      el.zoomX(win.from, win.to);
+    if (!this._hass) return;
+    if (this._screen === "forecast") {
+      const traj = parseTrajectory(this._hass.states[E.trajectory]?.attributes);
+      const el = this.renderRoot.querySelector<MaestroChart>("#fc-main");
+      if (traj && el) {
+        // Re-zoom only when the window inputs change, never on live updates (keeps the user's drag-zoom).
+        const win = forecastWindow(traj, this._range, {
+          showIst: this._showIst,
+          istStart: this._ist?.pv[0]?.[0] ?? this._ist?.soc[0]?.[0],
+        });
+        const key = `${this._range}|${win.from}|${win.to}`;
+        if (key !== this._zoomKey) {
+          this._zoomKey = key;
+          this._forecastZoom = [win.from, win.to];
+          el.zoomX(win.from, win.to);
+        }
+      }
     }
-    this._syncStrategyStrip();
+    this._syncPlotStrips();
   }
 
   /**
-   * Align the Preisplan strip to the Apex plot: same pixel width/inset and the
-   * same x-window Apex is actually showing (not a CSS guess).
+   * Align HTML slot strips (+ forecast brush) to the Apex plot: same pixel
+   * inset/width and the same x-window Apex is actually showing.
    */
-  private _syncStrategyStrip(): void {
+  private _syncPlotStrips(): void {
     const run = () => {
-      const chart = this.renderRoot.querySelector<MaestroChart>("#fc-main");
-      const track = this.renderRoot.querySelector<HTMLElement>(".strategy-strip .strip-track");
-      if (!chart || !track) return;
-      const m = chart.plotMetrics();
-      if (!m) return;
-      track.style.marginLeft = `${Math.round(m.left)}px`;
-      track.style.width = `${Math.round(m.width)}px`;
-      track.style.maxWidth = `${Math.round(m.width)}px`;
+      this._syncOnePlotStrip("#fc-main", ".strategy-strip .strip-track", "forecast");
+      this._syncOnePlotStrip("#plan-main", ".plan-slots-strip .strip-track", "plan");
+    };
+    // Apex finishes layout after zoom/render — wait two frames.
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }
+
+  private _syncOnePlotStrip(
+    chartSel: string,
+    trackSel: string,
+    zoom: "forecast" | "plan",
+  ): void {
+    const chart = this.renderRoot.querySelector<MaestroChart>(chartSel);
+    if (!chart) return;
+    const m = chart.plotMetrics();
+    if (!m) return;
+    const left = Math.round(m.left);
+    const width = Math.round(m.width);
+    const track = this.renderRoot.querySelector<HTMLElement>(trackSel);
+    if (track) {
+      track.style.marginLeft = `${left}px`;
+      track.style.width = `${width}px`;
+      track.style.maxWidth = `${width}px`;
       track.style.marginRight = "auto";
+    }
+    if (zoom === "forecast") {
+      // Brush has no kW/SoC axes, so Apex gives it a wider plot — match main padding.
+      const brush = this.renderRoot.querySelector<MaestroChart>("#fc-brush");
+      if (brush) {
+        const right = Math.max(0, Math.round(chart.getBoundingClientRect().width - m.left - m.width));
+        brush.setPlotPadding(left, right);
+      }
       const cur = this._forecastZoom;
       if (!cur || Math.abs(cur[0] - m.minX) > 1 || Math.abs(cur[1] - m.maxX) > 1) {
         this._forecastZoom = [m.minX, m.maxX];
         this.requestUpdate();
       }
-    };
-    // Apex finishes layout after zoom/render — wait two frames.
-    requestAnimationFrame(() => requestAnimationFrame(run));
+    } else {
+      // Pin each strip slot to the rendered column — Apex bar geometry ≠ pure time %.
+      if (track) this._syncPlanStripToBars(chart, track);
+      const cur = this._planZoom;
+      if (!cur || Math.abs(cur[0] - m.minX) > 1 || Math.abs(cur[1] - m.maxX) > 1) {
+        this._planZoom = [m.minX, m.maxX];
+        this.requestUpdate();
+      }
+    }
+  }
+
+  /** Overlay plan strip slots onto the Apex column paths (same left/width). */
+  private _syncPlanStripToBars(chart: MaestroChart, track: HTMLElement): void {
+    const bars = [...chart.querySelectorAll<SVGPathElement>(".apexcharts-bar-series path")].filter(
+      (p) => p.getBoundingClientRect().width > 1,
+    );
+    const slots = [...track.querySelectorAll<HTMLElement>(".strip.timed .slot")];
+    if (!bars.length || bars.length !== slots.length) return;
+    const origin = track.getBoundingClientRect().left;
+    const trackW = track.getBoundingClientRect().width;
+    if (!(trackW > 0)) return;
+    for (let i = 0; i < slots.length; i++) {
+      const b = bars[i].getBoundingClientRect();
+      const leftPct = ((b.left - origin) / trackW) * 100;
+      const widthPct = (b.width / trackW) * 100;
+      if (!Number.isFinite(leftPct) || !Number.isFinite(widthPct)) continue;
+      slots[i].style.left = `${leftPct}%`;
+      slots[i].style.width = `${Math.max(widthPct, 0.15)}%`;
+    }
   }
 }
 

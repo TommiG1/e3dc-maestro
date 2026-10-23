@@ -54,6 +54,8 @@ export class MaestroChart extends LitElement {
   options?: Opts;
   private _chart?: ChartApi;
   private _zoom?: [number, number];
+  /** Extra left/right plot inset (e.g. brush matching the main forecast chart). */
+  private _plotPad?: [number, number];
   private _run = 0;
   private _shape = "";
 
@@ -138,27 +140,50 @@ export class MaestroChart extends LitElement {
   plotMetrics(): PlotMetrics | undefined {
     const g = this._chart?.w?.globals;
     if (!g) return undefined;
-    const left = g.translateX;
-    const width = g.gridWidth;
     const minX = g.minX;
     const maxX = g.maxX;
-    if (
-      typeof left !== "number" ||
-      typeof width !== "number" ||
-      typeof minX !== "number" ||
-      typeof maxX !== "number" ||
-      !(width > 0) ||
-      !(maxX > minX)
-    ) {
+    if (typeof minX !== "number" || typeof maxX !== "number" || !(maxX > minX)) {
+      return undefined;
+    }
+    // Prefer the rendered grid box — combo/column charts can disagree with translateX/gridWidth.
+    const host = this.getBoundingClientRect();
+    const grid = this.querySelector(".apexcharts-grid")?.getBoundingClientRect();
+    if (grid && host.width > 0 && grid.width > 0) {
+      return { left: grid.left - host.left, width: grid.width, minX, maxX };
+    }
+    const left = g.translateX;
+    const width = g.gridWidth;
+    if (typeof left !== "number" || typeof width !== "number" || !(width > 0)) {
       return undefined;
     }
     return { left, width, minX, maxX };
   }
 
+  /**
+   * Force the plot area’s left/right inset (Apex `grid.padding`). Used so the
+   * brush chart lines up with the dual-axis forecast chart above it.
+   */
+  setPlotPadding(left: number, right: number): void {
+    const l = Math.max(0, Math.round(left));
+    const r = Math.max(0, Math.round(right));
+    const prev = this._plotPad;
+    if (prev && prev[0] === l && prev[1] === r) return;
+    this._plotPad = [l, r];
+    if (!this._chart) return;
+    void this._chart.updateOptions({ grid: { padding: { left: l, right: r } } }, false, false);
+  }
+
   private async _apply(): Promise<void> {
     const raw = this.options;
     if (!raw) return;
-    const opts = this._scoped(raw);
+    let opts = this._scoped(raw);
+    if (this._plotPad) {
+      const [left, right] = this._plotPad;
+      opts = {
+        ...opts,
+        grid: { ...opts.grid, padding: { ...opts.grid?.padding, left, right } },
+      } as Opts;
+    }
     const run = ++this._run;
     const mod = await loadApex();
     const Apex = mod.default as unknown as ApexStatic;

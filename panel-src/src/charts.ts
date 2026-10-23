@@ -6,6 +6,8 @@ import type { ThemeId } from "./theme";
 import {
   displaySlots,
   phaseBands,
+  planSocPoints,
+  planWindow,
   slotAction,
   slotSoc,
   splitGrid,
@@ -587,11 +589,25 @@ export interface PlanInput {
   i18n: I18n;
   /** Narrow screens: less chrome, more plot width. */
   compact?: boolean;
+  /** Fired when the user zooms the price-plan chart. */
+  onZoom?: (from: number, to: number) => void;
+  /** Fired after Apex finishes a layout pass — used to align the slot strip. */
+  onLayout?: () => void;
 }
 
-export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput): Opts {
+export function planOptions({ slots: allSlots, fmt, i18n, compact, onZoom, onLayout }: PlanInput): Opts {
   const slots = displaySlots(allSlots);
   const ts = (s: Slot) => Date.parse(s.start);
+  /** Slot end = next start (or +hours). Columns are centered on the slot mid so they fill [start,end). */
+  const slotEnd = (i: number): number => {
+    const t0 = ts(slots[i]);
+    if (i + 1 < slots.length) {
+      const t1 = ts(slots[i + 1]);
+      if (Number.isFinite(t1) && t1 > t0) return t1;
+    }
+    const h = typeof slots[i].hours === "number" && slots[i].hours! > 0 ? slots[i].hours! : 1;
+    return t0 + h * 3600e3;
+  };
   const actionLabel = (s: Slot) => {
     const a = slotAction(s);
     return a === "charge"
@@ -603,6 +619,7 @@ export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput):
   const row = (label: string, value: string) =>
     `<div style="display:flex;justify-content:space-between;gap:12px;color:${COLORS.muted}"><span>${label}</span><b style="color:${COLORS.text}">${value}</b></div>`;
   const labelStyle = compact ? { fontSize: "10px" } : undefined;
+  const win = planWindow(slots);
 
   return withBase({
     chart: {
@@ -611,31 +628,51 @@ export function planOptions({ slots: allSlots, fmt, i18n, compact }: PlanInput):
       zoom: { enabled: true, type: "x" },
       toolbar: { show: false, autoSelected: "zoom" },
       parentHeightOffset: compact ? 0 : undefined,
+      events: {
+        zoomed: (_ctx: unknown, opts?: { xaxis?: { min?: number; max?: number } }) => {
+          const min = opts?.xaxis?.min;
+          const max = opts?.xaxis?.max;
+          if (typeof min === "number" && typeof max === "number" && max > min) onZoom?.(min, max);
+          onLayout?.();
+        },
+        mounted: () => onLayout?.(),
+        updated: () => onLayout?.(),
+      },
     },
     grid: compact ? { padding: { top: 4, left: 4, right: 4, bottom: 0 } } : undefined,
     series: [
       {
         name: i18n.t("slotPrice"),
         type: "column",
-        data: slots.map((s) => ({ x: ts(s), y: +(s.price * 100).toFixed(1), fillColor: barFill(s) })),
+        // Midpoint + ~100% columnWidth ≈ one bar per slot interval (matches the strip below).
+        data: slots.map((s, i) => {
+          const t0 = ts(s);
+          const t1 = slotEnd(i);
+          return { x: (t0 + t1) / 2, y: +(s.price * 100).toFixed(1), fillColor: barFill(s) };
+        }),
       },
-      { name: i18n.t("legendPlanSoc"), type: "line", data: slots.map((s) => ({ x: ts(s), y: slotSoc(s) })) },
+      // End-of-slot SoC at slot boundaries (same mapping as the forecast shadow SoC).
+      { name: i18n.t("legendPlanSoc"), type: "line", data: planSocPoints(slots) },
     ],
     colors: [COLORS.bat, COLORS.series],
-    stroke: { width: [0, compact ? 2 : 2.5], curve: "stepline" },
+    // Straight SoC ramps through each slot; stepline would jump at the boundary only.
+    stroke: { width: [0, compact ? 2 : 2.5], curve: ["straight", "straight"] },
     plotOptions: {
       bar: {
-        columnWidth: compact ? "88%" : "78%",
-        borderRadius: compact ? 2 : 4,
+        columnWidth: compact ? "96%" : "100%",
+        borderRadius: compact ? 2 : 3,
         borderRadiusApplication: "end",
       },
     },
     fill: { opacity: [0.85, 1] },
-    xaxis: xaxis(
-      compact
+    // Same [from,to] as the HTML strip — otherwise Apex pads to midpoints and drifts.
+    xaxis: xaxis({
+      min: win.from,
+      max: win.to,
+      ...(compact
         ? { labels: { datetimeUTC: false, format: "HH:mm", style: { fontSize: "10px" } }, tickAmount: 4 }
-        : {},
-    ),
+        : {}),
+    }),
     yaxis: [
       {
         tickAmount: compact ? 4 : undefined,

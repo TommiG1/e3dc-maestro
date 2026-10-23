@@ -66,8 +66,8 @@ import {
   planImportKwPoints,
   planSocPoints,
   planStripSegments,
+  planWindow,
   priceExtremes,
-  slotAction,
   timelineBands,
   type PlanEmptyKind,
   type Point,
@@ -104,6 +104,10 @@ export interface Ctx {
   forecastZoom?: [number, number];
   onForecastZoom: (from: number, to: number) => void;
   onForecastLayout: () => void;
+  /** Visible price-plan chart x-window (ms); follows drag-zoom. */
+  planZoom?: [number, number];
+  onPlanZoom: (from: number, to: number) => void;
+  onPlanLayout: () => void;
   /** Forecast power series the user hid (SoC stays). */
   forecastHidden: ReadonlySet<ForecastPowerKey>;
   onToggleForecastSeries: (key: ForecastPowerKey) => void;
@@ -1152,7 +1156,8 @@ export function planView(c: Ctx): TemplateResult {
   ];
   const known = typeof a.known_until === "string" ? c.fmt.dayTime(a.known_until) : "–";
   const slotText = (s: { price: number; start_local: string }) => `${c.fmt.n(s.price * 100)} ct · ${s.start_local}`;
-  const axisStep = Math.max(1, Math.ceil(bars.length / 12));
+  const win = c.planZoom ? { from: c.planZoom[0], to: c.planZoom[1] } : planWindow(bars);
+  const stripSegs = bars.length ? planStripSegments(bars, win.from, win.to) : [];
 
   return html`
     <div class="grid plan-top">
@@ -1173,20 +1178,32 @@ export function planView(c: Ctx): TemplateResult {
         <maestro-chart
           id="plan-main"
           .options=${memo("plan", [c.theme, st(c, E.plan), c.mobile, c.fmt.loc], () =>
-            planOptions({ slots, fmt: c.fmt, i18n: c.i18n, compact: c.mobile }),
+            planOptions({
+              slots,
+              fmt: c.fmt,
+              i18n: c.i18n,
+              compact: c.mobile,
+              onZoom: c.onPlanZoom,
+              onLayout: c.onPlanLayout,
+            }),
           )}
         ></maestro-chart>
-        ${c.mobile
+        ${c.mobile || !stripSegs.length
           ? nothing
-          : html`<div class="strip">
-                ${bars.map(
-                  (s) =>
-                    html`<div class="slot ${slotAction(s)}${s.forecast ? " forecast" : ""}" title="${s.start_local} · ${c.fmt.n(s.price * 100)} ct"></div>`,
-                )}
+          : html`<div class="strategy-strip plan-slots-strip" aria-hidden="true">
+              <div class="strip-track">
+                <div class="strip timed">
+                  ${stripSegs.map(
+                    (s) =>
+                      html`<div
+                        class="slot ${s.action}${s.forecast ? " forecast" : ""}"
+                        style="left:${s.leftPct}%;width:${Math.max(s.widthPct, 0.15)}%"
+                        title="${s.startLocal} · ${c.fmt.n(s.price * 100)} ct"
+                      ></div>`,
+                  )}
+                </div>
               </div>
-              <div class="strip-axis">${bars
-                .filter((_, i) => i % axisStep === 0)
-                .map((s) => html`<span>${s.start_local}</span>`)}</div>`}
+            </div>`}
       </div>
       <div class="card plan-kpi">
         <div>

@@ -349,15 +349,17 @@ describe("price plan", () => {
     expect(parseSlots("nope")).toEqual([]);
   });
 
-  it("maps plan slots to SoC points for the forecast chart", () => {
+  it("maps plan slots to SoC points at slot ends (soc is end-of-slot)", () => {
     const slots = parseSlots([
-      slot(0.3, { start: "2026-10-16T12:00:00+02:00", start_local: "12:00", soc_pct: 40 }),
-      slot(0.5, { start: "2026-10-16T13:00:00+02:00", start_local: "13:00", soc_pct: 55 }),
+      slot(0.3, { start: "2026-10-16T12:00:00+02:00", start_local: "12:00", hours: 1, soc_pct: 40 }),
+      slot(0.5, { start: "2026-10-16T13:00:00+02:00", start_local: "13:00", hours: 1, soc_pct: 55 }),
       { start: "2026-10-16T14:00:00+02:00", start_local: "14:00", price: 0.4 },
     ]);
+    // Flat 40% during 12–13, then rise to 55% by 14:00 (not already 55% at 13:00).
     expect(planSocPoints(slots)).toEqual([
       [Date.parse("2026-10-16T12:00:00+02:00"), 40],
-      [Date.parse("2026-10-16T13:00:00+02:00"), 55],
+      [Date.parse("2026-10-16T13:00:00+02:00"), 40],
+      [Date.parse("2026-10-16T14:00:00+02:00"), 55],
     ]);
     expect(planSocPoints([])).toEqual([]);
   });
