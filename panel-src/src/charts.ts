@@ -245,6 +245,35 @@ export function saveShadowImportHidden(hidden: boolean): void {
   localStorage.setItem(SHADOW_IMPORT_HIDDEN_KEY, hidden ? "1" : "0");
 }
 
+/** Reading modes for the forecast chart (persisted in the panel). */
+export type ForecastViewMode = "balance" | "strategy" | "compare";
+
+export const FORECAST_VIEW_MODES: readonly ForecastViewMode[] = ["balance", "strategy", "compare"];
+
+const FORECAST_VIEW_KEY = "e3dc-maestro.forecast-view.v1";
+
+export function parseForecastViewMode(raw: unknown): ForecastViewMode {
+  return raw === "strategy" || raw === "compare" || raw === "balance" ? raw : "balance";
+}
+
+export function loadForecastViewMode(): ForecastViewMode {
+  try {
+    return parseForecastViewMode(localStorage.getItem(FORECAST_VIEW_KEY));
+  } catch {
+    return "balance";
+  }
+}
+
+export function saveForecastViewMode(mode: ForecastViewMode): void {
+  localStorage.setItem(FORECAST_VIEW_KEY, mode);
+}
+
+/** Compare needs shadow data; otherwise fall back to strategy. */
+export function resolveForecastViewMode(mode: ForecastViewMode, planShadow: boolean): ForecastViewMode {
+  if (mode === "compare" && !planShadow) return "strategy";
+  return mode;
+}
+
 export interface ForecastInput {
   traj: Trajectory;
   targetSoc: number | undefined;
@@ -264,6 +293,11 @@ export interface ForecastInput {
   showIst: boolean;
   /** Power series to omit. */
   hiddenPower?: ReadonlySet<ForecastPowerKey>;
+  /**
+   * Reading mode. `balance` = power + main SoC; `strategy` = SoC + phases (no power stack);
+   * `compare` = shadow expected vs plan (+ import). Defaults to `balance`.
+   */
+  mode?: ForecastViewMode;
   /** Narrow screens: less chrome, more plot width. */
   compact?: boolean;
   /** Fired when the user zooms / brushes the forecast chart. */
@@ -274,13 +308,21 @@ export interface ForecastInput {
   i18n: I18n;
 }
 
-export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShadowSoc, hideExpectedSoc, hideShadowImport, planImport, ist, showIst, hiddenPower, compact, onZoom, onLayout, fmt, i18n }: ForecastInput): Opts {
+export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShadowSoc, hideExpectedSoc, hideShadowImport, planImport, ist, showIst, hiddenPower, mode: modeIn, compact, onZoom, onLayout, fmt, i18n }: ForecastInput): Opts {
   const { imp, exp } = splitGrid(traj.grid_points);
   const hasPlanSoc = !!planSoc && planSoc.length >= 2;
   // Shadow: plan does not actuate — keep real trajectory (cyan); optionally overlay plan SoC.
   // Controlling: plan SoC is the forecast that will happen.
   const inShadow = hasPlanSoc && !!planShadow;
-  const showShadowSoc = inShadow && !hideShadowSoc && !!planSoc;
+  const mode = resolveForecastViewMode(modeIn ?? "balance", inShadow);
+
+  // Mode gates which layers appear (legend toggles still apply within the mode).
+  const hideAllPower = mode === "strategy";
+  const comparePower = mode === "compare"; // only import (+ shadow import), no PV/house/feed
+  const allowShadow = mode === "strategy" || mode === "compare";
+  const showPhaseBands = mode !== "compare";
+
+  const showShadowSoc = allowShadow && inShadow && !hideShadowSoc && !!planSoc;
   const showExpectedSoc = !hideExpectedSoc;
   const showShadowCompare = showShadowSoc; // used below for axis / ist bridge
   const expectedSeries = inShadow || !hasPlanSoc ? traj.trajectory_points : planSoc!;
@@ -289,23 +331,31 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShad
     : hasPlanSoc
       ? i18n.t("legendPlanSoc")
       : i18n.t("legendSoc");
-  const hidden = hiddenPower ?? new Set<ForecastPowerKey>();
-  const bands = phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
-    const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: compact ? 0.08 : 0.05 };
-    // Vertical phase names eat plot width on phones; keep the tint, drop the text.
-    if (!compact && b.x2 - b.x >= 30 * 60e3) {
-      ann.label = {
-        text: i18n.phase(b.phase),
-        borderWidth: 0,
-        orientation: "vertical",
-        position: "top",
-        offsetX: 10,
-        offsetY: 10,
-        style: { background: "transparent", color: COLORS.muted, fontSize: "11px" },
-      };
-    }
-    return ann;
-  });
+  const hidden = new Set<ForecastPowerKey>(hiddenPower ?? []);
+  if (hideAllPower) for (const k of FORECAST_POWER_KEYS) hidden.add(k);
+  if (comparePower) {
+    hidden.add("pv");
+    hidden.add("house");
+    hidden.add("feed");
+  }
+  const bands = showPhaseBands
+    ? phaseBands(traj.trajectory_phases, traj.trajectory_points).map((b) => {
+        const ann: Obj = { x: b.x, x2: b.x2, fillColor: COLORS.accent, opacity: compact ? 0.08 : 0.05 };
+        // Vertical phase names eat plot width on phones; keep the tint, drop the text.
+        if (!compact && b.x2 - b.x >= 30 * 60e3) {
+          ann.label = {
+            text: i18n.phase(b.phase),
+            borderWidth: 0,
+            orientation: "vertical",
+            position: "top",
+            offsetX: 10,
+            offsetY: 10,
+            style: { background: "transparent", color: COLORS.muted, fontSize: "11px" },
+          };
+        }
+        return ann;
+      })
+    : [];
 
   type PowerDef = {
     key: ForecastPowerKey;
@@ -324,7 +374,8 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShad
     { key: "feed", name: i18n.t("legendFeed"), type: "area", data: exp, color: COLORS.gridOut, width: 1.5, dash: 0, fill: "gradient" },
   ];
   const visible = powerDefs.filter((d) => !hidden.has(d.key));
-  const showPlanImport = inShadow && !hideShadowImport && !!planImport && planImport.length >= 2;
+  const showPlanImport =
+    allowShadow && inShadow && !hideShadowImport && !!planImport && planImport.length >= 2;
   const planImportName = i18n.t("legendImportShadow");
   const powerAxisName = visible[0]?.name ?? (showPlanImport ? planImportName : i18n.t("legendPv"));
 
@@ -464,11 +515,14 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShad
         yaxis.push({ seriesName: powerAxisName, show: false });
       }
     };
-    if (!hidden.has("pv") && ist.pv.length > 1) {
-      pushActual(`${i18n.t("legendPv")} ${i18n.t("legendActual")}`, toKw(bridge(ist.pv, traj.pv_points)), COLORS.pv, false);
-    }
-    if (!hidden.has("house") && ist.house.length > 1) {
-      pushActual(`${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, toKw(bridge(ist.house, traj.house_points)), COLORS.house, false);
+    // Ist power only in balance (and compare import); strategy is SoC-focused.
+    if (mode === "balance" || mode === "compare") {
+      if (!hidden.has("pv") && ist.pv.length > 1) {
+        pushActual(`${i18n.t("legendPv")} ${i18n.t("legendActual")}`, toKw(bridge(ist.pv, traj.pv_points)), COLORS.pv, false);
+      }
+      if (!hidden.has("house") && ist.house.length > 1) {
+        pushActual(`${i18n.t("legendHouse")} ${i18n.t("legendActual")}`, toKw(bridge(ist.house, traj.house_points)), COLORS.house, false);
+      }
     }
     if (ist.soc.length > 1) {
       const bridgeTo = showExpectedSoc ? expectedSeries : showShadowCompare && planSoc ? planSoc : expectedSeries;

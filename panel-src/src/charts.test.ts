@@ -124,6 +124,7 @@ describe("forecastOptions", () => {
         [Date.parse("2026-10-21T12:00:00Z"), 50],
         [Date.parse("2026-10-21T13:00:00Z"), 70],
       ],
+      mode: "balance",
       ist: undefined,
       showIst: false,
       hiddenPower: new Set(["import", "feed"]),
@@ -140,6 +141,7 @@ describe("forecastOptions", () => {
       traj: traj(),
       targetSoc: 100,
       planSoc: undefined,
+      mode: "balance",
       ist: undefined,
       showIst: false,
       compact: true,
@@ -154,7 +156,7 @@ describe("forecastOptions", () => {
     expect(bands.filter((b) => b.label?.orientation === "vertical")).toHaveLength(0);
   });
 
-  it("shows expected SoC, shadow plan SoC and planned import side by side", () => {
+  it("compare mode shows expected SoC, shadow plan SoC and planned import", () => {
     useChartTheme("dark");
     const planImport = [
       [Date.parse("2026-10-21T12:00:00Z"), 2],
@@ -169,29 +171,77 @@ describe("forecastOptions", () => {
       ],
       planShadow: true,
       planImport,
+      mode: "compare",
       ist: undefined,
       showIst: false,
-      hiddenPower: new Set(["pv", "house"]),
       fmt: makeFmt("de"),
       i18n: makeI18n("de"),
     });
     const series = opts.series as { name: string; data: unknown }[];
     expect(series.map((s) => s.name)).toEqual([
       "Netzbezug",
-      "Einspeisung",
       "Netzbezug · Schatten",
       "SoC erwartet",
       "SoC geplant · Schatten",
     ]);
-    expect(series[2]?.data).toEqual(planImport);
-    expect(series[3]?.data).toEqual(traj().trajectory_points);
+    expect(series[1]?.data).toEqual(planImport);
+    expect(series[2]?.data).toEqual(traj().trajectory_points);
     const colors = opts.colors as string[];
-    expect(colors[2]).toBe("#f87171");
-    expect(colors[3]).toBe("#22d3ee");
-    expect(colors[4]).toBe("#818cf8");
+    expect(colors[1]).toBe("#f87171");
+    expect(colors[2]).toBe("#22d3ee");
+    expect(colors[3]).toBe("#818cf8");
     const stroke = opts.stroke as { dashArray: number[]; curve: string[] };
-    expect(stroke.dashArray[2]).toBe(6);
-    expect(stroke.curve[2]).toBe("stepline");
+    expect(stroke.dashArray[1]).toBe(6);
+    expect(stroke.curve[1]).toBe("stepline");
+  });
+
+  it("balance mode hides shadow overlays", () => {
+    useChartTheme("dark");
+    const opts = forecastOptions({
+      traj: traj(),
+      targetSoc: undefined,
+      planSoc: [
+        [Date.parse("2026-10-21T12:00:00Z"), 50],
+        [Date.parse("2026-10-21T13:00:00Z"), 70],
+      ],
+      planShadow: true,
+      planImport: [
+        [Date.parse("2026-10-21T12:00:00Z"), 2],
+        [Date.parse("2026-10-21T13:00:00Z"), 2],
+      ],
+      mode: "balance",
+      ist: undefined,
+      showIst: false,
+      fmt: makeFmt("de"),
+      i18n: makeI18n("de"),
+    });
+    const names = (opts.series as { name: string }[]).map((s) => s.name);
+    expect(names).toContain("SoC erwartet");
+    expect(names).not.toContain("SoC geplant · Schatten");
+    expect(names).not.toContain("Netzbezug · Schatten");
+    expect(names).toContain("PV");
+  });
+
+  it("strategy mode shows SoC only (no power stack)", () => {
+    useChartTheme("dark");
+    const opts = forecastOptions({
+      traj: traj(),
+      targetSoc: undefined,
+      planSoc: [
+        [Date.parse("2026-10-21T12:00:00Z"), 50],
+        [Date.parse("2026-10-21T13:00:00Z"), 70],
+      ],
+      planShadow: true,
+      mode: "strategy",
+      ist: undefined,
+      showIst: false,
+      fmt: makeFmt("de"),
+      i18n: makeI18n("de"),
+    });
+    expect((opts.series as { name: string }[]).map((s) => s.name)).toEqual([
+      "SoC erwartet",
+      "SoC geplant · Schatten",
+    ]);
   });
 
   it("hides expected SoC while keeping shadow plan SoC", () => {
@@ -204,6 +254,7 @@ describe("forecastOptions", () => {
         [Date.parse("2026-10-21T13:00:00Z"), 70],
       ],
       planShadow: true,
+      mode: "strategy",
       hideExpectedSoc: true,
       ist: undefined,
       showIst: false,
@@ -230,6 +281,7 @@ describe("forecastOptions", () => {
       ],
       planShadow: true,
       planImport,
+      mode: "compare",
       hideExpectedSoc: true,
       hideShadowSoc: true,
       hideShadowImport: false,
@@ -257,6 +309,7 @@ describe("forecastOptions", () => {
         [Date.parse("2026-10-21T12:00:00Z"), 2],
         [Date.parse("2026-10-21T13:00:00Z"), 2],
       ],
+      mode: "compare",
       hideExpectedSoc: true,
       hideShadowSoc: true,
       hideShadowImport: true,
@@ -276,6 +329,7 @@ describe("forecastOptions", () => {
       traj: traj(),
       targetSoc: undefined,
       planSoc: undefined,
+      mode: "balance",
       ist: undefined,
       showIst: false,
       fmt: makeFmt("de"),

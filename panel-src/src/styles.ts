@@ -2711,6 +2711,42 @@ export const styles = css`
   .plan-slots-strip .strip-track {
     margin-top: 0;
   }
+  /* Quiet mode tabs — sit with chart tools, not a second primary control. */
+  .forecast-card .forecast-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+  }
+  .forecast-card .forecast-mode button {
+    border: 0;
+    background: transparent;
+    color: var(--faint);
+    font: 500 11px Inter, system-ui, sans-serif;
+    padding: 3px 7px;
+    border-radius: 0;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+  .forecast-card .forecast-mode button + button {
+    border-left: 1px solid var(--stroke);
+  }
+  .forecast-card .forecast-mode button:hover:not(:disabled),
+  .forecast-card .forecast-mode button:focus-visible:not(:disabled) {
+    color: var(--muted);
+  }
+  .forecast-card .forecast-mode button.active {
+    color: var(--text);
+    font-weight: 600;
+    background: transparent;
+  }
+  .forecast-card .forecast-mode button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
   .plan-top {
     grid-template-columns: 2fr 1fr;
   }

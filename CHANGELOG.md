@@ -11,6 +11,22 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.2-beta.2] – Prognose-Ansichten und Preisplan-Ausrichtung (2026-10-24)
+
+> **Beta.** Enthält 0.5.2-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.2.md](docs/release-notes/v0.5.2-beta.2.md).
+
+### Neu
+- Prognose-Ansichten **Bilanz / Strategie / Vergleich** (Vergleich nur im Schattenmodus), lokal gespeichert.
+- Schattenmodus: erwarteter SoC, Plan-SoC und geplanter Netzbezug einzeln umschaltbar; Look-Präferenzen lokal.
+
+### Korrekturen
+- Plan-SoC und Preisplan-Streifen an Chart-Zeit und Apex-Plotmaße gekoppelt (Zoom, Einrückung, Slot-Breiten).
+
+### Hinweise
+- Browser hart neu laden für Panel und Hilfe.
+
+---
+
 ## [0.5.2-beta.1] – HT-Schutz und Netzladung (#27) (2026-10-23)
 
 > **Beta.** Enthält 0.5.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.1.md](docs/release-notes/v0.5.2-beta.1.md).

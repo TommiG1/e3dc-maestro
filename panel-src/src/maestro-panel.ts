@@ -31,15 +31,18 @@ import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, 
 import {
   loadExpectedSocHidden,
   loadForecastHidden,
+  loadForecastViewMode,
   loadShadowImportHidden,
   loadShadowSocHidden,
   powerHistoryOptions,
   saveExpectedSocHidden,
   saveForecastHidden,
+  saveForecastViewMode,
   saveShadowImportHidden,
   saveShadowSocHidden,
   useChartTheme,
   type ForecastPowerKey,
+  type ForecastViewMode,
 } from "./charts";
 import { placeElectrons } from "./flow";
 import maestroLogo from "./maestro-logo.png";
@@ -195,6 +198,7 @@ class MaestroPanel extends LitElement {
   private _hideShadowSoc = loadShadowSocHidden();
   private _hideExpectedSoc = loadExpectedSocHidden();
   private _hideShadowImport = loadShadowImportHidden();
+  private _forecastMode: ForecastViewMode = loadForecastViewMode();
   private _forecastZoom?: [number, number];
   private _planZoom?: [number, number];
   private _settingsQuery = "";
@@ -1371,6 +1375,13 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       onForecastLayout: () => this._syncPlotStrips(),
+      forecastMode: this._forecastMode,
+      onForecastMode: (mode) => {
+        if (mode === this._forecastMode) return;
+        this._forecastMode = mode;
+        saveForecastViewMode(mode);
+        this.requestUpdate();
+      },
       onPlanZoom: (from, to) => {
         const cur = this._planZoom;
         if (cur && Math.abs(cur[0] - from) < 1 && Math.abs(cur[1] - to) < 1) return;

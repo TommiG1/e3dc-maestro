@@ -9,10 +9,13 @@ import {
   brushOptions,
   COLORS,
   forecastOptions,
+  FORECAST_VIEW_MODES,
   planOptions,
+  resolveForecastViewMode,
   socRingGradient,
   sparkOptions,
   type ForecastPowerKey,
+  type ForecastViewMode,
 } from "./charts";
 import type { ClassicStatus } from "./classic";
 import type { EnergyApplyMode, EnergyDashboardStatus } from "./energy-dashboard";
@@ -104,6 +107,9 @@ export interface Ctx {
   forecastZoom?: [number, number];
   onForecastZoom: (from: number, to: number) => void;
   onForecastLayout: () => void;
+  /** Forecast reading mode: balance / strategy / compare. */
+  forecastMode: ForecastViewMode;
+  onForecastMode: (mode: ForecastViewMode) => void;
   /** Visible price-plan chart x-window (ms); follows drag-zoom. */
   planZoom?: [number, number];
   onPlanZoom: (from: number, to: number) => void;
@@ -944,7 +950,15 @@ export function forecastView(c: Ctx): TemplateResult {
   const usePlanSoc = planSoc.length >= 2;
   const planControlling = planAttrs.controlling === true;
   const planShadow = usePlanSoc && !planControlling;
-  const titleKey = usePlanSoc ? "chartTitleStrategy" : "chartTitle";
+  const mode = resolveForecastViewMode(c.forecastMode, planShadow);
+  const titleKey =
+    mode === "compare"
+      ? "chartTitleCompare"
+      : mode === "strategy"
+        ? "chartTitleStrategy"
+        : usePlanSoc
+          ? "chartTitleBalance"
+          : "chartTitle";
   // Shadow: real trajectory stays primary; plan SoC is the compare curve.
   // Controlling: plan SoC is what will happen.
   const socMin =
@@ -955,13 +969,18 @@ export function forecastView(c: Ctx): TemplateResult {
     html`<div class="card stat"><h3>${label}</h3><div class="v">${value}</div></div>`;
   const hiddenKey = [...c.forecastHidden].sort().join(",");
   const socToggleLabel = planShadow ? t("legendSocExpected") : usePlanSoc ? t("legendPlanSoc") : t("legendSoc");
+  const showPowerLegend = mode === "balance" || mode === "compare";
+  const showShadowLegend = (mode === "strategy" || mode === "compare") && planShadow;
+  const showStrip = (mode === "strategy" || mode === "compare") && slots.length > 0;
+  const modeLabel = (m: ForecastViewMode) =>
+    m === "balance" ? t("forecastModeBalance") : m === "strategy" ? t("forecastModeStrategy") : t("forecastModeCompare");
   const win = c.forecastZoom
     ? { from: c.forecastZoom[0], to: c.forecastZoom[1] }
     : forecastWindow(traj, c.range, {
         showIst: c.showIst,
         istStart: c.ist?.pv[0]?.[0] ?? c.ist?.soc[0]?.[0],
       });
-  const stripSegs = slots.length ? planStripSegments(slots, win.from, win.to) : [];
+  const stripSegs = showStrip ? planStripSegments(slots, win.from, win.to) : [];
 
   return html`
     <div class="card forecast-card">
@@ -979,7 +998,7 @@ export function forecastView(c: Ctx): TemplateResult {
               title=${t("legendToggleHint")}
               @click=${() => c.onToggleHideExpectedSoc()}
             ><i style="background:${COLORS.bat}"></i>${socToggleLabel}</button>
-            ${planShadow
+            ${showShadowLegend
               ? html`<button
                     type="button"
                     class="legend-toggle ${c.hideShadowSoc ? "off" : ""}"
@@ -997,18 +1016,33 @@ export function forecastView(c: Ctx): TemplateResult {
                       ><i style="background:${COLORS.gridIn};height:2px;border-radius:0;opacity:0.85"></i>${t("legendImportShadow")}</button>`
                     : nothing}`
               : nothing}
-            ${POWER_LEGEND.map(
-              ({ key, color, label }) => html`<button
-                type="button"
-                class="legend-toggle ${c.forecastHidden.has(key) ? "off" : ""}"
-                aria-pressed=${!c.forecastHidden.has(key)}
-                title=${t("legendToggleHint")}
-                @click=${() => c.onToggleForecastSeries(key)}
-              ><i style="background:${color}"></i>${t(label)}</button>`,
-            )}
+            ${showPowerLegend
+              ? POWER_LEGEND.filter((row) => mode !== "compare" || row.key === "import").map(
+                  ({ key, color, label }) => html`<button
+                    type="button"
+                    class="legend-toggle ${c.forecastHidden.has(key) ? "off" : ""}"
+                    aria-pressed=${!c.forecastHidden.has(key)}
+                    title=${t("legendToggleHint")}
+                    @click=${() => c.onToggleForecastSeries(key)}
+                  ><i style="background:${color}"></i>${t(label)}</button>`,
+                )
+              : nothing}
           </div>
         </div>
         <div class="chart-tools">
+          <div class="forecast-mode" role="group" aria-label=${t("forecastModeGroup")}>
+            ${FORECAST_VIEW_MODES.map((m) => {
+              const locked = m === "compare" && !planShadow;
+              return html`<button
+                type="button"
+                class=${mode === m ? "active" : ""}
+                aria-pressed=${mode === m}
+                ?disabled=${locked}
+                title=${locked ? t("forecastModeCompareHint") : modeLabel(m)}
+                @click=${() => !locked && c.onForecastMode(m)}
+              >${modeLabel(m)}</button>`;
+            })}
+          </div>
           <button class="toggle ${c.showIst ? "active" : ""}" aria-pressed=${c.showIst} @click=${c.onToggleIst}>${t("actualOverlay")}</button>
           ${c.mobile ? nothing : html`<button class="toggle" @click=${() => downloadCsv("maestro-prognose.csv", forecastCsv(traj))}>${t("exportCsv")}</button>`}
           <div class="seg" role="group">
@@ -1022,7 +1056,7 @@ export function forecastView(c: Ctx): TemplateResult {
         id="fc-main"
         .options=${memo(
           "forecast",
-          [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, hiddenKey, c.hideShadowSoc, c.hideExpectedSoc, c.hideShadowImport, c.mobile, c.fmt.loc],
+          [c.theme, st(c, E.trajectory), st(c, E.plan), st(c, E.targetSoc)?.state, c.ist, c.showIst, hiddenKey, c.hideShadowSoc, c.hideExpectedSoc, c.hideShadowImport, mode, c.mobile, c.fmt.loc],
           () =>
             forecastOptions({
               traj,
@@ -1036,6 +1070,7 @@ export function forecastView(c: Ctx): TemplateResult {
               ist: c.ist,
               showIst: c.showIst,
               hiddenPower: c.forecastHidden,
+              mode,
               compact: c.mobile,
               fmt: c.fmt,
               i18n: c.i18n,
