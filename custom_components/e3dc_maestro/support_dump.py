@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, VERSION
@@ -26,11 +27,10 @@ def build_support_dump(
     coordinator: Any | None,
 ) -> dict[str, Any]:
     """Assemble a JSON-serialisable support bundle (no secrets)."""
-    ha_version = getattr(getattr(hass, "config", None), "version", None)
     data: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "integration_version": VERSION,
-        "ha_version": str(ha_version) if ha_version is not None else None,
+        "ha_version": HA_VERSION,
         "domain": DOMAIN,
         "hint": (
             "Attach this file to a GitHub issue. Secrets are redacted; "

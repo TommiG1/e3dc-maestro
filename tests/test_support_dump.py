@@ -24,7 +24,6 @@ def test_redact_options_scrubs_secrets() -> None:
 
 def test_build_support_dump_includes_debug_log() -> None:
     hass = MagicMock()
-    hass.config.version = "2026.10.3"
     entry = SimpleNamespace(
         title="Maestro",
         entry_id="abc",
@@ -70,7 +69,7 @@ def test_build_support_dump_includes_debug_log() -> None:
     )
     dump = build_support_dump(hass, entry, coordinator)
     assert dump["integration_version"]
-    assert dump["ha_version"] == "2026.10.3"
+    assert dump["ha_version"]  # from homeassistant.const
     assert dump["options"]["cloud_token"] == "**REDACTED**"
     assert dump["options"]["grid_power_sensor"] == "sensor.grid"
     assert dump["debug_log"] == ["line-a", "line-b"]
