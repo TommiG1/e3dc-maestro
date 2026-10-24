@@ -354,6 +354,7 @@ async def test_websocket_command_registered_once(ha_frontend, monkeypatch):
         panel._ws_panel_options,
         panel._ws_panel_options_set,
         panel._ws_panel_pause,
+        panel._ws_debug_dump,
         panel._ws_energy_preview,
         panel._ws_energy_apply,
     ]
