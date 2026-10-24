@@ -1,0 +1,63 @@
+name: Bug report
+description: Something is broken or behaves incorrectly in Maestro.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Questions and “how do I …?” belong in [Discussions → Hilfe](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/2-hilfe-zu-setup-sensoren-und-regelung).**
+  - type: input
+    id: version
+    attributes:
+      label: Maestro version
+      description: From HACS / `manifest.json` (e.g. `0.5.2-beta.2`).
+      placeholder: "0.5.2-beta.2"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.10.3"
+    validations:
+      required: true
+  - type: input
+    id: e3dc_rscp
+    attributes:
+      label: e3dc_rscp version (if known)
+      placeholder: "4.0.0"
+    validations:
+      required: false
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Expected vs actual behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / screenshots
+      description: Redact secrets. Panel screenshots and `e3dc_maestro` log lines help a lot.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing Issues and Discussions for this problem.
+          required: true
+        - label: This is a bug (not a setup question or feature idea).
+          required: true

@@ -1,0 +1,36 @@
+name: Feature request (prefer Discussions)
+description: Prefer opening a Discussion under Feature-Wünsche. Use this only if you need an Issue tracker item.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature ideas are easiest to discuss in **[Discussions → Feature-Wünsche](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/3-feature-wünsche-und-verbesserungen)**.
+        Open an Issue here only if you already have a concrete, implementable proposal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked Discussions / existing Issues for a similar idea.
+          required: true

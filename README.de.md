@@ -38,9 +38,10 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 11. [Sensor-Vorzeichen-Konventionen](#sensor-vorzeichen-konventionen)
 12. [Fehlerbehebung & FAQ](#fehlerbehebung--faq)
 13. [Bekannte Kompatibilität](#bekannte-kompatibilität)
-14. [Danksagung](#danksagung)
-15. [Changelog](CHANGELOG.md)
-16. [Lizenz](#lizenz)
+14. [Support & Community](#support--community)
+15. [Danksagung](#danksagung)
+16. [Changelog](CHANGELOG.md)
+17. [Lizenz](#lizenz)
 
 ---
 
@@ -1235,6 +1236,18 @@ Maestro überträgt diese Ideen in die Home-Assistant-Welt als native HACS-Integ
 Ebenfalls ein herzlicher Dank an **Torben Nehmer** für die [e3dc_rscp](https://github.com/torbennehmer/hacs-e3dc) Home Assistant Integration, auf der Maestro als Kommunikationsschicht vollständig aufbaut. Ohne diese Arbeit wäre Maestro nicht möglich.
 
 ---
+
+## Support & Community
+
+| Anliegen | Ort |
+|----------|-----|
+| **Bug** / klarer Defekt | [GitHub Issues](https://github.com/TommiG1/hacs-e3dc-maestro/issues) (Bug-Vorlage nutzen) |
+| **Hilfe** / Setup / „warum regelt er so?“ | [Discussions → Hilfe](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/2-hilfe-zu-setup-sensoren-und-regelung) |
+| **Feature-Idee** | [Discussions → Feature-Wünsche](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/3-feature-wünsche-und-verbesserungen) |
+| **Release-News** | [Discussions → Releases](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/1-release-ankündigungen) |
+| **Website / Ökosystem-News** | [glowdash.de/maestro/news](https://glowdash.de/maestro/news/) |
+
+Sicherheitsrelevante Meldungen: siehe [SECURITY.md](SECURITY.md).
 
 ## Changelog
 

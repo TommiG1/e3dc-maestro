@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Help & questions (Discussions)
+    url: https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/2-hilfe-zu-setup-sensoren-und-regelung
+    about: Setup, sensors, and “why is it regulating like this?” — use Q&A Discussions, not Issues.
+  - name: Feature ideas (Discussions)
+    url: https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/3-feature-wünsche-und-verbesserungen
+    about: Feature requests and improvements belong in Discussions.
+  - name: Website & news
+    url: https://glowdash.de/maestro/news/
+    about: Product and E3DC ecosystem news on the GlowDash site.
