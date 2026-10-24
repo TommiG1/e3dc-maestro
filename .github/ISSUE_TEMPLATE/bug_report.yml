@@ -49,7 +49,10 @@ body:
     id: logs
     attributes:
       label: Relevant logs / screenshots
-      description: Redact secrets. Panel screenshots and `e3dc_maestro` log lines help a lot.
+      description: >
+        Best: Maestro Cockpit → Entscheidung → Debug-Log → enable logging → reproduce →
+        **Debug herunterladen** and attach the JSON. Otherwise screenshots / Core log lines
+        (`custom_components.e3dc_maestro: debug`). Secrets are redacted in the panel dump.
     validations:
       required: false
   - type: checkboxes

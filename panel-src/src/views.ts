@@ -182,6 +182,10 @@ export interface Ctx {
   onReserveCommit: (percent: number) => void;
   debugOpen: boolean;
   onToggleDebug: () => void;
+  /** Fetch redacted support JSON and trigger a browser download. */
+  onDownloadDebug: () => void;
+  debugDownloadPending: boolean;
+  debugDownloadError?: string;
   /** Scroll to the control ladder on this screen (decision). */
   onShowLadder: () => void;
   theme: ThemeId;
@@ -1650,7 +1654,7 @@ export function decisionView(c: Ctx): TemplateResult {
       ${c.debugOpen
         ? html`<div class="card debug-card">
             <div class="force">
-              <div class="txt"><b>${t("debugSwitch")}</b></div>
+              <div class="txt"><b>${t("debugSwitch")}</b><span>${t("debugSwitchHint")}</span></div>
               <button
                 class="switch ${onDebug(c) ? "on" : ""}"
                 role="switch"
@@ -1660,6 +1664,16 @@ export function decisionView(c: Ctx): TemplateResult {
                 @click=${() => c.onToggle(E.debug)}
               ></button>
             </div>
+            <div class="debug-actions">
+              <button
+                type="button"
+                class="btn primary"
+                ?disabled=${c.debugDownloadPending}
+                @click=${c.onDownloadDebug}
+              >${c.debugDownloadPending ? t("debugDownloadPending") : t("debugDownload")}</button>
+              <span class="sub">${t("debugDownloadHint")}</span>
+            </div>
+            ${c.debugDownloadError ? html`<p class="hint warn">${c.debugDownloadError}</p>` : nothing}
             <pre class="debug-log">${debugText(c)}</pre>
           </div>`
         : nothing}

@@ -49,6 +49,7 @@ _PANEL_FLAG = f"{DOMAIN}_panel_registered"
 _WS_FLAG = f"{DOMAIN}_panel_ws_registered"
 WS_PANEL_PAUSE = f"{DOMAIN}/pause"
 WS_PANEL_ENTITIES = f"{DOMAIN}/panel_entities"
+WS_DEBUG_DUMP = f"{DOMAIN}/debug_dump"
 WS_ENERGY_PREVIEW = f"{DOMAIN}/energy_dashboard/preview"
 WS_ENERGY_APPLY = f"{DOMAIN}/energy_dashboard/apply"
 
@@ -551,6 +552,21 @@ def _ws_panel_pause(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -
     connection.send_result(msg["id"], {"hours": msg["hours"]})
 
 
+@websocket_api.websocket_command({vol.Required("type"): WS_DEBUG_DUMP})
+@callback
+def _ws_debug_dump(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    """Return a redacted support JSON for GitHub issues (panel download)."""
+    from .support_dump import build_support_dump
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    entry = next((item for item in entries if item.state == ConfigEntryState.LOADED), None)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Maestro is not loaded")
+        return
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    connection.send_result(msg["id"], build_support_dump(hass, entry, coordinator))
+
+
 @websocket_api.websocket_command({vol.Required("type"): WS_ENERGY_PREVIEW})
 @websocket_api.async_response
 async def _ws_energy_preview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
@@ -605,6 +621,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_options)
         websocket_api.async_register_command(hass, _ws_panel_options_set)
         websocket_api.async_register_command(hass, _ws_panel_pause)
+        websocket_api.async_register_command(hass, _ws_debug_dump)
         websocket_api.async_register_command(hass, _ws_energy_preview)
         websocket_api.async_register_command(hass, _ws_energy_apply)
         hass.data[_WS_FLAG] = True

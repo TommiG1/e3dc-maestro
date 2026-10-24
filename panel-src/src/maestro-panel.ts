@@ -121,6 +121,7 @@ import { slotsFrom, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, ENERGY_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
+import { debugDumpFilename, downloadJson } from "./csv";
 import { batteryControlOverlay, decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 import { helpAnchor, type HelpAction } from "./help-content";
 import { helpOverlay } from "./help-view";
@@ -245,6 +246,8 @@ class MaestroPanel extends LitElement {
   private _pulseDays?: BalanceDay[];
   private _pulseState: "idle" | "loading" | "ready" | "error" = "idle";
   private _debugOpen = false;
+  private _debugDownloadPending = false;
+  private _debugDownloadError?: string;
   private _picking = false;
   private _pickQuery = "";
   private _focusConsumers = false;
@@ -1120,6 +1123,23 @@ class MaestroPanel extends LitElement {
     }
   }
 
+  private async _downloadDebug(): Promise<void> {
+    const hass = this._hass;
+    if (!hass || this._debugDownloadPending) return;
+    this._debugDownloadPending = true;
+    this._debugDownloadError = undefined;
+    this.requestUpdate();
+    try {
+      const dump = await hass.callWS<unknown>({ type: "e3dc_maestro/debug_dump" });
+      downloadJson(debugDumpFilename(), dump);
+    } catch {
+      this._debugDownloadError = makeI18n(hass.language).t("debugDownloadFailed");
+    } finally {
+      this._debugDownloadPending = false;
+      this.requestUpdate();
+    }
+  }
+
   private _syncPauseClock(until: number | undefined): void {
     const running = until !== undefined && until * 1000 > Date.now();
     if (running && this._pauseClock === undefined) {
@@ -1536,6 +1556,9 @@ class MaestroPanel extends LitElement {
         this._debugOpen = !this._debugOpen;
         this.requestUpdate();
       },
+      onDownloadDebug: () => void this._downloadDebug(),
+      debugDownloadPending: this._debugDownloadPending,
+      debugDownloadError: this._debugDownloadError,
       theme: this._theme,
       onTheme: (theme) => this._setTheme(theme),
       onThemePreview: (theme) => this._previewTheme(theme),

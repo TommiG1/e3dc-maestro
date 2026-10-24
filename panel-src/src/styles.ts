@@ -2503,11 +2503,25 @@ export const styles = css`
   .debug-card {
     margin-top: 0;
   }
+  .debug-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 4px 0 8px;
+  }
+  .debug-actions .sub {
+    flex: 1 1 12rem;
+    margin: 0;
+  }
   .debug-log {
     margin: 12px 0 0;
     white-space: pre-wrap;
     font: 12px ui-monospace, monospace;
     color: var(--muted);
+  }
+  .hint.warn {
+    color: var(--warn, #f59e0b);
   }
   .sheet select,
   .btn.action {
