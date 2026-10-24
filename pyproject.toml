@@ -1,14 +1,5 @@
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hacs-e3dc-maestro"
-version = "0.3.19"
-description = "E3DC Maestro Home Assistant custom integration"
-readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "AGPL-3.0-or-later" }
+# Tooling config for CI / local tests.
+# Integration version: custom_components/e3dc_maestro/manifest.json (single source of truth).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
