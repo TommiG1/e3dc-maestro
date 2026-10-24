@@ -11,6 +11,7 @@ E3DC Maestro läuft vollständig **lokal und ohne Cloud-Verbindung**. Es ergänz
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=for-the-badge)](LICENSE)
 [![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=for-the-badge&logo=paypal)](https://www.paypal.com/paypalme/tommigraf)
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-blue?style=for-the-badge&logo=github)](https://github.com/TommiG1/hacs-e3dc-maestro/discussions)
+[![Website](https://img.shields.io/badge/Website-glowdash.de%2Fmaestro-blue?style=for-the-badge)](https://glowdash.de/maestro/)
 
 ---
 
