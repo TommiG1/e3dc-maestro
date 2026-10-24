@@ -1,7 +1,7 @@
 🇬🇧 English | [🇩🇪 Deutsch](README.de.md)
 
 <p align="center">
-  <img src="brand/maestro-logo.png" alt="E3DC Maestro" width="88" height="88">
+  <img src="icon.png" alt="E3DC Maestro" width="88" height="88">
 </p>
 
 <h1 align="center">E3DC Maestro</h1>
