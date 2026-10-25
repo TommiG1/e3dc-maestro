@@ -799,6 +799,15 @@ class E3DCMaestroCoordinator(
         self.last_decision = decision
         self.last_phase = decision.phase
 
+        # Ringpuffer für Support-Dump: bei aktivem Debug jeden Takt eine Zeile,
+        # nicht nur bei RSCP-Writes (sonst bleibt der Dump bei stabilem Korridor leer).
+        if self.debug_enabled:
+            ch = decision.charge_power_limit
+            dis = decision.discharge_power_limit
+            ch_s = f"{ch:.0f}W" if ch is not None else "—"
+            dis_s = f"{dis:.0f}W" if dis is not None else "—"
+            self._log(f"[{decision.phase}] charge={ch_s} discharge={dis_s} → {decision.reason}")
+
         # Update statistics
         charged_native = None
         discharged_native = None
@@ -1112,6 +1121,16 @@ class E3DCMaestroCoordinator(
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Stats konnten nicht gesichert werden: %s", err)
 
+
+    def set_debug_enabled(self, enabled: bool) -> None:
+        """Toggle the in-memory debug ring buffer (panel / switch.e3dc_maestro_debug)."""
+        if enabled:
+            self.debug_enabled = True
+            self._log("Debug-Logging aktiviert")
+        else:
+            if self.debug_enabled:
+                self._log("Debug-Logging deaktiviert")
+            self.debug_enabled = False
 
     def _log(self, msg: str) -> None:
         ts = dt_util.now().strftime("%H:%M:%S")

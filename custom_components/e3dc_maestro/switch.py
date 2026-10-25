@@ -132,8 +132,8 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         key="debug",
         name="Debug-Logging",
         icon="mdi:bug",
-        on_fn=lambda coord: setattr(coord, "debug_enabled", True),
-        off_fn=lambda coord: setattr(coord, "debug_enabled", False),
+        on_fn=lambda coord: coord.set_debug_enabled(True),
+        off_fn=lambda coord: coord.set_debug_enabled(False),
     ),
     # B1: Saisonale Notstromreserve
     MaestroSwitchDescription(
