@@ -11,6 +11,22 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.2-beta.3] – Debug herunterladen und voller Ringpuffer (2026-10-25)
+
+> **Beta.** Enthält 0.5.2-beta.2. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.3.md](docs/release-notes/v0.5.2-beta.3.md).
+
+### Neu
+- **Debug herunterladen** im Cockpit (Entscheidung): redacted JSON-Support-Dump für Issues.
+- Debug-Ringpuffer schreibt bei aktivem Debug **jeden Regelungstakt**; Einschalten loggt sofort.
+
+### Dokumentation
+- Schlankeres HACS-README; Handbuch-/Discussions-/Website-Badges; Issue-/PR-Vorlagen.
+
+### Hinweise
+- Home Assistant neu starten (Websocket `e3dc_maestro/debug_dump`), danach Browser hart neu laden.
+
+---
+
 ## [0.5.2-beta.2] – Prognose-Ansichten und Preisplan-Ausrichtung (2026-10-24)
 
 > **Beta.** Enthält 0.5.2-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.2.md](docs/release-notes/v0.5.2-beta.2.md).
