@@ -117,7 +117,7 @@ import {
   type EnergyDashboardStatus,
 } from "./energy-dashboard";
 import { loadSetupAck, saveSetupAck } from "./onboarding";
-import { slotsFrom, type Slot } from "./options";
+import { modul3ZonesFrom, slotsFrom, slotsFromModul3Zones, type Modul3Zones, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, ENERGY_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
@@ -263,6 +263,8 @@ class MaestroPanel extends LitElement {
   private _optionQuery: Record<string, string> = {};
   private _slots: Slot[] = [];
   private _slotsDirty = false;
+  private _modul3Zones: Modul3Zones = modul3ZonesFrom(undefined);
+  private _modul3Dirty = false;
   private _phasePoints: Record<string, Point[]> = {};
   private _phaseHistory: "idle" | "loading" | "ready" | "error" = "idle";
   private _phaseTicket = 0;
@@ -1268,6 +1270,7 @@ class MaestroPanel extends LitElement {
       window.clearTimeout(this._optionsRetry);
       this._optionsRetry = undefined;
       if (!this._slotsDirty) this._slots = slotsFrom(this._storedOptions.tariff_slots);
+      if (!this._modul3Dirty) this._modul3Zones = modul3ZonesFrom(this._storedOptions.modul3_zones);
       const stored = consumersFromOptions(this._storedOptions.flow_consumers, this._consumers);
       this._consumers = stored.list;
       saveConsumers(stored.list);
@@ -1313,6 +1316,7 @@ class MaestroPanel extends LitElement {
       this._storedOptions = next;
       if (!quiet) this._optionNotice = res.reloaded ? "reload" : "saved";
       if (key === "tariff_slots") this._slotsDirty = false;
+      if (key === "modul3_zones") this._modul3Dirty = false;
       if (res.reloaded) {
         this._resolvedAt = 0;
         void this._resolveEntities();
@@ -1345,6 +1349,7 @@ class MaestroPanel extends LitElement {
       query: this._optionQuery,
       pending: this._pending,
       slots: this._slots,
+      modul3Zones: this._modul3Zones,
       onQuery: (key, query) => {
         this._optionQuery = { ...this._optionQuery, [key]: query };
         this.requestUpdate();
@@ -1356,6 +1361,17 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       onSaveSlots: () => void this._setOption("tariff_slots", this._slots),
+      onModul3Zones: (zones) => {
+        this._modul3Zones = zones;
+        this._modul3Dirty = true;
+        this.requestUpdate();
+      },
+      onSaveModul3Zones: () => void this._setOption("modul3_zones", this._modul3Zones),
+      onFillSlotsFromModul3: () => {
+        this._slots = slotsFromModul3Zones(this._modul3Zones);
+        this._slotsDirty = true;
+        void this._setOption("tariff_slots", this._slots);
+      },
       onRunSizing: () => this._press(E.btnSizing),
     };
     const ctx: Ctx = {

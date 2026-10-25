@@ -15,6 +15,8 @@ import {
   fieldLabel,
   selectValue,
   timeValue,
+  type Modul3ZoneKey,
+  type Modul3Zones,
   type OptionArea,
   type OptionField,
   type Slot,
@@ -32,10 +34,14 @@ export interface OptionCtx {
   query: Record<string, string>;
   pending: ReadonlySet<string>;
   slots: Slot[];
+  modul3Zones: Modul3Zones;
   onQuery: (key: string, query: string) => void;
   onChange: (key: string, value: unknown) => void;
   onSlots: (slots: Slot[]) => void;
   onSaveSlots: () => void;
+  onModul3Zones: (zones: Modul3Zones) => void;
+  onSaveModul3Zones: () => void;
+  onFillSlotsFromModul3: () => void;
   onRunSizing: () => void;
 }
 
@@ -171,6 +177,78 @@ function actionField(c: OptionCtx, field: OptionField): TemplateResult {
 }
 
 const WEEKDAYS: Key[] = ["wd0", "wd1", "wd2", "wd3", "wd4", "wd5", "wd6"];
+
+const MODUL3_ZONE_KEYS: Modul3ZoneKey[] = ["nt", "st", "ht"];
+const MODUL3_ZONE_TITLE: Record<Modul3ZoneKey, Key> = {
+  nt: "modul3Nt",
+  st: "modul3St",
+  ht: "modul3Ht",
+};
+
+function modul3ZonesEditor(c: OptionCtx): TemplateResult {
+  const { t } = c.i18n;
+  const enabled = c.options.modul3_enabled === true;
+  const setZone = (key: Modul3ZoneKey, zone: Modul3Zones[Modul3ZoneKey]) =>
+    c.onModul3Zones({ ...c.modul3Zones, [key]: zone });
+  return html`<section class="settings-section">
+    <h3>${t("secModul3Zones")}</h3>
+    <p class="sub">${t("secModul3ZonesHint")}</p>
+    ${!enabled ? html`<p class="hint">${t("modul3OffHint")}</p>` : nothing}
+    ${MODUL3_ZONE_KEYS.map((key) => {
+      const zone = c.modul3Zones[key];
+      return html`<div class="slot-card">
+        <div class="txt"><span class="name"><b>${t(MODUL3_ZONE_TITLE[key])}</b></span></div>
+        <div class="opt-slot-fields">
+          <label>${t("modul3PriceCt")}
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              .value=${String(zone.price_ct_kwh)}
+              ?disabled=${!c.isAdmin || !enabled}
+              @change=${(e: Event) =>
+                setZone(key, { ...zone, price_ct_kwh: Number((e.target as HTMLInputElement).value) || 0 })}
+            />
+          </label>
+          ${key === "st"
+            ? html`<p class="hint">${t("modul3StRest")}</p>`
+            : html`${zone.windows.map(
+                (window, index) => html`<label>${t("optFrom")}
+                  <input type="number" min="0" max="24" step="0.25" .value=${String(window.start_h)} ?disabled=${!c.isAdmin || !enabled}
+                    @change=${(e: Event) => {
+                      const windows = zone.windows.map((w, i) =>
+                        i === index ? { ...w, start_h: Number((e.target as HTMLInputElement).value) } : w,
+                      );
+                      setZone(key, { ...zone, windows });
+                    }}
+                  /></label>
+                  <label>${t("optTo")}
+                  <input type="number" min="0" max="24" step="0.25" .value=${String(window.end_h)} ?disabled=${!c.isAdmin || !enabled}
+                    @change=${(e: Event) => {
+                      const windows = zone.windows.map((w, i) =>
+                        i === index ? { ...w, end_h: Number((e.target as HTMLInputElement).value) } : w,
+                      );
+                      setZone(key, { ...zone, windows });
+                    }}
+                  /></label>
+                  <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled}
+                    @click=${() => setZone(key, { ...zone, windows: zone.windows.filter((_, i) => i !== index) })}
+                  >${t("optRemove")}</button>`,
+              )}
+              <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled}
+                @click=${() => setZone(key, { ...zone, windows: [...zone.windows, { start_h: 0, end_h: 6 }] })}
+              >${t("modul3AddWindow")}</button>`}
+        </div>
+      </div>`;
+    })}
+    <div class="opt-actions">
+      <button type="button" class="btn" ?disabled=${!c.isAdmin || c.pending.has("modul3_zones")} @click=${() => c.onSaveModul3Zones()}>${t("modul3SaveZones")}</button>
+      <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled || c.pending.has("tariff_slots")} @click=${() => c.onFillSlotsFromModul3()}>${t("modul3FillSlots")}</button>
+    </div>
+    <p class="hint">${t("modul3FillSlotsHint")}</p>
+  </section>`;
+}
 
 function slotsEditor(c: OptionCtx): TemplateResult {
   const { t } = c.i18n;
@@ -423,5 +501,5 @@ export function optionSections(c: OptionCtx, area: string): TemplateResult {
           : block.fields.map((field) => fieldRow(c, field))}
       </section>`,
     )}
-    ${area === "tariff" ? slotsEditor(c) : nothing}`;
+    ${area === "tariff" ? html`${modul3ZonesEditor(c)}${slotsEditor(c)}` : nothing}`;
 }

@@ -29,10 +29,24 @@ export interface Slot {
 
 export type OptionArea = "plant" | "safety" | "tariff" | "pv" | "loads" | "sizing";
 
+export type Modul3ZoneKey = "nt" | "st" | "ht";
+
+export interface Modul3Window {
+  start_h: number;
+  end_h: number;
+}
+
+export interface Modul3Zone {
+  price_ct_kwh: number;
+  windows: Modul3Window[];
+}
+
+export type Modul3Zones = Record<Modul3ZoneKey, Modul3Zone>;
+
 export interface OptionBlock {
   area: OptionArea;
-  title: "secSources" | "secAdaptive" | "secPriceSensor" | "secEnergyforecast" | "secForecastSensors" | "secWallboxWire" | "secEvccWire" | "secHpWire" | "secSizingInputs";
-  hint: "secSourcesHint" | "secAdaptiveHint" | "secPriceSensorHint" | "secEnergyforecastHint" | "secForecastSensorsHint" | "secWallboxWireHint" | "secEvccWireHint" | "secHpWireHint" | "secSizingInputsHint";
+  title: "secSources" | "secAdaptive" | "secPriceSensor" | "secEnergyforecast" | "secModul3" | "secForecastSensors" | "secWallboxWire" | "secEvccWire" | "secHpWire" | "secSizingInputs";
+  hint: "secSourcesHint" | "secAdaptiveHint" | "secPriceSensorHint" | "secEnergyforecastHint" | "secModul3Hint" | "secForecastSensorsHint" | "secWallboxWireHint" | "secEvccWireHint" | "secHpWireHint" | "secSizingInputsHint";
   fields: readonly OptionField[];
   /** One card for every field, instead of a card per field. */
   bundle?: boolean;
@@ -104,6 +118,17 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
         kind: "select",
         choices: ["DE-LU", "AT", "FR", "NL", "BE", "PL", "DK1", "DK2", "CH", "CZ", "HU", "SI"],
       },
+    ],
+    bundle: true,
+  },
+  {
+    area: "tariff",
+    title: "secModul3",
+    hint: "secModul3Hint",
+    fields: [
+      { key: "modul3_enabled", kind: "bool" },
+      { key: "modul3_add_to_curve", kind: "bool" },
+      { key: "modul3_apply_vat", kind: "bool" },
     ],
     bundle: true,
   },
@@ -205,6 +230,9 @@ const labels: Record<string, { de: string; en: string }> = {
   price_sensor: { de: "Preis-Sensor", en: "Price sensor" },
   energyforecast_token: { de: "Energyforecast API-Token", en: "Energyforecast API token" },
   energyforecast_market_zone: { de: "Energyforecast Marktzone", en: "Energyforecast market zone" },
+  modul3_enabled: { de: "Modul 3 nutzen", en: "Use Module 3" },
+  modul3_add_to_curve: { de: "Auf Preiskurve addieren (Sensor ohne Netzentgelt)", en: "Add to price curve (sensor without grid fees)" },
+  modul3_apply_vat: { de: "19 % MwSt. auf ct/kWh aufschlagen", en: "Add 19% VAT on ct/kWh" },
   pv_forecast_sensor: { de: "Restprognose heute", en: "Remaining forecast today" },
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
   tomorrow_pv_sensor: { de: "Prognose morgen", en: "Tomorrow's forecast" },
@@ -292,6 +320,54 @@ export function slotsFrom(value: unknown): Slot[] {
 }
 
 export const emptySlot = (): Slot => ({ weekdays: [0, 1, 2, 3, 4], start_h: 6, end_h: 22, class_: "high" });
+
+export const emptyModul3Zones = (): Modul3Zones => ({
+  nt: { price_ct_kwh: 0, windows: [{ start_h: 0, end_h: 5 }] },
+  st: { price_ct_kwh: 0, windows: [] },
+  ht: { price_ct_kwh: 0, windows: [{ start_h: 17, end_h: 21 }] },
+});
+
+const zoneFrom = (raw: unknown, fallback: Modul3Zone): Modul3Zone => {
+  if (!raw || typeof raw !== "object") return fallback;
+  const row = raw as Record<string, unknown>;
+  const price = typeof row.price_ct_kwh === "number" && Number.isFinite(row.price_ct_kwh) ? Math.max(0, row.price_ct_kwh) : 0;
+  const windows: Modul3Window[] = [];
+  if (Array.isArray(row.windows)) {
+    for (const item of row.windows) {
+      if (!item || typeof item !== "object") continue;
+      const w = item as Record<string, unknown>;
+      const start_h = typeof w.start_h === "number" ? w.start_h : 0;
+      const end_h = typeof w.end_h === "number" ? w.end_h : 0;
+      if (start_h === end_h) continue;
+      windows.push({ start_h, end_h });
+    }
+  }
+  return { price_ct_kwh: price, windows };
+};
+
+export function modul3ZonesFrom(value: unknown): Modul3Zones {
+  const base = emptyModul3Zones();
+  if (!value || typeof value !== "object") return base;
+  const raw = value as Record<string, unknown>;
+  return {
+    nt: zoneFrom(raw.nt, base.nt),
+    st: zoneFrom(raw.st, base.st),
+    ht: zoneFrom(raw.ht, base.ht),
+  };
+}
+
+/** NT→low, HT→high, alle Wochentage — für Tarif-Slots. */
+export function slotsFromModul3Zones(zones: Modul3Zones): Slot[] {
+  const weekdays = [0, 1, 2, 3, 4, 5, 6];
+  const out: Slot[] = [];
+  for (const window of zones.nt.windows) {
+    out.push({ weekdays: [...weekdays], start_h: window.start_h, end_h: window.end_h, class_: "low" });
+  }
+  for (const window of zones.ht.windows) {
+    out.push({ weekdays: [...weekdays], start_h: window.start_h, end_h: window.end_h, class_: "high" });
+  }
+  return out;
+}
 
 export function actionFrom(value: unknown): { service: string; entity: string } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { service: "", entity: "" };

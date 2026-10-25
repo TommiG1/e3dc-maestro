@@ -108,6 +108,10 @@ _SPECS: dict[str, _Spec] = {
         "select",
         ("DE-LU", "AT", "FR", "NL", "BE", "PL", "DK1", "DK2", "CH", "CZ", "HU", "SI"),
     ),
+    "modul3_enabled": ("bool",),
+    "modul3_add_to_curve": ("bool",),
+    "modul3_apply_vat": ("bool",),
+    "modul3_zones": ("modul3_zones",),
     "cheap_threshold": _n(0, 1),
     "max_grid_charge_kwh": _n(0, 150),
     "low_slot_grid_charge_enabled": ("bool",),
@@ -332,6 +336,9 @@ def _check(spec: _Spec, value: Any, known) -> str | None:
             if reason:
                 return reason
         return None
+    if kind == "modul3_zones":
+        # Validated in validate_panel_options (needs cleaned payload).
+        return None
     return "type"
 
 
@@ -348,7 +355,7 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             errors[key] = "unknown"
             continue
         if value is None:
-            clearable = spec[0] in {"entity", "entities", "action", "text", "slots"}
+            clearable = spec[0] in {"entity", "entities", "action", "text", "slots", "modul3_zones"}
             if not clearable or (spec[0] == "entity" and spec[1]):
                 errors[key] = "required"
             else:
@@ -361,6 +368,15 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
                 continue
         if spec[0] == "consumers":
             parsed, reason = _flow_consumers(value, known)
+            if reason:
+                errors[key] = reason
+            else:
+                cleaned[key] = parsed
+            continue
+        if spec[0] == "modul3_zones":
+            from .modul3 import clean_modul3_zones
+
+            parsed, reason = clean_modul3_zones(value)
             if reason:
                 errors[key] = reason
             else:

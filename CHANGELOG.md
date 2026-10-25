@@ -9,6 +9,11 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Ostrom-Preiskurve:** Melmager- (`data`/`date`, Cent→€) und oliverwehrens-Attribute (`prices`-Dict) werden für den Preisplan normalisiert. FAQ „Ostrom als Preis-Sensor“.
+- **EPEX Spot (`ha_epex_spot`):** Attribut `price_per_kwh` in der Preiskurve erkannt — Total-Price-Sensor inkl. Aufschlag/MwSt. für E.ON-/LUOX-ähnliche Spot-Tarife.
+- **§14a Modul 3:** variable Netzentgelte NT/ST/HT unter Netz und Tarif — Fenster und ct/kWh aus dem VNB-Preisblatt, optional Schicht auf die Preiskurve (mit Hinweis gegen Doppelzählung), MwSt.-Option, Tarif-Slots aus Modul 3 füllen. FAQ „Modul 3 · variable Netzentgelte“.
+
 ---
 
 ## [0.5.2-beta.3] – Debug herunterladen und voller Ringpuffer (2026-10-25)

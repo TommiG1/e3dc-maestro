@@ -56,6 +56,26 @@ class TestExtract:
         assert [s.price for s in slots] == [0.31, 0.35]
         assert slots[0].hours == 1.0 and slots[1].hours == 1.0
 
+    def test_epex_spot_price_per_kwh(self):
+        """mampfes/hacs_epex_spot Total-/Market-Price: data + start_time + price_per_kwh."""
+        attrs = {"data": [
+            {
+                "start_time": "2026-10-09T18:00:00+02:00",
+                "end_time": "2026-10-09T19:00:00+02:00",
+                "price_per_kwh": 0.12485,
+            },
+            {
+                "start_time": "2026-10-09T19:00:00+02:00",
+                "end_time": "2026-10-09T20:00:00+02:00",
+                "price_per_kwh": 0.12235,
+            },
+        ]}
+        horizon = read_price_horizon(attrs, NOW)
+        assert horizon is not None
+        assert abs(horizon.prices[0] - 0.12485) < 1e-9
+        assert abs(horizon.prices[1] - 0.12235) < 1e-9
+        assert abs(horizon.slot_hours[0] - 40 / 60) < 1e-9
+
     def test_epoch_ms_timestamps_and_naive_strings(self):
         ts = int(dt.datetime(2026, 10, 9, 18, tzinfo=TZ).timestamp() * 1000)
         slots = extract_price_slots({"data": [{"start": ts, "price": 0.3}]}, NOW)

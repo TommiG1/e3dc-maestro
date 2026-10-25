@@ -10,7 +10,7 @@ Supported sensor attribute shapes (first match wins):
   96 (15 min) values starting at local midnight; ``None`` entries are unknown
 * ``prices`` / ``data`` / ``forecast`` – flat list of dicts with ``startsAt`` / ``start`` /
   ``start_time`` / ``from`` / ``datetime`` and ``total`` / ``value`` / ``price`` /
-  ``marketprice``
+  ``marketprice`` / ``price_per_kwh`` (EPEX Spot HACS)
 
 Prices are returned as-is (€/kWh expected). Unit conversion is the caller's job.
 """
@@ -23,7 +23,7 @@ from typing import Any
 
 _START_KEYS = ("start", "startsAt", "start_time", "from", "datetime", "period_start")
 _END_KEYS = ("end", "endsAt", "end_time", "to")
-_VALUE_KEYS = ("value", "total", "price", "marketprice")
+_VALUE_KEYS = ("value", "total", "price", "marketprice", "price_per_kwh")
 _FLAT_LIST_KEYS = ("raw_today", "raw_tomorrow", "prices", "data", "forecast")
 _FLOAT_LIST_RESOLUTIONS = {23: 1.0, 24: 1.0, 25: 1.0, 48: 0.5, 92: 0.25, 96: 0.25, 100: 0.25}
 _GAP_TOLERANCE_S = 90.0

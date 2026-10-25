@@ -17,6 +17,8 @@ from .const import (
 from .energyforecast import API_URL, extend_horizon, slots_from_payload
 from .grid_charge_strategy import plan_tuning
 from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
+from .modul3 import add_modul3_to_horizon, parse_modul3_profile
+from .ostrom_prices import normalize_ostrom_curve_attrs
 from .price_curve import PriceHorizon, read_price_horizon
 from .price_plan_runner import STATUS_OK, PricePlanSnapshot, compute_price_plan
 from .tibber_prices import is_tibber_electricity_price, price_slots_for_home
@@ -91,6 +93,10 @@ class CoordinatorPricePlanMixin:
             attrs = dict(st.attributes)
         horizon = read_price_horizon(attrs, now)
         if horizon is None:
+            ostrom_attrs = normalize_ostrom_curve_attrs(attrs)
+            if ostrom_attrs:
+                horizon = read_price_horizon(ostrom_attrs, now)
+        if horizon is None:
             tibber_attrs = await self._async_tibber_curve_attrs(sensor_id, st, now)
             if tibber_attrs:
                 horizon = read_price_horizon(tibber_attrs, now)
@@ -100,7 +106,9 @@ class CoordinatorPricePlanMixin:
         if forecast:
             horizon, provider_until = extend_horizon(horizon, forecast, now)
             self._price_provider_until = provider_until
-        return horizon
+        # §14a Modul 3: Netzentgelt-Schicht auf die fertige Kurve (inkl. Forecast).
+        modul3 = parse_modul3_profile(self.entry.options)
+        return add_modul3_to_horizon(horizon, modul3, now)
 
     async def _async_update_price_plan(
         self, state: MaestroState, now: datetime, horizon: PriceHorizon | None
