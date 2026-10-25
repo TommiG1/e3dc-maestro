@@ -7,7 +7,14 @@ import type { I18n, Key, Translate } from "./i18n";
 import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
 import { OPTION_BLOCKS, fieldLabel } from "./options";
-import { optionSections, sizingPage, type OptionCtx } from "./options-view";
+import {
+  optionSections,
+  sizingPage,
+  slotsEditor,
+  tariffModul3Sections,
+  tariffPriceSections,
+  type OptionCtx,
+} from "./options-view";
 import { settingTip } from "./setting-tips";
 import { pauseStatus } from "./pause";
 import { sliderField } from "./slider-field";
@@ -102,9 +109,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         "price_plan_efficiency",
       ]),
       sec("secHt", "secHtHint", ["ht_enabled", "ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"]),
-      sec("secCosts", "secCostsHint", ["fixed_buy_price", "feed_in_price", "battery_capex_eur", "battery_total_cycles"]),
-      sec("secSwitches", "secSwitchesHint", [
+      sec("secCosts", "secCostsHint", [
         "tariff_mode",
+        "fixed_buy_price",
+        "feed_in_price",
+        "battery_capex_eur",
+        "battery_total_cycles",
+      ]),
+      sec("secSwitches", "secSwitchesHint", [
         "dynamic_tariff_enabled",
         "low_slot_grid_charge_enabled",
         "price_plan_enabled",
@@ -783,7 +795,7 @@ const ROW_WHEN: Record<string, (v: Required<StrategyView>) => boolean> = {
   price_plan_min_spread: (v) => v.strategy === "dynamic_expert",
   price_plan_efficiency: (v) => v.strategy === "dynamic_expert",
   price_plan_safety_factor: (v) => v.strategy === "dynamic_expert" || (ruleRows(v.strategy) && v.expert),
-  tariff_mode: (v) => v.expert,
+  // tariff_mode sits under Kosten (contract for accounting) — always visible.
   dynamic_tariff_enabled: (v) => v.expert,
   low_slot_grid_charge_enabled: (v) => v.expert,
   price_plan_enabled: (v) => v.expert,
@@ -898,14 +910,24 @@ const switchOn = (hass: Hass, key: string): boolean | undefined => {
   return undefined;
 };
 
+/** Parent switches whose detail fields stay hidden while off (not only greyed). */
+const COLLAPSE_WHEN_OFF = new Set(["ht_enabled"]);
+
 function settingBlocks(
   c: ControlCtx,
   keys: readonly string[],
   extraQuiet: (key: string) => boolean = () => false,
 ): Array<TemplateResult | typeof nothing> {
+  const { t } = c.i18n;
   return bundleRows(keys).map(({ key, children }) => {
     if (!children.length) return settingRow(c, key, extraQuiet(key));
     const off = switchOn(c.hass, key) === false;
+    if (off && COLLAPSE_WHEN_OFF.has(key)) {
+      return html`<div class="ctrl setting-bundle">
+        ${settingRow(c, key, false, true)}
+        <p class="hint">${t(key === "ht_enabled" ? "htOffHint" : "secHtHint")}</p>
+      </div>`;
+    }
     const held = (child: string) => {
       const parents = QUIET_IF_ALL_OFF[child];
       const shared = !!parents && (parents.length > 1 || parents[0] !== key);
@@ -1075,31 +1097,48 @@ function pvSections(c: SettingsCtx, sections: readonly SettingsSection[]): Templ
     })}`;
 }
 
+const jumpTo = (id: string) => (e: Event) => {
+  e.preventDefault();
+  const root = (e.currentTarget as HTMLElement).closest(".settings-detail");
+  root?.querySelector(`#${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 /** One sentence that says what the chosen strategy does with the current values. */
 function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): TemplateResult {
   const { t } = c.i18n;
   const capId = S.max_grid_charge_kwh;
   const cap = capId ? num(c.hass.states[capId]) : undefined;
-  const lines: string[] = [];
-  if (strategy === "off") lines.push(t("sumOff"));
+  const lines: TemplateResult[] = [];
+  if (strategy === "off") {
+    lines.push(html`<p>${t("sumOff")}</p>`);
+    lines.push(html`<p>${t("sumOffPlanHint")}</p>`);
+  }
   if (strategy === "slots") {
-    lines.push(t("sumSlots", { soc: fmt(c.hass, "low_slot_target_soc") }));
-    if (c.lowSlots === 0) lines.push(t("sumSlotsNone"));
+    lines.push(html`<p>${t("sumSlots", { soc: fmt(c.hass, "low_slot_target_soc") })}</p>`);
+    if (c.lowSlots === 0) {
+      lines.push(html`<p>${t("sumSlotsNone")}
+        <button type="button" class="text-link" @click=${jumpTo("tariff-slots")}>${t("sumJumpSlots")}</button></p>`);
+    }
   }
   if (strategy === "threshold") {
-    lines.push(t("sumThreshold", { price: fmt(c.hass, "cheap_threshold", 3), soc: fmt(c.hass, "low_slot_target_soc") }));
+    lines.push(
+      html`<p>${t("sumThreshold", { price: fmt(c.hass, "cheap_threshold", 3), soc: fmt(c.hass, "low_slot_target_soc") })}</p>`,
+    );
   }
   if (strategy !== "off" && cap !== undefined && cap > 0) {
-    lines.push(t("sumCap", { kwh: fmt(c.hass, "max_grid_charge_kwh", 1) }));
+    lines.push(html`<p>${t("sumCap", { kwh: fmt(c.hass, "max_grid_charge_kwh", 1) })}</p>`);
   }
   if (isPlanStrategy(strategy)) {
-    lines.push(t("sumPlan", { soc: fmt(c.hass, "price_plan_max_soc") }));
-    lines.push(t(strategy === "dynamic_auto" ? "sumAuto" : "sumExpert"));
+    lines.push(html`<p>${t("sumPlan", { soc: fmt(c.hass, "price_plan_max_soc") })}</p>`);
+    lines.push(html`<p>${t(strategy === "dynamic_auto" ? "sumAuto" : "sumExpert")}</p>`);
     const active = S.price_plan_active ? isOn(c.hass.states[S.price_plan_active]) : false;
-    lines.push(t(active ? "sumActive" : "sumShadow"));
+    lines.push(html`<p>${t(active ? "sumActive" : "sumShadow")}</p>`);
   }
-  if ((strategy === "threshold" || isPlanStrategy(strategy)) && c.priceSensor === false) lines.push(t("sumNoPrice"));
-  return html`<div class="strategy-summary">${lines.map((line) => html`<p>${line}</p>`)}</div>`;
+  if ((strategy === "threshold" || isPlanStrategy(strategy)) && c.priceSensor === false) {
+    lines.push(html`<p>${t("sumNoPrice")}
+      <button type="button" class="text-link" @click=${jumpTo("tariff-price")}>${t("sumJumpPrice")}</button></p>`);
+  }
+  return html`<div class="strategy-summary">${lines}</div>`;
 }
 
 function expertToggle(c: { i18n: I18n; expert: boolean; onExpert: (on: boolean) => void }): TemplateResult {
@@ -1124,9 +1163,11 @@ function strategySections(c: StrategyCtx, sections: readonly SettingsSection[], 
     const rows = section.rows.filter((key) => rowVisible(key, view));
     const lead = section.title === "secStrategy";
     if (!rows.length && !lead) return [];
+    const planLimitsHint = section.title === "secLimits" && isPlanStrategy(strategy);
     return [
       html`<section class="settings-section">
         ${headings ? html`<h3>${t(section.title)}</h3><p class="sub">${t(section.hint)}</p>` : nothing}
+        ${planLimitsHint ? html`<p class="hint">${t("secLimitsHintPlan")}</p>` : nothing}
         ${settingBlocks(c, rows)}
         ${lead && strategy ? strategySummary(c, strategy) : nothing}
         ${lead ? expertToggle(c) : nothing}
@@ -1322,9 +1363,19 @@ export function settingsView(c: SettingsCtx): TemplateResult {
       lowSlots: c.options.ready ? c.options.slots.filter((slot) => slot.class_ === "low").length : undefined,
       priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined,
     };
+    const strategy = strategyOf(c.hass);
+    const charge = current.sections.filter((section) =>
+      ["secStrategy", "secLimits", "secPlanTune"].includes(section.title),
+    );
+    const after = current.sections.filter((section) =>
+      ["secHt", "secCosts", "secSwitches"].includes(section.title),
+    );
     return html`<div class="settings-detail">
-      ${strategySections(strategyCtx, current.sections, true)}
-      ${optionSections(c.options, current.id)}
+      ${tariffPriceSections(c.options)}
+      ${strategySections(strategyCtx, charge, true)}
+      ${slotsEditor(c.options, strategy === "slots")}
+      ${tariffModul3Sections(c.options)}
+      ${strategySections(strategyCtx, after, true)}
     </div>`;
   }
   if (current) {

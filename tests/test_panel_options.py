@@ -97,6 +97,40 @@ def test_wallbox_soc_and_plug_are_display_only():
     assert entry.options[CONF_WALLBOX_PLUG_ENTITY] == "binary_sensor.ladekabel"
 
 
+def test_modul3_enabled_persists_without_reload():
+    """Modul 3 is not on MaestroParams; a reload would drop the cockpit WS."""
+    params = SimpleNamespace(tariff_schedule=None)
+    hass, entry, written, stored = _hass({}, set(), params)
+    result = apply_panel_options(hass, {"modul3_enabled": True})
+    assert result["reloaded"] is False
+    assert written == []
+    assert entry.options["modul3_enabled"] is True
+    assert stored and stored[0]["modul3_enabled"] is True
+
+
+def test_modul3_zones_and_price_sensor_are_soft_options():
+    params = SimpleNamespace(tariff_schedule=None)
+    hass, entry, written, _ = _hass({}, {"sensor.preis"}, params)
+    zones = {
+        "nt": {"price_ct_kwh": 2.0, "windows": [{"start_h": 0, "end_h": 6}]},
+        "st": {"price_ct_kwh": 5.0, "windows": []},
+        "ht": {"price_ct_kwh": 8.0, "windows": [{"start_h": 17, "end_h": 21}]},
+    }
+    result = apply_panel_options(
+        hass,
+        {
+            "modul3_zones": zones,
+            "modul3_add_to_curve": False,
+            "price_sensor": "sensor.preis",
+        },
+    )
+    assert result["reloaded"] is False
+    assert written == []
+    assert entry.options["modul3_add_to_curve"] is False
+    assert entry.options["price_sensor"] == "sensor.preis"
+    assert entry.options["modul3_zones"]["nt"]["price_ct_kwh"] == 2.0
+
+
 def test_additional_producers_accept_list_and_legacy_string():
     params = SimpleNamespace()
     states = {"sensor.a", "sensor.b"}

@@ -1,9 +1,10 @@
 """Read and patch Maestro options from the cockpit.
 
 The allow-list mirrors the config-flow schemas. Live parameters (fields on
-``MaestroParams``) go through ``update_param`` and do not reload. Everything
-else, including entity wiring, is written to the config entry so the update
-listener reloads the integration.
+``MaestroParams``) go through ``update_param`` and do not reload. Soft options
+(price sensor, Energyforecast, Modul 3, tariff slots) live only on the config
+entry and are written without a reload — a full reload drops the cockpit
+websocket mid-click. Entity wiring still reloads the integration.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from .const import (
     WALLBOX_TYPE_GENERIC,
     as_entity_list,
 )
+from .coordinator_helpers import _tariff_schedule_from_stored
 
 WS_PANEL_OPTIONS = f"{DOMAIN}/panel_options"
 WS_PANEL_OPTIONS_SET = f"{DOMAIN}/panel_options/set"
@@ -110,7 +112,8 @@ _SPECS: dict[str, _Spec] = {
     ),
     "modul3_enabled": ("bool",),
     "modul3_add_to_curve": ("bool",),
-    "modul3_apply_vat": ("bool",),
+    "modul3_vat": ("select", ("off", "de", "custom")),
+    "modul3_vat_percent": _n(0, 100),
     "modul3_zones": ("modul3_zones",),
     "cheap_threshold": _n(0, 1),
     "max_grid_charge_kwh": _n(0, 150),
@@ -211,6 +214,19 @@ _DISPLAY_OPTIONS = frozenset({
     "wallbox_soc_sensor",
     "wallbox_plug_entity",
     "sidebar_title",
+})
+# Not on MaestroParams; coordinator reads them from entry.options each cycle.
+# Must not trigger a full integration reload (that breaks the cockpit WS).
+_SOFT_OPTIONS = frozenset({
+    "price_sensor",
+    "energyforecast_token",
+    "energyforecast_market_zone",
+    "modul3_enabled",
+    "modul3_add_to_curve",
+    "modul3_vat",
+    "modul3_vat_percent",
+    "modul3_zones",
+    "tariff_slots",
 })
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
 _CONSUMER_ENTITY = re.compile(r"wallbox|evcc|easee|go-?e", re.IGNORECASE)
@@ -437,9 +453,25 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
         raise PanelOptionsError({"entry": "not_loaded"})
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     display = {key: value for key, value in cleaned.items() if key in _DISPLAY_OPTIONS}
-    live = {key: value for key, value in cleaned.items() if key not in _DISPLAY_OPTIONS}
+    soft = {key: value for key, value in cleaned.items() if key in _SOFT_OPTIONS}
+    live = {
+        key: value
+        for key, value in cleaned.items()
+        if key not in _DISPLAY_OPTIONS and key not in _SOFT_OPTIONS
+    }
     if display:
         _store_options(hass, entry, coordinator, display, reload=False)
+    if soft:
+        # Drop legacy Modul-3 VAT bool once the new select is written.
+        if any(key.startswith("modul3_") for key in soft):
+            soft = {**soft, "modul3_apply_vat": None}
+        _store_options(hass, entry, coordinator, soft, reload=False)
+        # Slot list feeds the live schedule; Modul 3 / price sensor are read
+        # from entry.options on the next price-plan cycle.
+        if coordinator is not None and "tariff_slots" in soft:
+            params = getattr(coordinator, "_params", None)
+            if params is not None:
+                params.tariff_schedule = _tariff_schedule_from_stored(dict(entry.options))
     if not live:
         return {
             "entry_id": entry.entry_id,
@@ -479,7 +511,12 @@ def panel_options_payload(hass: HomeAssistant) -> dict[str, Any]:
     entry = _loaded_entry(hass)
     if entry is None:
         return {"entry_id": None, "options": {}}
-    return {"entry_id": entry.entry_id, "options": dict(entry.options)}
+    from .modul3 import normalize_modul3_vat_options
+
+    return {
+        "entry_id": entry.entry_id,
+        "options": normalize_modul3_vat_options(dict(entry.options)),
+    }
 
 
 def _admin(connection: Any) -> bool:

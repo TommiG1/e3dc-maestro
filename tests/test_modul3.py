@@ -27,7 +27,7 @@ def _profile(**kwargs) -> Modul3Profile:
         ZONE_ST: Modul3Zone(9.59, ()),
         ZONE_HT: Modul3Zone(11.21, (Modul3Window(17.0, 21.0),)),
     }
-    return Modul3Profile(enabled=True, add_to_curve=True, apply_vat=False, zones=zones, **kwargs)
+    return Modul3Profile(enabled=True, add_to_curve=True, vat="off", zones=zones, **kwargs)
 
 
 def test_zone_priority_ht_over_nt():
@@ -83,16 +83,31 @@ def test_add_skipped_when_all_in():
     profile = Modul3Profile(
         enabled=True,
         add_to_curve=False,
-        apply_vat=False,
+        vat="off",
         zones=profile.zones,
     )
     assert add_modul3_to_horizon(horizon, profile, now) is horizon
 
 
-def test_vat_multiplier():
-    profile = _profile()
-    profile = Modul3Profile(enabled=True, add_to_curve=True, apply_vat=True, zones=profile.zones)
-    assert abs(profile.fee_eur(ZONE_NT) - 0.0384 * 1.19) < 1e-9
+def test_vat_presets_de_and_custom():
+    zones = _profile().zones
+    de = Modul3Profile(enabled=True, vat="de", zones=zones)
+    custom = Modul3Profile(enabled=True, vat="custom", vat_percent=7.7, zones=zones)
+    assert abs(de.fee_eur(ZONE_NT) - 0.0384 * 1.19) < 1e-9
+    assert abs(custom.fee_eur(ZONE_NT) - 0.0384 * 1.077) < 1e-9
+
+
+def test_legacy_apply_vat_migrates_to_de():
+    profile = parse_modul3_profile({"modul3_enabled": True, "modul3_apply_vat": True})
+    assert profile.vat == "de"
+    assert abs(profile.vat_rate_percent() - 19.0) < 1e-9
+
+
+def test_legacy_at_ch_vat_become_custom():
+    at = parse_modul3_profile({"modul3_vat": "at"})
+    ch = parse_modul3_profile({"modul3_vat": "ch"})
+    assert at.vat == "custom" and abs(at.vat_percent - 20.0) < 1e-9
+    assert ch.vat == "custom" and abs(ch.vat_percent - 8.1) < 1e-9
 
 
 def test_tariff_slots_from_modul3():
@@ -107,7 +122,7 @@ def test_parse_and_clean_zones():
     options = {
         "modul3_enabled": True,
         "modul3_add_to_curve": True,
-        "modul3_apply_vat": False,
+        "modul3_vat": "off",
         "modul3_zones": {
             "nt": {"price_ct_kwh": 3.84, "windows": [{"start_h": 0, "end_h": 5}]},
             "st": {"price_ct_kwh": 9.59, "windows": []},

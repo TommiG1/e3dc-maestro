@@ -3289,6 +3289,49 @@ export const styles = css`
     text-transform: none;
     color: var(--text);
   }
+  .settings-fold details {
+    margin: 0;
+  }
+  .settings-fold details > summary.group-head {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .settings-fold details > summary.group-head::-webkit-details-marker {
+    display: none;
+  }
+  .settings-fold details > summary.group-head svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    transition: transform 0.15s ease;
+  }
+  .settings-fold details[open] > summary.group-head svg {
+    transform: rotate(90deg);
+  }
+  .settings-section.tariff-focus {
+    outline: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 45%, transparent);
+    outline-offset: 4px;
+    border-radius: 12px;
+  }
+  .strategy-summary .text-link,
+  button.text-link {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    margin-left: 0.35em;
+    color: var(--accent, #3b82f6);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
   .setup-card {
     margin-bottom: 18px;
   }
@@ -3952,6 +3995,12 @@ export const styles = css`
   }
   .bundle-fields.quiet {
     opacity: 0.55;
+    pointer-events: none;
+  }
+  .bundle-fields.quiet input,
+  .bundle-fields.quiet button,
+  .bundle-fields.quiet select {
+    pointer-events: none;
   }
   .bundle-fields .slider-field,
   .bundle-fields .setting-num,

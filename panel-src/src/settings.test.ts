@@ -87,10 +87,11 @@ describe("rowVisible", () => {
       const rows = shown(strategy);
       expect(rows).toContain("grid_charge_strategy");
       expect(rows).toContain("fixed_buy_price");
+      expect(rows).toContain("tariff_mode");
       expect(rows).not.toContain("price_plan_enabled");
-      expect(rows).not.toContain("tariff_mode");
+      expect(rows).not.toContain("dynamic_tariff_enabled");
     }
-    expect(shown("dynamic_auto", true)).toContain("tariff_mode");
+    expect(shown("dynamic_auto", true)).toContain("price_plan_enabled");
   });
 
   it("shows only what the strategy reads", () => {
@@ -151,6 +152,10 @@ describe("pv rows", () => {
       "delay_min_soc",
     ]);
     expect(bundleRows(["charge_target_late"])).toEqual([{ key: "charge_target_late", children: [] }]);
+    expect(
+      bundleRows(["ht_enabled", "ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"]).find((row) => row.key === "ht_enabled")
+        ?.children,
+    ).toEqual(["ht_on", "ht_off", "ht_min", "ht_sockel", "ht_sat", "ht_sun"]);
   });
 });
 

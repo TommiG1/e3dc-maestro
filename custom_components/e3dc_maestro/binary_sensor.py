@@ -54,7 +54,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[MaestroBinarySensorDescription, ...] = (
     ),
     MaestroBinarySensorDescription(
         key="ht_protection_active",
-        name="HT-Schutz aktiv",
+        name="Entladeschutz aktiv",
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda coord: coord.last_phase == PHASE_HT_PROTECTION,
     ),

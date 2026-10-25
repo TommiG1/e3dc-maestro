@@ -222,10 +222,10 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         min_value=0, max_value=15000, step_value=50,
         advanced=True,
     ),
-    # ── HT ────────────────────────────────────────────────────────────────
+    # ── Entladeschutz (teures Fenster; früher HT) ─────────────────────────
     MaestroNumberDescription(
         key=CONF_HT_ON,
-        name="HT Beginn",
+        name="Entladeschutz Beginn",
         icon="mdi:clock-start",
         native_unit_of_measurement="h",
         param_key=CONF_HT_ON,
@@ -233,7 +233,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
     ),
     MaestroNumberDescription(
         key=CONF_HT_OFF,
-        name="HT Ende",
+        name="Entladeschutz Ende",
         icon="mdi:clock-end",
         native_unit_of_measurement="h",
         param_key=CONF_HT_OFF,
@@ -241,7 +241,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
     ),
     MaestroNumberDescription(
         key=CONF_HT_MIN,
-        name="HT-Reserve Winter",
+        name="Entladeschutz-Reserve Winter",
         icon="mdi:battery-50",
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_HT_MIN,
@@ -249,7 +249,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
     ),
     MaestroNumberDescription(
         key=CONF_HT_SOCKEL,
-        name="HT-Sockel Äquinoktium",
+        name="Entladeschutz-Sockel Äquinoktium",
         icon="mdi:battery-20",
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_HT_SOCKEL,

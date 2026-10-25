@@ -1,8 +1,8 @@
 /** One short sentence per setting. Shown after a second of hover or press. */
 export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
   grid_charge_strategy: {
-    de: "Aus: nie aus dem Netz. Zeitfenster: in NT-Fenstern. Preisschwelle: unter einem festen Preis. Automatisch: der Preisplan wählt die günstigsten Stunden. Experte: wie automatisch, mit eigenen Werten.",
-    en: "Off: never from the grid. Time windows: in off-peak windows. Price threshold: below a fixed price. Automatic: the price plan picks the cheapest hours. Expert: like automatic, with your own values.",
+    de: "Aus: nie aus dem Netz. Zeitfenster: in Tarif-Slots Klasse Niedrig. Preisschwelle: unter einem festen Preis. Dynamisch: Preisplan (startet im Schattenmodus). Experte: wie Dynamisch, mit eigenen Werten.",
+    en: "Off: never from the grid. Time windows: in tariff slots class Low. Price threshold: below a fixed price. Dynamic: price plan (starts in shadow mode). Expert: like Dynamic, with your own values.",
   },
   inverter_power: {
     de: "Gesamte WR-Leistung der Anlage inkl. zusätzlicher Erzeuger. Begrenzt die Entladung und skaliert die Last-Balken im Haus-Fluss.",
@@ -209,8 +209,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Up to this price per kWh the electricity counts as cheap.",
   },
   max_grid_charge_kwh: {
-    de: "Sicherheitsgrenze: Nach so vielen kWh aus dem Netz an einem Tag stoppt die Netzladung. Die Menge selbst bestimmen Ziel und Prognose. 0 = keine Grenze.",
-    en: "Safety cap: grid charging stops after this many kWh from the grid in one day. Target and forecast decide the amount. 0 = no cap.",
+    de: "Sicherheitsgrenze: Nach so vielen kWh aus dem Netz an einem Tag stoppt die Netzladung. Die Menge selbst bestimmen Ziel und Prognose. 0 = keine Grenze. Bei Dynamisch meist 0 lassen, sonst drosselt der Cap den Preisplan.",
+    en: "Safety cap: grid charging stops after this many kWh from the grid in one day. Target and forecast decide the amount. 0 = no cap. For Dynamic leave at 0, or the cap throttles the price plan.",
   },
   low_slot_grid_charge_enabled: {
     de: "Lädt im günstigen Zeitfenster aktiv aus dem Netz, nicht nur per Preisplan.",
@@ -237,8 +237,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Executes the plan: grid charging in cheap slots and holding discharge.",
   },
   price_plan_max_soc: {
-    de: "Der Plan lädt aus dem Netz höchstens bis zu diesem SoC.",
-    en: "The plan charges from the grid only up to this SoC.",
+    de: "Der Plan lädt aus dem Netz höchstens bis zu diesem SoC. Bei Dynamisch meist 100 %, damit der Plan nicht künstlich vor dem vollen Akku stoppt.",
+    en: "The plan charges from the grid only up to this SoC. For Dynamic usually 100%, so the plan does not stop short of a full battery.",
   },
   price_plan_min_spread: {
     de: "Mindestabstand zwischen günstigem und teurem Preis, damit sich Netzladung lohnt.",
@@ -253,28 +253,28 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Maestro assumes consumption this much higher so the battery does not run empty. Applies to the price plan (expert) and to forecast-based grid charging in time windows and below the price threshold.",
   },
   ht_enabled: {
-    de: "Schützt den SoC im Hochtarif-Fenster vor Entladung.",
-    en: "Protects the SoC from discharge during the high-tariff window.",
+    de: "Schaltet den Entladeschutz ein: im teuren Fenster Mindestreserve halten. Nicht dasselbe wie Modul-3-HT oder Tarif-Slots.",
+    en: "Turns on discharge protection: keep a minimum reserve in the expensive window. Not the same as Module 3 HT or tariff slots.",
   },
   ht_sat: {
-    de: "Der Hochtarif-Schutz gilt auch am Samstag.",
-    en: "High-tariff protection also applies on Saturday.",
+    de: "Der Entladeschutz gilt auch am Samstag.",
+    en: "Discharge protection also applies on Saturday.",
   },
   ht_sun: {
-    de: "Der Hochtarif-Schutz gilt auch am Sonntag.",
-    en: "High-tariff protection also applies on Sunday.",
+    de: "Der Entladeschutz gilt auch am Sonntag.",
+    en: "Discharge protection also applies on Sunday.",
   },
   ht_on: {
-    de: "Stunde, ab der das Hochtarif-Fenster gilt.",
-    en: "Hour when the high-tariff window starts.",
+    de: "Stunde, ab der das Entladeschutz-Fenster gilt.",
+    en: "Hour when the discharge-protection window starts.",
   },
   ht_off: {
-    de: "Stunde, ab der das Hochtarif-Fenster endet.",
-    en: "Hour when the high-tariff window ends.",
+    de: "Stunde, ab der das Entladeschutz-Fenster endet.",
+    en: "Hour when the discharge-protection window ends.",
   },
   ht_min: {
-    de: "SoC, der im Hochtarif im Winter nicht unterschritten wird.",
-    en: "SoC that winter high-tariff hours will not go below.",
+    de: "SoC, den der Entladeschutz im Winter nicht unterschreitet.",
+    en: "SoC that discharge protection will not go below in winter.",
   },
   ht_sockel: {
     de: "SoC-Sockel zur Tag-und-Nacht-Gleiche, zwischen Winter- und Sommerwert.",

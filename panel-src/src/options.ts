@@ -11,6 +11,8 @@ export interface OptionField {
   /** Shown beside the number. "%" uses the slider with the 10% grid. */
   unit?: string;
   choices?: readonly string[];
+  /** i18n keys for select choice labels; falls back to the raw value. */
+  choiceLabels?: Readonly<Record<string, string>>;
   domains?: readonly string[];
   required?: boolean;
   /** Max length for text fields (default 64). */
@@ -50,6 +52,11 @@ export interface OptionBlock {
   fields: readonly OptionField[];
   /** One card for every field, instead of a card per field. */
   bundle?: boolean;
+  /**
+   * Tariff page only: which band this block belongs to when the page is
+   * composed (price → strategy → slots → modul3 → …).
+   */
+  tariffBand?: "price" | "modul3";
 }
 
 const sensor = ["sensor"] as const;
@@ -106,6 +113,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     hint: "secPriceSensorHint",
     fields: [entity("price_sensor", sensor)],
     bundle: true,
+    tariffBand: "price",
   },
   {
     area: "tariff",
@@ -120,6 +128,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       },
     ],
     bundle: true,
+    tariffBand: "price",
   },
   {
     area: "tariff",
@@ -128,9 +137,20 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     fields: [
       { key: "modul3_enabled", kind: "bool" },
       { key: "modul3_add_to_curve", kind: "bool" },
-      { key: "modul3_apply_vat", kind: "bool" },
+      {
+        key: "modul3_vat",
+        kind: "select",
+        choices: ["off", "de", "custom"],
+        choiceLabels: {
+          off: "modul3VatOff",
+          de: "modul3VatDe",
+          custom: "modul3VatCustom",
+        },
+      },
+      num("modul3_vat_percent", 0, 100, 0.1, "%"),
     ],
     bundle: true,
+    tariffBand: "modul3",
   },
   {
     area: "pv",
@@ -231,8 +251,12 @@ const labels: Record<string, { de: string; en: string }> = {
   energyforecast_token: { de: "Energyforecast API-Token", en: "Energyforecast API token" },
   energyforecast_market_zone: { de: "Energyforecast Marktzone", en: "Energyforecast market zone" },
   modul3_enabled: { de: "Modul 3 nutzen", en: "Use Module 3" },
-  modul3_add_to_curve: { de: "Auf Preiskurve addieren (Sensor ohne Netzentgelt)", en: "Add to price curve (sensor without grid fees)" },
-  modul3_apply_vat: { de: "19 % MwSt. auf ct/kWh aufschlagen", en: "Add 19% VAT on ct/kWh" },
+  modul3_add_to_curve: {
+    de: "Sensor ohne Netzentgelt → NE auf die Kurve addieren",
+    en: "Sensor without grid fees → add NE to the curve",
+  },
+  modul3_vat: { de: "MwSt. auf ct/kWh", en: "VAT on ct/kWh" },
+  modul3_vat_percent: { de: "Eigener MwSt.-Satz", en: "Custom VAT rate" },
   pv_forecast_sensor: { de: "Restprognose heute", en: "Remaining forecast today" },
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
   tomorrow_pv_sensor: { de: "Prognose morgen", en: "Tomorrow's forecast" },

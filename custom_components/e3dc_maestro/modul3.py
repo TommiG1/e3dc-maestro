@@ -16,7 +16,18 @@ ZONE_ST = "st"
 ZONE_HT = "ht"
 ZONES = (ZONE_NT, ZONE_ST, ZONE_HT)
 
-VAT_FACTOR = 1.19
+# Preset VAT rates (%) for Modul-3 ct from the DE DSO price sheet (net → gross).
+# §14a Modul 3 is Germany-only; AT/CH have no equivalent NT/ST/HT sheet.
+VAT_OFF = "off"
+VAT_DE = "de"
+VAT_CUSTOM = "custom"
+VAT_CHOICES = (VAT_OFF, VAT_DE, VAT_CUSTOM)
+VAT_PRESET_PERCENT = {
+    VAT_OFF: 0.0,
+    VAT_DE: 19.0,
+}
+# Brief AT/CH presets from an earlier UI — map to custom if still stored.
+_LEGACY_VAT_PERCENT = {"at": 20.0, "ch": 8.1}
 
 
 @dataclass(frozen=True)
@@ -37,15 +48,21 @@ class Modul3Profile:
 
     enabled: bool = False
     add_to_curve: bool = True
-    apply_vat: bool = False
+    vat: str = VAT_OFF
+    vat_percent: float = 0.0  # used when vat == custom
     zones: Mapping[str, Modul3Zone] = field(default_factory=dict)
+
+    def vat_rate_percent(self) -> float:
+        if self.vat == VAT_CUSTOM:
+            return max(0.0, float(self.vat_percent))
+        return float(VAT_PRESET_PERCENT.get(self.vat, 0.0))
 
     def fee_eur(self, zone: str) -> float:
         z = self.zones.get(zone)
         if z is None:
             return 0.0
         eur = max(0.0, float(z.price_ct_kwh)) / 100.0
-        return eur * VAT_FACTOR if self.apply_vat else eur
+        return eur * (1.0 + self.vat_rate_percent() / 100.0)
 
 
 def _window_active(window: Modul3Window, hour: float) -> bool:
@@ -158,11 +175,35 @@ def empty_zones_dict() -> dict[str, dict[str, Any]]:
     }
 
 
+def _parse_vat(options: Mapping[str, Any]) -> tuple[str, float]:
+    """Return (vat choice, custom percent). Migrates legacy bool / AT·CH presets."""
+    try:
+        percent = float(options.get("modul3_vat_percent", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        percent = 0.0
+    if percent != percent or percent < 0:
+        percent = 0.0
+    if percent > 100:
+        percent = 100.0
+    raw = options.get("modul3_vat")
+    if isinstance(raw, str) and raw in VAT_CHOICES:
+        vat = raw
+    elif isinstance(raw, str) and raw in _LEGACY_VAT_PERCENT:
+        vat = VAT_CUSTOM
+        if not percent:
+            percent = _LEGACY_VAT_PERCENT[raw]
+    elif options.get("modul3_apply_vat") is True:
+        vat = VAT_DE
+    else:
+        vat = VAT_OFF
+    return vat, percent
+
+
 def parse_modul3_profile(options: Mapping[str, Any]) -> Modul3Profile:
     """Options-Dict → Profil. Unbekannte/leere Werte → aus / Defaults."""
     enabled = bool(options.get("modul3_enabled", False))
     add_to_curve = bool(options.get("modul3_add_to_curve", True))
-    apply_vat = bool(options.get("modul3_apply_vat", False))
+    vat, vat_percent = _parse_vat(options)
     raw_zones = options.get("modul3_zones")
     zones: dict[str, Modul3Zone] = {}
     if isinstance(raw_zones, Mapping):
@@ -174,9 +215,20 @@ def parse_modul3_profile(options: Mapping[str, Any]) -> Modul3Profile:
     return Modul3Profile(
         enabled=enabled,
         add_to_curve=add_to_curve,
-        apply_vat=apply_vat,
+        vat=vat,
+        vat_percent=vat_percent,
         zones=zones,
     )
+
+
+def normalize_modul3_vat_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Ensure cockpit always sees ``modul3_vat`` (migrates legacy bool)."""
+    out = dict(options)
+    vat, percent = _parse_vat(out)
+    out["modul3_vat"] = vat
+    out["modul3_vat_percent"] = percent
+    out.pop("modul3_apply_vat", None)
+    return out
 
 
 def clean_modul3_zones(value: Any) -> tuple[dict[str, Any] | None, str | None]:

@@ -18,6 +18,7 @@ import {
   type Modul3ZoneKey,
   type Modul3Zones,
   type OptionArea,
+  type OptionBlock,
   type OptionField,
   type Slot,
 } from "./options";
@@ -190,8 +191,8 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
   const enabled = c.options.modul3_enabled === true;
   const setZone = (key: Modul3ZoneKey, zone: Modul3Zones[Modul3ZoneKey]) =>
     c.onModul3Zones({ ...c.modul3Zones, [key]: zone });
-  return html`<section class="settings-section">
-    <h3>${t("secModul3Zones")}</h3>
+  return html`<div class="modul3-zones">
+    <h4>${t("secModul3Zones")}</h4>
     <p class="sub">${t("secModul3ZonesHint")}</p>
     ${!enabled ? html`<p class="hint">${t("modul3OffHint")}</p>` : nothing}
     ${MODUL3_ZONE_KEYS.map((key) => {
@@ -244,18 +245,25 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
     })}
     <div class="opt-actions">
       <button type="button" class="btn" ?disabled=${!c.isAdmin || c.pending.has("modul3_zones")} @click=${() => c.onSaveModul3Zones()}>${t("modul3SaveZones")}</button>
-      <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled || c.pending.has("tariff_slots")} @click=${() => c.onFillSlotsFromModul3()}>${t("modul3FillSlots")}</button>
+      <button
+        type="button"
+        class="btn"
+        ?disabled=${!c.isAdmin || !enabled || c.pending.has("tariff_slots")}
+        @click=${() => {
+          if (window.confirm(c.i18n.t("modul3FillSlotsConfirm"))) c.onFillSlotsFromModul3();
+        }}
+      >${t("modul3FillSlots")}</button>
     </div>
     <p class="hint">${t("modul3FillSlotsHint")}</p>
-  </section>`;
+  </div>`;
 }
 
-function slotsEditor(c: OptionCtx): TemplateResult {
+export function slotsEditor(c: OptionCtx, highlight = false): TemplateResult {
   const { t } = c.i18n;
   const update = (index: number, next: Slot) => c.onSlots(c.slots.map((slot, i) => (i === index ? next : slot)));
-  return html`<section class="settings-section">
+  return html`<section class="settings-section ${highlight ? "tariff-focus" : ""}" id="tariff-slots">
     <h3>${t("secSlots")}</h3>
-    <p class="sub">${t("secSlotsHint")}</p>
+    <p class="sub">${t(highlight ? "secSlotsHint" : "secSlotsHintOther")}</p>
     ${c.slots.map(
       (slot, index) => html`<div class="slot-card">
         <div class="opt-days" role="group" aria-label=${t("optWeekdays")}>
@@ -282,7 +290,8 @@ function slotsEditor(c: OptionCtx): TemplateResult {
               <option value="normal">${t("classNormal")}</option>
             </select>
           </label>
-          <label>${t("optReserve")}
+          ${slot.class_ === "high"
+            ? html`<label>${t("optReserve")}
             <input
               type="number"
               min="0"
@@ -297,7 +306,8 @@ function slotsEditor(c: OptionCtx): TemplateResult {
                 update(index, next);
               }}
             />
-          </label>
+          </label>`
+            : nothing}
           <button type="button" class="btn" ?disabled=${!c.isAdmin} @click=${() => c.onSlots(c.slots.filter((_, i) => i !== index))}>${t("optRemove")}</button>
         </div>
       </div>`,
@@ -326,10 +336,15 @@ function fieldRow(c: OptionCtx, field: OptionField, plain = false): TemplateResu
   if (field.kind === "select") {
     const choices = field.choices ?? [];
     const value = selectValue(c.options[field.key], choices);
+    const { t } = c.i18n;
     return row(
       label,
       html`<select aria-label=${label} .value=${value} ?disabled=${locked} @change=${(e: Event) => c.onChange(field.key, (e.target as HTMLSelectElement).value)}>
-        ${choices.map((choice) => html`<option value=${choice} ?selected=${choice === value}>${choice}</option>`)}
+        ${choices.map((choice) => {
+          const key = field.choiceLabels?.[choice];
+          const text = key ? t(key as never) : choice;
+          return html`<option value=${choice} ?selected=${choice === value}>${text}</option>`;
+        })}
       </select>`,
       locked,
       false,
@@ -485,21 +500,86 @@ export function sizingPage(c: OptionCtx, expansion: TemplateResult, prices: Temp
   </div>`;
 }
 
-export function optionSections(c: OptionCtx, area: string): TemplateResult {
-  const blocks = blocksFor(area as OptionArea);
-  if (!blocks.length && area !== "tariff") return html``;
+const FOLD_CHEVRON = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>`;
+
+function blockBody(c: OptionCtx, block: OptionBlock): TemplateResult {
+  return block.bundle
+    ? html`<div class="ctrl setting-bundle">${block.fields.map((field) => fieldRow(c, field, true))}</div>`
+    : html`${block.fields.map((field) => fieldRow(c, field))}`;
+}
+
+function optionNotices(c: OptionCtx): TemplateResult {
   const { t } = c.i18n;
   return html`${c.notice ? html`<p class="hint">${c.notice === "reload" ? t("optReload") : t("optSaved")}</p>` : nothing}
     ${c.error ? html`<p class="err">${c.error}</p>` : nothing}
-    ${!c.isAdmin ? html`<p class="hint">${t("optAdmin")}</p>` : nothing}
+    ${!c.isAdmin ? html`<p class="hint">${t("optAdmin")}</p>` : nothing}`;
+}
+
+/** Preis-Sensor + eingeklapptes Energyforecast (Tarif-Seite oben). */
+export function tariffPriceSections(c: OptionCtx): TemplateResult {
+  const { t } = c.i18n;
+  const blocks = blocksFor("tariff").filter((block) => block.tariffBand === "price");
+  const forecastOpen = typeof c.options.energyforecast_token === "string" && c.options.energyforecast_token.length > 0;
+  return html`${optionNotices(c)}
+    ${blocks.map((block) => {
+      if (block.title === "secEnergyforecast") {
+        return html`<section class="settings-section settings-fold" id="tariff-price-forecast">
+          <details ?open=${forecastOpen}>
+            <summary class="group-head">
+              ${FOLD_CHEVRON}
+              <span>${t(block.title)}</span>
+            </summary>
+            <p class="sub">${t(block.hint)}</p>
+            ${blockBody(c, block)}
+          </details>
+        </section>`;
+      }
+      return html`<section class="settings-section" id="tariff-price">
+        <h3>${t(block.title)}</h3>
+        <p class="sub">${t(block.hint)}</p>
+        ${blockBody(c, block)}
+      </section>`;
+    })}`;
+}
+
+/** Modul 3: Hauptschalter immer sichtbar; Details nur bei an. */
+export function tariffModul3Sections(c: OptionCtx): TemplateResult {
+  const { t } = c.i18n;
+  const block = blocksFor("tariff").find((item) => item.tariffBand === "modul3");
+  if (!block) return html``;
+  const enabled = c.options.modul3_enabled === true;
+  const enableField = block.fields.find((field) => field.key === "modul3_enabled");
+  const customVat = c.options.modul3_vat === "custom";
+  const detailFields = block.fields.filter((field) => {
+    if (field.key === "modul3_enabled") return false;
+    if (field.key === "modul3_vat_percent" && !customVat) return false;
+    return true;
+  });
+  return html`<section class="settings-section" id="tariff-modul3">
+    <h3>${t(block.title)}</h3>
+    <p class="sub">${t(block.hint)}</p>
+    ${enableField ? fieldRow(c, enableField) : nothing}
+    ${enabled
+      ? html`<div class="ctrl setting-bundle">${detailFields.map((field) => fieldRow(c, field, true))}</div>
+          ${modul3ZonesEditor(c)}`
+      : html`<p class="hint">${t("modul3OffHint")}</p>`}
+  </section>`;
+}
+
+export function optionSections(c: OptionCtx, area: string): TemplateResult {
+  if (area === "tariff") {
+    // Composed by settingsView(tariff) — price / slots / modul3 interleaved with strategy.
+    return html``;
+  }
+  const blocks = blocksFor(area as OptionArea);
+  if (!blocks.length) return html``;
+  const { t } = c.i18n;
+  return html`${optionNotices(c)}
     ${blocks.map(
       (block) => html`<section class="settings-section">
         <h3>${t(block.title)}</h3>
         <p class="sub">${t(block.hint)}</p>
-        ${block.bundle
-          ? html`<div class="ctrl setting-bundle">${block.fields.map((field) => fieldRow(c, field, true))}</div>`
-          : block.fields.map((field) => fieldRow(c, field))}
+        ${blockBody(c, block)}
       </section>`,
-    )}
-    ${area === "tariff" ? html`${modul3ZonesEditor(c)}${slotsEditor(c)}` : nothing}`;
+    )}`;
 }

@@ -118,7 +118,9 @@ CONF_ENERGYFORECAST_MARKET_ZONE = "energyforecast_market_zone"  # z. B. DE-LU
 # §14a Modul 3 – zeitvariable Netzentgelte (NT/ST/HT), Schicht auf die Preiskurve.
 CONF_MODUL3_ENABLED = "modul3_enabled"
 CONF_MODUL3_ADD_TO_CURVE = "modul3_add_to_curve"      # False wenn Sensor schon All-in inkl. NE
-CONF_MODUL3_APPLY_VAT = "modul3_apply_vat"            # ct aus Preisblatt × 1,19
+CONF_MODUL3_VAT = "modul3_vat"                        # off|de|at|ch|custom
+CONF_MODUL3_VAT_PERCENT = "modul3_vat_percent"        # % bei custom (0–100)
+CONF_MODUL3_APPLY_VAT = "modul3_apply_vat"            # legacy bool → de/off
 CONF_MODUL3_ZONES = "modul3_zones"                    # {nt|st|ht: {price_ct_kwh, windows}}
 CONF_CHEAP_THRESHOLD = "cheap_threshold"              # €/kWh
 CONF_MAX_GRID_CHARGE_KWH = "max_grid_charge_kwh"      # Sicherheitsgrenze pro Tag, 0 = keine

@@ -12,7 +12,18 @@ einen eigenen Versionsabschnitt verschieben.
 ### Neu
 - **Ostrom-Preiskurve:** Melmager- (`data`/`date`, Cent→€) und oliverwehrens-Attribute (`prices`-Dict) werden für den Preisplan normalisiert. FAQ „Ostrom als Preis-Sensor“.
 - **EPEX Spot (`ha_epex_spot`):** Attribut `price_per_kwh` in der Preiskurve erkannt — Total-Price-Sensor inkl. Aufschlag/MwSt. für E.ON-/LUOX-ähnliche Spot-Tarife.
-- **§14a Modul 3:** variable Netzentgelte NT/ST/HT unter Netz und Tarif — Fenster und ct/kWh aus dem VNB-Preisblatt, optional Schicht auf die Preiskurve (mit Hinweis gegen Doppelzählung), MwSt.-Option, Tarif-Slots aus Modul 3 füllen. FAQ „Modul 3 · variable Netzentgelte“.
+- **§14a Modul 3 (DE):** variable Netzentgelte NT/ST/HT unter Netz und Tarif — Fenster und ct/kWh aus dem VNB-Preisblatt, optional Schicht auf die Preiskurve (mit Hinweis gegen Doppelzählung), MwSt. Aus/19 %/eigener Satz, Tarif-Slots aus Modul 3 füllen. FAQ „Modul 3 · variable Netzentgelte“.
+
+### Behoben
+- **Modul 3 Schalter:** Speichern löste einen Integrations-Reload aus (Option nicht auf MaestroParams) und brach die Cockpit-WebSocket-Verbindung — Schalter wirkte tot. Modul-3-/Preis-/Energyforecast-Optionen speichern jetzt ohne Reload.
+
+### Geändert
+- **Modul 3 MwSt.:** Aus / 19 % (DE) / eigener Satz (kein AT/CH-Preset — Modul 3 ist DE-only). Alter Schalter „19 % MwSt.“ wird als DE übernommen; Hinweise in UI/FAQ geschärft.
+- **Netz und Tarif:** klarere Reihenfolge (Preisquelle → Netzladung → Tarif-Slots → Modul 3 → Entladeschutz → Kosten); „Hochtarif“ heißt jetzt Entladeschutz; Vertrag fest/dynamisch unter Kosten; Energyforecast und Modul 3 einklappbar.
+- **Grenzen (Dynamisch):** Hinweis zu Max. Netzladung/Tag = 0 und Plan-Obergrenze = 100 % (nicht HT-Reserve).
+- **Entladeschutz:** Fenster und Reserve nur sichtbar, wenn HT/NT-Schutz an ist.
+- **Netzladung Aus:** Hinweis, dass Dynamisch zuerst nur im Schattenmodus simuliert und die Steuerung extra eingeschaltet werden muss.
+- **Klarheit Netz und Tarif:** Strategie „Zeitfenster (Tarif-Slots)“; Entitätsnamen Entladeschutz statt HT; Slot-Mindestreserve nur bei Klasse Hoch; Kontext-Hinweis wenn Strategie nicht Zeitfenster.
 
 ---
 

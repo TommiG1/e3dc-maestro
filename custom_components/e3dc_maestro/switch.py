@@ -81,7 +81,7 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
     ),
     MaestroSwitchDescription(
         key=CONF_HT_ENABLED,
-        name="HT/NT-Schutz",
+        name="Entladeschutz",
         icon="mdi:clock-alert",
         param_key=CONF_HT_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_HT_ENABLED, True),
@@ -89,7 +89,7 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
     ),
     MaestroSwitchDescription(
         key=CONF_HT_SAT,
-        name="HT Samstag",
+        name="Entladeschutz Samstag",
         icon="mdi:calendar-weekend",
         param_key=CONF_HT_SAT,
         on_fn=lambda coord: coord.update_param(CONF_HT_SAT, True),
@@ -97,7 +97,7 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
     ),
     MaestroSwitchDescription(
         key=CONF_HT_SUN,
-        name="HT Sonntag",
+        name="Entladeschutz Sonntag",
         icon="mdi:calendar-weekend-outline",
         param_key=CONF_HT_SUN,
         on_fn=lambda coord: coord.update_param(CONF_HT_SUN, True),
