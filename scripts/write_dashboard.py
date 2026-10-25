@@ -135,8 +135,8 @@ TAB_1 = """\
           - type: template
             content: HT-Schutz
             icon: mdi:clock-alert
-            icon_color: "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}"
-            entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+            icon_color: "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}"
+            entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             tap_action:
               action: more-info
           - type: template
@@ -605,7 +605,7 @@ TAB_COCKPIT = """\
                     is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),
                     is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),
                     is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),
-                    is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on'),
+                    is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on'),
                     p in ['pv_delay', 'astro_wait', 'morning_cap', 'corridor', 'spreading', 'predischarge']
                   ] | select('equalto', true) | list | count %}
                   {{ active ~ ' Eingriff' ~ ('e' if active != 1 else '') if active else 'keine Eingriffe' }}
@@ -621,7 +621,7 @@ TAB_COCKPIT = """\
                   {% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red
                   {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange
                   {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red
-                  {% elif is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') %}deep-purple
+                  {% elif is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') %}deep-purple
                   {% elif p in ['pv_delay', 'astro_wait', 'morning_cap'] %}amber
                   {% elif p in ['corridor', 'spreading', 'predischarge'] %}blue
                   {% else %}green{% endif %}
@@ -662,14 +662,14 @@ TAB_COCKPIT = """\
                   tap_action: { action: more-info }
               - type: conditional
                 conditions:
-                  - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+                  - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
                     state: "on"
                 chip:
                   type: template
                   content: HT/NT
                   icon: mdi:transmission-tower
                   icon_color: deep-purple
-                  entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+                  entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
                   tap_action: { action: more-info }
               - type: conditional
                 conditions:
@@ -750,7 +750,7 @@ TAB_COCKPIT = """\
                     is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),
                     is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),
                     is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),
-                    is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on')
+                    is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on')
                   ] | select('equalto', true) | list | count %}
                   {{ active ~ ' aktiv' if active else 'bereit' }}
                 icon: mdi:shield-check
@@ -758,7 +758,7 @@ TAB_COCKPIT = """\
                   {% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red
                   {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange
                   {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red
-                  {% elif is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') %}deep-purple
+                  {% elif is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') %}deep-purple
                   {% else %}green{% endif %}
                 fill_container: true
                 tap_action: { action: more-info }
@@ -1071,34 +1071,34 @@ TAB_4 = (
           - type: template
             content: HT/NT-Schutz
             icon: mdi:clock-alert
-            icon_color: "{{ 'deep-orange' if is_state('switch.e3dc_maestro_ht_nt_schutz', 'on') else 'grey' }}"
-            entity: switch.e3dc_maestro_ht_nt_schutz
+            icon_color: "{{ 'deep-orange' if is_state('switch.e3dc_maestro_entladeschutz', 'on') else 'grey' }}"
+            entity: switch.e3dc_maestro_entladeschutz
             tap_action:
               action: toggle
           - type: template
             content: HT aktiv
             icon: mdi:clock-check
-            icon_color: "{{ 'red' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}"
-            entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+            icon_color: "{{ 'red' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}"
+            entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             tap_action:
               action: more-info
 
       - type: entities
         title: Hochtarif-Schutz
         entities:
-          - entity: switch.e3dc_maestro_ht_nt_schutz
+          - entity: switch.e3dc_maestro_entladeschutz
             name: HT/NT-Schutz aktiv
-          - entity: switch.e3dc_maestro_ht_samstag
+          - entity: switch.e3dc_maestro_entladeschutz_samstag
             name: Samstag wie HT
-          - entity: switch.e3dc_maestro_ht_sonntag
+          - entity: switch.e3dc_maestro_entladeschutz_sonntag
             name: Sonntag wie HT
-          - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+          - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             name: HT-Schutz – aktuell aktiv
 """
-    + entity_row("number.e3dc_maestro_ht_beginn",             "HT Beginn (Stunde, lokal)")
-    + entity_row("number.e3dc_maestro_ht_ende",               "HT Ende (Stunde, lokal)")
-    + entity_row("number.e3dc_maestro_ht_reserve_winter",     "HT-Reserve Winter (%)")
-    + entity_row("number.e3dc_maestro_ht_sockel_aquinoktium", "HT-Reserve Äquinoktium (%)")
+    + entity_row("number.e3dc_maestro_entladeschutz_beginn",             "HT Beginn (Stunde, lokal)")
+    + entity_row("number.e3dc_maestro_entladeschutz_ende",               "HT Ende (Stunde, lokal)")
+    + entity_row("number.e3dc_maestro_entladeschutz_reserve_winter",     "HT-Reserve Winter (%)")
+    + entity_row("number.e3dc_maestro_entladeschutz_sockel_aquinoktium", "HT-Reserve Äquinoktium (%)")
     + help_btn("help-ht")
     + """\
 
@@ -1116,9 +1116,9 @@ TAB_4 = (
         title: Tarif-Slots
         subtitle: Flexible Tarif-Fenster – via Options Flow konfigurieren
         entities:
-          - entity: switch.e3dc_maestro_ht_nt_schutz
+          - entity: switch.e3dc_maestro_entladeschutz
             name: HT-Schutz aktiv (Legacy-Schnellzugriff)
-          - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+          - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             name: HT-Schutz aktuell aktiv
 """
     + help_btn("help-tariff-slots")
@@ -1363,8 +1363,8 @@ TAB_7 = """\
           - type: template
             content: HT-Schutz
             icon: mdi:clock-alert
-            icon_color: "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}"
-            entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+            icon_color: "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}"
+            entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             tap_action:
               action: more-info
 
@@ -1377,7 +1377,7 @@ TAB_7 = """\
             name: Einspeisedrosselung aktiv
           - entity: binary_sensor.e3dc_maestro_abregelschutz_aktiv
             name: Abregelschutz aktiv
-          - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+          - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             name: HT-Schutz aktiv
           - entity: binary_sensor.e3dc_maestro_notfallladung_aktiv
             name: Notfallladung aktiv

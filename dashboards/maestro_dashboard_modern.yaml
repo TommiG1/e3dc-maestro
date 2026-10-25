@@ -1304,12 +1304,12 @@ views:
           - type: conditional
             conditions:
               - condition: state
-                entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+                entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
                 state: "on"
             card:
               type: custom:button-card
               template: status_chip
-              entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+              entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
               name: HT-Schutz
               icon: mdi:clock-alert
               variables:
@@ -1387,7 +1387,7 @@ views:
                 value: |
                   [[[
                     return ['notfallladung_aktiv','abregelschutz_aktiv','einspeisedrosselung_aktiv',
-                            'ht_schutz_aktiv','netzladung_aktiv','akku_prioritat_aktiv','ladesperre_aktiv','entladesperre_aktiv']
+                            'entladeschutz_aktiv','netzladung_aktiv','akku_prioritat_aktiv','ladesperre_aktiv','entladesperre_aktiv']
                       .some(k => states['binary_sensor.e3dc_maestro_' + k] &&
                                   states['binary_sensor.e3dc_maestro_' + k].state === 'on');
                   ]]]
@@ -2634,7 +2634,7 @@ views:
             icon: mdi:transmission-tower
 
           - type: tile
-            entity: switch.e3dc_maestro_ht_nt_schutz
+            entity: switch.e3dc_maestro_entladeschutz
             name: HT/NT-Schutz
             icon: mdi:clock-alert
             color: deep-orange
@@ -2642,7 +2642,7 @@ views:
               action: toggle
 
           - type: tile
-            entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+            entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             name: HT aktuell aktiv
             icon: mdi:clock-check
             color: red
@@ -2656,21 +2656,21 @@ views:
 
           - type: entities
             entities:
-              - entity: switch.e3dc_maestro_ht_nt_schutz
+              - entity: switch.e3dc_maestro_entladeschutz
                 name: HT/NT-Schutz aktiv
-              - entity: switch.e3dc_maestro_ht_samstag
+              - entity: switch.e3dc_maestro_entladeschutz_samstag
                 name: Samstag wie HT
-              - entity: switch.e3dc_maestro_ht_sonntag
+              - entity: switch.e3dc_maestro_entladeschutz_sonntag
                 name: Sonntag wie HT
-              - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+              - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
                 name: HT-Schutz – aktuell aktiv
-              - entity: number.e3dc_maestro_ht_beginn
+              - entity: number.e3dc_maestro_entladeschutz_beginn
                 name: HT Beginn (Stunde, lokal)
-              - entity: number.e3dc_maestro_ht_ende
+              - entity: number.e3dc_maestro_entladeschutz_ende
                 name: HT Ende (Stunde, lokal)
-              - entity: number.e3dc_maestro_ht_reserve_winter
+              - entity: number.e3dc_maestro_entladeschutz_reserve_winter
                 name: HT-Reserve Winter (%)
-              - entity: number.e3dc_maestro_ht_sockel_aquinoktium
+              - entity: number.e3dc_maestro_entladeschutz_sockel_aquinoktium
                 name: HT-Reserve Äquinoktium (%)
               - type: button
                 name: "Hilfe HT/NT-Schutz"
@@ -2911,9 +2911,9 @@ views:
 
           - type: entities
             entities:
-              - entity: switch.e3dc_maestro_ht_nt_schutz
+              - entity: switch.e3dc_maestro_entladeschutz
                 name: HT-Schutz aktiv (Legacy-Schnellzugriff)
-              - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+              - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
                 name: HT-Schutz aktuell aktiv
               - type: button
                 name: "Hilfe Tarif-Slots"
@@ -3260,7 +3260,7 @@ views:
             color: amber
 
           - type: tile
-            entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+            entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
             name: HT-Schutz
             icon: mdi:clock-alert
             color: deep-orange

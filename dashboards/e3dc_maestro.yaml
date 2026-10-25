@@ -19,7 +19,7 @@ views:
           - entity: binary_sensor.e3dc_maestro_e3dc_erreichbar
             name: E3DC erreichbar
           - entity: binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv
-          - entity: binary_sensor.e3dc_maestro_ht_schutz_aktiv
+          - entity: binary_sensor.e3dc_maestro_entladeschutz_aktiv
           - entity: binary_sensor.e3dc_maestro_notfallladung_aktiv
 
       # ── Gauge: SoC vs. Ziel ───────────────────────────
@@ -167,13 +167,13 @@ views:
       - type: entities
         title: HT/NT-Schutz
         entities:
-          - entity: switch.e3dc_maestro_ht_nt_schutz
-          - entity: number.e3dc_maestro_ht_beginn
-          - entity: number.e3dc_maestro_ht_ende
-          - entity: number.e3dc_maestro_ht_reserve_winter
-          - entity: number.e3dc_maestro_ht_sockel_aquinoktium
-          - entity: switch.e3dc_maestro_ht_samstag
-          - entity: switch.e3dc_maestro_ht_sonntag
+          - entity: switch.e3dc_maestro_entladeschutz
+          - entity: number.e3dc_maestro_entladeschutz_beginn
+          - entity: number.e3dc_maestro_entladeschutz_ende
+          - entity: number.e3dc_maestro_entladeschutz_reserve_winter
+          - entity: number.e3dc_maestro_entladeschutz_sockel_aquinoktium
+          - entity: switch.e3dc_maestro_entladeschutz_samstag
+          - entity: switch.e3dc_maestro_entladeschutz_sonntag
 
       # ── Dynamische Tarife ─────────────────────────────
       - type: entities

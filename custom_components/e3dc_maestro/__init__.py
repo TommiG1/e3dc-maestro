@@ -29,6 +29,15 @@ _ENTITY_ID_RENAMES: dict[str, str] = {
     "charge_power_limit": "soll_lade_limit",
     "discharge_power_limit": "soll_entlade_limit",
     "feed_in_avoided_today": "dc_abregelung_verhindert_heute",
+    # Anzeigename HT* → Entladeschutz* (entity_id folgt dem Name-Slug)
+    "ht_enabled": "entladeschutz",
+    "ht_sat": "entladeschutz_samstag",
+    "ht_sun": "entladeschutz_sonntag",
+    "ht_protection_active": "entladeschutz_aktiv",
+    "ht_on": "entladeschutz_beginn",
+    "ht_off": "entladeschutz_ende",
+    "ht_min": "entladeschutz_reserve_winter",
+    "ht_sockel": "entladeschutz_sockel_aquinoktium",
 }
 
 # Removing `entity_registry_enabled_default=False` from a description only

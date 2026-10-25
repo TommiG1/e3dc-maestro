@@ -309,7 +309,7 @@ def test_panel_entities_settings_map_keeps_renames_and_skips_sensors(monkeypatch
         {},
         entries=(
             SimpleNamespace(domain="number", unique_id="e1_inverter_power", entity_id="number.mein_wr", disabled_by=None),
-            SimpleNamespace(domain="switch", unique_id="e1_ht_enabled", entity_id="switch.e3dc_maestro_ht_nt_schutz", disabled_by="user"),
+            SimpleNamespace(domain="switch", unique_id="e1_ht_enabled", entity_id="switch.e3dc_maestro_entladeschutz", disabled_by="user"),
             SimpleNamespace(domain="sensor", unique_id="e1_phase", entity_id="sensor.phase", disabled_by=None),
             SimpleNamespace(domain="number", unique_id="other_inverter_power", entity_id="number.other", disabled_by=None),
             SimpleNamespace(domain="button", unique_id="e1_reset_stats", entity_id="button.reset", disabled_by=None),
@@ -329,7 +329,7 @@ def test_panel_entities_settings_map_keeps_renames_and_skips_sensors(monkeypatch
 
     assert result["settings"] == {
         "inverter_power": "number.mein_wr",
-        "ht_enabled": "switch.e3dc_maestro_ht_nt_schutz",
+        "ht_enabled": "switch.e3dc_maestro_entladeschutz",
         "reset_stats": "button.reset",
     }
     assert result["settings_disabled"] == ["ht_enabled"]

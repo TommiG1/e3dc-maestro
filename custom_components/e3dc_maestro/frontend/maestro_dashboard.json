@@ -71,8 +71,8 @@
               "type": "template",
               "content": "HT-Schutz",
               "icon": "mdi:clock-alert",
-              "icon_color": "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}",
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "icon_color": "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "tap_action": {
                 "action": "more-info"
               }
@@ -980,9 +980,9 @@
               "chips": [
                 {
                   "type": "template",
-                  "content": "{% set p = states('sensor.e3dc_maestro_regelphase') %} {% set active = [\n  is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on'),\n  p in ['pv_delay', 'astro_wait', 'morning_cap', 'corridor', 'spreading', 'predischarge'],\n  is_state('binary_sensor.e3dc_maestro_akku_prioritat_aktiv', 'on')\n] | select('equalto', true) | list | count %} {{ active ~ ' Eingriff' ~ ('e' if active != 1 else '') if active else 'keine Eingriffe' }}",
+                  "content": "{% set p = states('sensor.e3dc_maestro_regelphase') %} {% set active = [\n  is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on'),\n  p in ['pv_delay', 'astro_wait', 'morning_cap', 'corridor', 'spreading', 'predischarge'],\n  is_state('binary_sensor.e3dc_maestro_akku_prioritat_aktiv', 'on')\n] | select('equalto', true) | list | count %} {{ active ~ ' Eingriff' ~ ('e' if active != 1 else '') if active else 'keine Eingriffe' }}",
                   "icon": "{% set p = states('sensor.e3dc_maestro_regelphase') %} {% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}mdi:alert-octagon {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}mdi:weather-sunny-alert {% elif p in ['pv_delay', 'astro_wait', 'morning_cap'] %}mdi:calendar-clock {% elif p in ['corridor', 'spreading', 'predischarge'] %}mdi:tune-variant {% else %}mdi:check-circle-outline{% endif %}",
-                  "icon_color": "{% set p = states('sensor.e3dc_maestro_regelphase') %} {% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') %}deep-purple {% elif p in ['pv_delay', 'astro_wait', 'morning_cap'] %}amber {% elif p in ['corridor', 'spreading', 'predischarge'] %}blue {% else %}green{% endif %}",
+                  "icon_color": "{% set p = states('sensor.e3dc_maestro_regelphase') %} {% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') %}deep-purple {% elif p in ['pv_delay', 'astro_wait', 'morning_cap'] %}amber {% elif p in ['corridor', 'spreading', 'predischarge'] %}blue {% else %}green{% endif %}",
                   "entity": "sensor.e3dc_maestro_regelphase",
                   "tap_action": {
                     "action": "more-info"
@@ -1049,7 +1049,7 @@
                   "type": "conditional",
                   "conditions": [
                     {
-                      "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+                      "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
                       "state": "on"
                     }
                   ],
@@ -1058,7 +1058,7 @@
                     "content": "HT/NT",
                     "icon": "mdi:transmission-tower",
                     "icon_color": "deep-purple",
-                    "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+                    "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
                     "tap_action": {
                       "action": "more-info"
                     }
@@ -1208,9 +1208,9 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Schutz",
-                  "secondary": "{% set active = [\n  is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on')\n] | select('equalto', true) | list | count %} {{ active ~ ' aktiv' if active else 'bereit' }}",
+                  "secondary": "{% set active = [\n  is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on'),\n  is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on')\n] | select('equalto', true) | list | count %} {{ active ~ ' aktiv' if active else 'bereit' }}",
                   "icon": "mdi:shield-check",
-                  "icon_color": "{% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') %}deep-purple {% else %}green{% endif %}",
+                  "icon_color": "{% if is_state('binary_sensor.e3dc_maestro_notfallladung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_abregelschutz_aktiv', 'on') %}deep-orange {% elif is_state('binary_sensor.e3dc_maestro_einspeisedrosselung_aktiv', 'on') %}red {% elif is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') %}deep-purple {% else %}green{% endif %}",
                   "fill_container": true,
                   "tap_action": {
                     "action": "more-info"
@@ -1892,8 +1892,8 @@
               "type": "template",
               "content": "HT/NT-Schutz",
               "icon": "mdi:clock-alert",
-              "icon_color": "{{ 'deep-orange' if is_state('switch.e3dc_maestro_ht_nt_schutz', 'on') else 'grey' }}",
-              "entity": "switch.e3dc_maestro_ht_nt_schutz",
+              "icon_color": "{{ 'deep-orange' if is_state('switch.e3dc_maestro_entladeschutz', 'on') else 'grey' }}",
+              "entity": "switch.e3dc_maestro_entladeschutz",
               "tap_action": {
                 "action": "toggle"
               }
@@ -1902,8 +1902,8 @@
               "type": "template",
               "content": "HT aktiv",
               "icon": "mdi:clock-check",
-              "icon_color": "{{ 'red' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}",
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "icon_color": "{{ 'red' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "tap_action": {
                 "action": "more-info"
               }
@@ -1925,35 +1925,35 @@
           "title": "Hochtarif-Schutz",
           "entities": [
             {
-              "entity": "switch.e3dc_maestro_ht_nt_schutz",
+              "entity": "switch.e3dc_maestro_entladeschutz",
               "name": "HT/NT-Schutz aktiv"
             },
             {
-              "entity": "switch.e3dc_maestro_ht_samstag",
+              "entity": "switch.e3dc_maestro_entladeschutz_samstag",
               "name": "Samstag wie HT"
             },
             {
-              "entity": "switch.e3dc_maestro_ht_sonntag",
+              "entity": "switch.e3dc_maestro_entladeschutz_sonntag",
               "name": "Sonntag wie HT"
             },
             {
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "name": "HT-Schutz – aktuell aktiv"
             },
             {
-              "entity": "number.e3dc_maestro_ht_beginn",
+              "entity": "number.e3dc_maestro_entladeschutz_beginn",
               "name": "HT Beginn (Stunde, lokal)"
             },
             {
-              "entity": "number.e3dc_maestro_ht_ende",
+              "entity": "number.e3dc_maestro_entladeschutz_ende",
               "name": "HT Ende (Stunde, lokal)"
             },
             {
-              "entity": "number.e3dc_maestro_ht_reserve_winter",
+              "entity": "number.e3dc_maestro_entladeschutz_reserve_winter",
               "name": "HT-Reserve Winter (%)"
             },
             {
-              "entity": "number.e3dc_maestro_ht_sockel_aquinoktium",
+              "entity": "number.e3dc_maestro_entladeschutz_sockel_aquinoktium",
               "name": "HT-Reserve Äquinoktium (%)"
             },
             {
@@ -2246,11 +2246,11 @@
           "subtitle": "Flexible Tarif-Fenster – via Options Flow konfigurieren",
           "entities": [
             {
-              "entity": "switch.e3dc_maestro_ht_nt_schutz",
+              "entity": "switch.e3dc_maestro_entladeschutz",
               "name": "HT-Schutz aktiv (Legacy-Schnellzugriff)"
             },
             {
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "name": "HT-Schutz aktuell aktiv"
             },
             {
@@ -2700,8 +2700,8 @@
               "type": "template",
               "content": "HT-Schutz",
               "icon": "mdi:clock-alert",
-              "icon_color": "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_ht_schutz_aktiv', 'on') else 'grey' }}",
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "icon_color": "{{ 'deep-orange' if is_state('binary_sensor.e3dc_maestro_entladeschutz_aktiv', 'on') else 'grey' }}",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "tap_action": {
                 "action": "more-info"
               }
@@ -2725,7 +2725,7 @@
               "name": "Abregelschutz aktiv"
             },
             {
-              "entity": "binary_sensor.e3dc_maestro_ht_schutz_aktiv",
+              "entity": "binary_sensor.e3dc_maestro_entladeschutz_aktiv",
               "name": "HT-Schutz aktiv"
             },
             {

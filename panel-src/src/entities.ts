@@ -70,7 +70,7 @@ export const DEFAULT_IDS = {
   reachable: binary("e3dc_erreichbar"),
   chargeLock: binary("ladesperre_aktiv"),
   dischargeLock: binary("entladesperre_aktiv"),
-  htProtect: binary("ht_schutz_aktiv"),
+  htProtect: binary("entladeschutz_aktiv"),
   curtail: binary("abregelschutz_aktiv"),
   emergency: binary("notfallladung_aktiv"),
   chargeLimit: sensor("soll_lade_limit"),
