@@ -900,8 +900,9 @@ class TestSeasonalReserve:
         """Issue #13: SoC ≤ Notstromreserve, aber aktive Netzladung im low-Slot
         ist bewusst eingeschaltet und gerade ein low-Slot aktiv → die Reserve
         darf das gezielte Netzladen nicht blockieren, §6.97 muss greifen."""
+        # Kurzes Restfenster, damit Just-in-Time (#33) die Netzladung freigibt.
         low_slot = TariffSlot(
-            weekdays=frozenset(range(7)), start_h=0, end_h=24, class_=TARIFF_LOW,
+            weekdays=frozenset(range(7)), start_h=12, end_h=15, class_=TARIFF_LOW,
         )
         p = self._reserve_params()
         p.tariff_schedule = TariffSchedule(slots=[low_slot])
@@ -2124,11 +2125,16 @@ class TestSlotMinReserveOverridesHtMin:
 
 
 class TestLowSlotGridCharge:
-    """`low_slot_grid_charge_enabled` lädt im low-Slot aktiv aus dem Netz."""
+    """`low_slot_grid_charge_enabled` lädt im low-Slot aktiv aus dem Netz.
+
+    Default-Slot 0–2.2 Uhr: Tests um 02:00 haben ~0,2 h Restzeit → Just-in-Time
+    ist auch bei kleinem SoC-Defizit fällig (Issue #33). Für „warten am
+    Fensteranfang“ eigene längere Slots setzen.
+    """
 
     def _params(self, **overrides):
         low_slot = TariffSlot(
-            weekdays=frozenset(range(7)), start_h=0, end_h=24, class_=TARIFF_LOW,
+            weekdays=frozenset(range(7)), start_h=0, end_h=2.2, class_=TARIFF_LOW,
         )
         base = {
             **DEFAULT_PARAMS.__dict__,
@@ -2225,20 +2231,35 @@ class TestLowSlotGridCharge:
         assert d.phase == PHASE_FAST_FLOOR
 
     def test_astro_wait_yields_while_grid_charge_pending(self):
-        p = self._params(astro_enabled=True)
+        # Low-Fenster 6–8 Uhr, Test 07:00 → Restzeit 1 h, JIT fällig.
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=6, end_h=8, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            astro_enabled=True,
+            tariff_schedule=TariffSchedule(slots=[low]),
+        )
         d = decide(self._state(soc=30), p, _now(1, 15, 7))
         assert d.phase == PHASE_GRID_CHARGE
 
     def test_morning_cap_yields_while_grid_charge_pending(self):
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=6, end_h=8, class_=TARIFF_LOW,
+        )
         p = self._params(
             morning_cap_enabled=True, morning_cap_soc=20.0, morning_cap_until_h=12.0,
+            tariff_schedule=TariffSchedule(slots=[low]),
         )
         d = decide(self._state(soc=30), p, _now(1, 15, 7))
         assert d.phase == PHASE_GRID_CHARGE
 
     def test_morning_cap_applies_when_grid_budget_exhausted(self):
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=6, end_h=8, class_=TARIFF_LOW,
+        )
         p = self._params(
             morning_cap_enabled=True, morning_cap_soc=20.0, morning_cap_until_h=12.0,
+            tariff_schedule=TariffSchedule(slots=[low]),
         )
         d = decide(
             self._state(soc=30), p, _now(1, 15, 7),
@@ -2255,13 +2276,76 @@ class TestLowSlotGridCharge:
         d = decide(self._state(soc=30), p, _now(1, 15, 2))
         assert d.phase == PHASE_FAST_FLOOR
 
+    def test_jit_waits_at_start_of_long_window(self):
+        """Issue #33: 4 h Low ab 12 Uhr, Bedarf ~1 h Volllast → am Anfang warten."""
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=12, end_h=16, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            tariff_schedule=TariffSchedule(slots=[low]),
+            battery_capacity_kwh=10.0,
+            max_charge_power=3000,
+            low_slot_target_soc=60.0,
+            low_slot_grid_charge_jit=True,
+        )
+        d = decide(self._state(soc=30), p, _now(1, 15, 12))
+        assert d.phase != PHASE_GRID_CHARGE
+
+    def test_jit_off_charges_immediately(self):
+        """Schalter aus → sofort Netzladung wie früher, auch am Fensteranfang."""
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=12, end_h=16, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            tariff_schedule=TariffSchedule(slots=[low]),
+            battery_capacity_kwh=10.0,
+            max_charge_power=3000,
+            low_slot_target_soc=60.0,
+            low_slot_grid_charge_jit=False,
+        )
+        d = decide(self._state(soc=30), p, _now(1, 15, 12))
+        assert d.phase == PHASE_GRID_CHARGE
+        assert "Just-in-Time" not in d.reason
+
+    def test_jit_starts_when_remaining_time_is_tight(self):
+        """Kurz vor Fensterende: Volllast-Zeit reicht gerade noch → Netzladung."""
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=12, end_h=16, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            tariff_schedule=TariffSchedule(slots=[low]),
+            battery_capacity_kwh=10.0,
+            max_charge_power=3000,
+            low_slot_target_soc=60.0,
+        )
+        # need=3 kWh / 3 kW = 1 h + 0,25 slack → fällig ab ~14:45
+        d = decide(self._state(soc=30), p, _now(1, 15, 15))
+        assert d.phase == PHASE_GRID_CHARGE
+        assert "Just-in-Time" in d.reason
+
+    def test_jit_still_reaches_target_without_pv(self):
+        """Ohne PV: Start so spät, dass max_charge_power das Ziel noch schafft."""
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=12, end_h=16, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            tariff_schedule=TariffSchedule(slots=[low]),
+            battery_capacity_kwh=10.0,
+            max_charge_power=3000,
+            low_slot_target_soc=60.0,
+        )
+        d = decide(self._state(soc=30), p, _now(1, 15, 15))
+        assert d.phase == PHASE_GRID_CHARGE
+        assert d.charge_power_limit == 3000
+        assert d.target_soc == 60.0
+
 
 class TestLowSlotGridChargeForecast:
     """Prognosebasierte Netzlade-Menge: Boden + Bedarf bis zum nächsten günstigen Fenster."""
 
     def _params(self, **overrides):
         low_slot = TariffSlot(
-            weekdays=frozenset(range(7)), start_h=0, end_h=24, class_=TARIFF_LOW,
+            weekdays=frozenset(range(7)), start_h=0, end_h=2.2, class_=TARIFF_LOW,
         )
         base = {
             **DEFAULT_PARAMS.__dict__,
@@ -2340,7 +2424,14 @@ class TestLowSlotGridChargeForecast:
         assert d.discharge_power_limit == 0.0
 
     def test_reserve_bypassed_while_charging_above_it(self):
-        p = self._params(seasonal_reserve_enabled=True)
+        # Wintermittag + kurzes Restfenster, damit JIT die Netzladung freigibt.
+        low = TariffSlot(
+            weekdays=frozenset(range(7)), start_h=12, end_h=15, class_=TARIFF_LOW,
+        )
+        p = self._params(
+            seasonal_reserve_enabled=True,
+            tariff_schedule=TariffSchedule(slots=[low]),
+        )
         d = decide(self._state(soc=5, need=6.0), p, _now(12, 21, 14))
         assert d.phase == PHASE_GRID_CHARGE
 
@@ -3372,8 +3463,9 @@ class TestLowYieldDecide:
         # bewusst eingeschaltet, weil gerade ein günstiger Tarif-Slot läuft.
         # §6.96 (PV-Überschuss-Priorität) darf diesen expliziten Nutzerwunsch
         # nicht mehr blockieren – §6.97 (grid_charge) muss greifen.
+        # Kurzes Restfenster (JIT #33): sonst wartet die Netzladung aufs Ende.
         low_slot = TariffSlot(
-            weekdays=frozenset(range(7)), start_h=0, end_h=24, class_=TARIFF_LOW,
+            weekdays=frozenset(range(7)), start_h=10, end_h=11.2, class_=TARIFF_LOW,
         )
         p = _low_yield_params(
             ht_enabled=False,

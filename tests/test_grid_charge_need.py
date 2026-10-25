@@ -13,9 +13,11 @@ from custom_components.e3dc_maestro.control_tariff import (
 from custom_components.e3dc_maestro.grid_charge_need import (
     bridge_need_kwh,
     bridge_window,
+    grid_charge_jit_due,
     horizon_price_fn,
     load_fn,
     low_fn,
+    low_slot_hours_left,
     need_fn,
     pv_fn,
 )
@@ -162,6 +164,38 @@ class TestPriceThreshold:
 
     def test_no_curve_gives_no_price(self):
         assert horizon_price_fn(None) is None
+
+
+class TestGridChargeJit:
+    """Just-in-Time-Netzladung: erst starten wenn Restzeit knapp ist (#33)."""
+
+    def test_waits_while_slack_remains(self):
+        # 3 kWh / 3 kW = 1 h + 0,25 slack → bei 2 h Restzeit noch warten.
+        assert grid_charge_jit_due(3.0, 3.0, 2.0) is False
+
+    def test_due_when_time_is_tight(self):
+        assert grid_charge_jit_due(3.0, 3.0, 1.25) is True
+        assert grid_charge_jit_due(3.0, 3.0, 1.0) is True
+
+    def test_no_need_never_due(self):
+        assert grid_charge_jit_due(0.0, 3.0, 0.1) is False
+
+    def test_unknown_window_charges_immediately(self):
+        assert grid_charge_jit_due(3.0, 3.0, None) is True
+
+    def test_zero_power_charges_immediately(self):
+        assert grid_charge_jit_due(3.0, 0.0, 4.0) is True
+
+    def test_hours_left_same_day(self):
+        slot = TariffSlot(weekdays=ALL_DAYS, start_h=12, end_h=16, class_=TARIFF_LOW)
+        assert low_slot_hours_left(_at(21, 12), slot) == pytest.approx(4.0)
+        assert low_slot_hours_left(_at(21, 15, 30), slot) == pytest.approx(0.5)
+        assert low_slot_hours_left(_at(21, 11), slot) is None
+
+    def test_hours_left_spans_midnight(self):
+        slot = TariffSlot(weekdays=ALL_DAYS, start_h=22, end_h=2, class_=TARIFF_LOW)
+        assert low_slot_hours_left(_at(21, 23), slot) == pytest.approx(3.0)
+        assert low_slot_hours_left(_at(22, 1), slot) == pytest.approx(1.0)
 
 
 class TestCoordinatorWiring:

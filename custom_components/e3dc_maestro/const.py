@@ -133,6 +133,8 @@ CONF_LOW_SLOT_TARGET_SOC = "low_slot_target_soc"                    # % SoC-Ziel
 # (low_slot_target_soc wirkt dann als Obergrenze).
 CONF_LOW_SLOT_FORECAST_BASED = "low_slot_forecast_based"           # bool
 CONF_LOW_SLOT_HOLD_DISCHARGE = "low_slot_hold_discharge"           # bool
+# Just-in-Time: Netzladung erst gegen Ende des günstigen Fensters (Issue #33).
+CONF_LOW_SLOT_GRID_CHARGE_JIT = "low_slot_grid_charge_jit"         # bool
 
 # Preisplan (dynamische Netzladung + Entlade-Sperre anhand der Preiskurve).
 # Schattenmodus: berechnet/zeigt den Plan, steuert nichts.
@@ -417,6 +419,7 @@ DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED = False
 DEFAULT_LOW_SLOT_TARGET_SOC = 60.0
 DEFAULT_LOW_SLOT_FORECAST_BASED = False
 DEFAULT_LOW_SLOT_HOLD_DISCHARGE = True
+DEFAULT_LOW_SLOT_GRID_CHARGE_JIT = True
 DEFAULT_PRICE_PLAN_ENABLED = False
 DEFAULT_PRICE_PLAN_ACTIVE = False
 DEFAULT_PRICE_PLAN_MAX_SOC = 90.0

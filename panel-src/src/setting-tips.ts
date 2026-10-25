@@ -228,6 +228,10 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Sperrt die Entladung, sobald das Ziel im günstigen Fenster erreicht ist.",
     en: "Blocks discharge once the cheap-window target is reached.",
   },
+  low_slot_grid_charge_jit: {
+    de: "Verschiebt die Netzladung ans Ende des günstigen Fensters. Wartet, solange die Restzeit länger ist als die Volllast-Ladedauer bis zum Ziel (plus kurzer Puffer). PV kann vorher nachladen; fehlt sie, startet die Netzladung rechtzeitig. Aus = sofort laden wie früher.",
+    en: "Moves grid charging to the end of the cheap window. Waits while remaining time is longer than full-power duration to the target (plus a short buffer). PV can top up first; if not, charging still starts in time. Off = charge immediately as before.",
+  },
   price_plan_enabled: {
     de: "Berechnet den Plan und zeigt ihn. Der Akku wird davon noch nicht gesteuert.",
     en: "Calculates the plan and shows it. It does not control the battery yet.",

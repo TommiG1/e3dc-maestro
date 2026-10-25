@@ -27,6 +27,7 @@ from .const import (
     CONF_DYNAMIC_TARIFF_ENABLED,
     CONF_LOW_SLOT_FORECAST_BASED,
     CONF_LOW_SLOT_HOLD_DISCHARGE,
+    CONF_LOW_SLOT_GRID_CHARGE_JIT,
     CONF_LOW_SLOT_GRID_CHARGE_ENABLED,
     CONF_SPREADING_ENABLED,
     CONF_ASTRO_ENABLED,
@@ -247,6 +248,14 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         param_key=CONF_LOW_SLOT_HOLD_DISCHARGE,
         on_fn=lambda coord: coord.update_param(CONF_LOW_SLOT_HOLD_DISCHARGE, True),
         off_fn=lambda coord: coord.update_param(CONF_LOW_SLOT_HOLD_DISCHARGE, False),
+    ),
+    MaestroSwitchDescription(
+        key=CONF_LOW_SLOT_GRID_CHARGE_JIT,
+        name="Netzladung Just-in-Time",
+        icon="mdi:timer-sand",
+        param_key=CONF_LOW_SLOT_GRID_CHARGE_JIT,
+        on_fn=lambda coord: coord.update_param(CONF_LOW_SLOT_GRID_CHARGE_JIT, True),
+        off_fn=lambda coord: coord.update_param(CONF_LOW_SLOT_GRID_CHARGE_JIT, False),
     ),
     # Preisplan: Berechnung (Schalter „Schattenmodus“, Entity-ID bleibt stabil) und Steuerung
     MaestroSwitchDescription(

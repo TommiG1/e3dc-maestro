@@ -9,7 +9,14 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.2-beta.4] – Just-in-Time-Netzladung und Modul 3 (2026-10-25)
+
+> **Beta.** Enthält 0.5.2-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.4.md](docs/release-notes/v0.5.2-beta.4.md).
+
 ### Neu
+- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/hacs-e3dc-maestro/issues/33)): Schalter unter Netz und Tarif → Grenzen. Im günstigen Fenster (Zeitfenster/Preisschwelle) startet die Netzladung erst, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst; ohne PV rechtzeitig mit max. Ladeleistung. Aus = sofort laden wie früher.
 - **Ostrom-Preiskurve:** Melmager- (`data`/`date`, Cent→€) und oliverwehrens-Attribute (`prices`-Dict) werden für den Preisplan normalisiert. FAQ „Ostrom als Preis-Sensor“.
 - **EPEX Spot (`ha_epex_spot`):** Attribut `price_per_kwh` in der Preiskurve erkannt — Total-Price-Sensor inkl. Aufschlag/MwSt. für E.ON-/LUOX-ähnliche Spot-Tarife.
 - **§14a Modul 3 (DE):** variable Netzentgelte NT/ST/HT unter Netz und Tarif — Fenster und ct/kWh aus dem VNB-Preisblatt, optional Schicht auf die Preiskurve (mit Hinweis gegen Doppelzählung), MwSt. Aus/19 %/eigener Satz, Tarif-Slots aus Modul 3 füllen. FAQ „Modul 3 · variable Netzentgelte“.

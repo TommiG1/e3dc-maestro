@@ -13,7 +13,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Callable, Sequence
 
-from .control_tariff import TARIFF_LOW, TariffSchedule, current_tariff_class
+from .control_tariff import TARIFF_LOW, TariffSchedule, TariffSlot, current_tariff_class
 from .price_curve import PriceHorizon
 from .price_plan_runner import PV_HISTORIC_FACTOR, PV_SAFETY_FACTOR, profile_w_at
 
@@ -21,6 +21,46 @@ STEP = _dt.timedelta(minutes=15)
 _STEP_H = STEP.total_seconds() / 3600.0
 # Ohne nächstes günstiges Fenster in Sicht zählt höchstens ein Tag.
 MAX_WINDOW = _dt.timedelta(hours=24)
+# Just-in-Time-Netzladung: Puffer, damit Rampe/Regeltakt das Fensterende nicht verpassen.
+JIT_SLACK_H = 0.25
+
+
+def grid_charge_jit_due(
+    need_kwh: float,
+    max_charge_kw: float,
+    hours_left: float | None,
+    *,
+    slack_h: float = JIT_SLACK_H,
+) -> bool:
+    """True wenn die Netzladung jetzt starten muss, um das Ziel noch zu schaffen.
+
+    Wartet, solange die Restzeit im günstigen Fenster länger ist als die
+    Volllast-Ladedauer (``need_kwh / max_charge_kw``) plus ``slack_h``. Ohne
+    bekannte Restzeit oder ohne Ladeleistung: sofort (fail-safe).
+    """
+    if need_kwh <= 0.0:
+        return False
+    if hours_left is None or max_charge_kw <= 0.0:
+        return True
+    return hours_left <= need_kwh / max_charge_kw + max(0.0, slack_h)
+
+
+def low_slot_hours_left(now: _dt.datetime, slot: TariffSlot | None) -> float | None:
+    """Reststunden bis ``slot.end_h``, oder ``None`` wenn kein aktives Fenster."""
+    if slot is None:
+        return None
+    hour = now.hour + now.minute / 60.0
+    if slot.start_h <= slot.end_h:
+        if not (slot.start_h <= hour < slot.end_h):
+            return None
+        return max(0.0, slot.end_h - hour)
+    # Über Mitternacht: aktiv ab start_h oder vor end_h am Folgetag.
+    if hour >= slot.start_h:
+        return (24.0 - hour) + slot.end_h
+    if hour < slot.end_h:
+        return max(0.0, slot.end_h - hour)
+    return None
+
 
 PowerFn = Callable[[_dt.datetime], float]
 LowFn = Callable[[_dt.datetime], bool]

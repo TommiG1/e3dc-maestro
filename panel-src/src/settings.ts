@@ -103,6 +103,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         "low_slot_forecast_based",
         "price_plan_safety_factor",
         "low_slot_hold_discharge",
+        "low_slot_grid_charge_jit",
       ]),
       sec("secPlanTune", "secPlanTuneHint", [
         "price_plan_min_spread",
@@ -792,6 +793,7 @@ const ROW_WHEN: Record<string, (v: Required<StrategyView>) => boolean> = {
   price_plan_max_soc: (v) => isPlanStrategy(v.strategy),
   low_slot_forecast_based: (v) => ruleRows(v.strategy) && v.expert,
   low_slot_hold_discharge: (v) => ruleRows(v.strategy) && v.expert,
+  low_slot_grid_charge_jit: (v) => ruleRows(v.strategy),
   price_plan_min_spread: (v) => v.strategy === "dynamic_expert",
   price_plan_efficiency: (v) => v.strategy === "dynamic_expert",
   price_plan_safety_factor: (v) => v.strategy === "dynamic_expert" || (ruleRows(v.strategy) && v.expert),

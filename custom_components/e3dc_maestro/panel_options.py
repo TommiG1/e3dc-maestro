@@ -121,6 +121,7 @@ _SPECS: dict[str, _Spec] = {
     "low_slot_target_soc": _n(0, 100),
     "low_slot_forecast_based": ("bool",),
     "low_slot_hold_discharge": ("bool",),
+    "low_slot_grid_charge_jit": ("bool",),
     "price_plan_enabled": ("bool",),
     "price_plan_active": ("bool",),
     "price_plan_max_soc": _n(10, 100),

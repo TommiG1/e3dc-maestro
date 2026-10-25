@@ -22,6 +22,7 @@ from .control_tariff import (  # noqa: F401
     current_tariff_class,
     tariff_schedule_from_params,
 )
+from .grid_charge_need import grid_charge_jit_due, low_slot_hours_left
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +114,9 @@ class MaestroParams:
     # (Haus läuft aus dem günstigen Netz), statt den Akku zu entladen und
     # kurz darauf wieder nachzuladen (Lade-/Entlade-Schwingen, Issue #15).
     low_slot_hold_discharge: bool = True
+    # Just-in-Time (#33): Netzladung erst starten, wenn die Restzeit im
+    # günstigen Fenster knapp für Volllast bis zum Ziel reicht — PV zuerst.
+    low_slot_grid_charge_jit: bool = True
     # Preisplan (Schattenmodus): Plan aus der Preiskurve berechnen und anzeigen.
     price_plan_enabled: bool = False
     # Beta: Plan steuert den Akku (Netzladung + Entladung halten) statt nur anzuzeigen.
@@ -1281,13 +1285,33 @@ def _decide_core(
     # die nur PV-Ladung drosseln oder sperren (Reserve-Sperre, Morning-Cap,
     # Astro-Wait, Schnelllade-Boden, Akku-Priorität), weichen dann – sonst
     # schalten sie die bewusst angeforderte Netzladung stumm ab (Issue #13, #15).
+    # Just-in-Time (#33): erst starten, wenn die Restzeit knapp für Volllast
+    # bis zum Ziel reicht – PV kann vorher nachladen, ohne das Ziel zu riskieren.
     _gc_target = low_slot_grid_charge_target(state, params, now)
+    _gc_need_kwh = max(
+        0.0,
+        (_gc_target - state.soc) / 100.0 * params.battery_capacity_kwh,
+    )
+    _gc_hours_left = (
+        low_slot_hours_left(now, active_slot)
+        if tariff_class == TARIFF_LOW
+        else None
+    )
+    _gc_jit_due = (
+        not params.low_slot_grid_charge_jit
+        or grid_charge_jit_due(
+            _gc_need_kwh,
+            params.max_charge_power / 1000.0,
+            _gc_hours_left,
+        )
+    )
     _grid_charge_pending = (
         params.low_slot_grid_charge_enabled
         and tariff_class == TARIFF_LOW
         and not curtailment_guard_active
         and state.soc < _gc_target
         and _budget_left_kwh > 0
+        and _gc_jit_due
     )
 
     # Schwacher-PV-Tag: einmal pro Tick auswerten und als Flag durchreichen.
@@ -1816,11 +1840,16 @@ def _decide_core(
             if math.isfinite(_budget_left_kwh)
             else ""
         )
+        jit_note = (
+            f", Just-in-Time noch {_gc_hours_left:.1f} h Fenster"
+            if params.low_slot_grid_charge_jit and _gc_hours_left is not None
+            else ""
+        )
         return MaestroDecision(
             phase=PHASE_GRID_CHARGE,
             reason=(
                 f"Netzladung im günstigen Slot: SoC {state.soc:.0f}% < "
-                f"Ziel {_gc_target:.0f}% ({target_src}){budget_note}"
+                f"Ziel {_gc_target:.0f}% ({target_src}){budget_note}{jit_note}"
             ),
             power_mode=POWER_MODE_CHARGE,
             charge_power_limit=params.max_charge_power,

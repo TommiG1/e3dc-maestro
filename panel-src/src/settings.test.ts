@@ -104,6 +104,8 @@ describe("rowVisible", () => {
     expect(shown("dynamic_expert")).toContain("price_plan_efficiency");
     expect(shown("slots")).not.toContain("low_slot_hold_discharge");
     expect(shown("slots", true)).toContain("low_slot_hold_discharge");
+    expect(shown("slots")).toContain("low_slot_grid_charge_jit");
+    expect(shown("dynamic_auto")).not.toContain("low_slot_grid_charge_jit");
   });
 });
 
