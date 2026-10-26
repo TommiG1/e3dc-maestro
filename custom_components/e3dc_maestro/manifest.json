@@ -2,7 +2,6 @@
   "domain": "e3dc_maestro",
   "name": "E3DC Maestro",
   "after_dependencies": ["lovelace", "energy", "recorder"],
-  "categories": ["energy.solar_batteries", "energy.energy_prices"],
   "codeowners": ["@TommiG1"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "lovelace", "panel_custom", "websocket_api"],
