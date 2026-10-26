@@ -5,15 +5,28 @@ from dataclasses import dataclass
 from typing import Any
 
 
+class _AutoMeta(type):
+    """Metaclass so stub classes support nested attrs (NumberSelectorMode.BOX)."""
+
+    def __getattr__(cls, name: str):
+        val = _AutoMeta(name, (), {"__init__": lambda self, *a, **kw: None})
+        setattr(cls, name, val)
+        return val
+
+
 class _AutoModule(types.ModuleType):
     """A module that returns a dummy class/value for any attribute access."""
 
     def __getattr__(self, name: str):
         # Return a generic class that can be used as a base class or called
-        cls = type(name, (), {
-            "__init__": lambda self, *a, **kw: None,
-            "__class_getitem__": classmethod(lambda cls, item: cls),
-        })
+        cls = _AutoMeta(
+            name,
+            (),
+            {
+                "__init__": lambda self, *a, **kw: None,
+                "__class_getitem__": classmethod(lambda cls, item: cls),
+            },
+        )
         setattr(self, name, cls)
         return cls
 
@@ -34,13 +47,28 @@ class _Platform:
     BUTTON = "button"
 
 
+class _ConfigFlow:
+    """Minimal stub: HA ConfigFlow accepts domain= on subclasses."""
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+
+
+class _OptionsFlow:
+    pass
+
+
 _HA_STUBS = [
     ("homeassistant", {}),
     (
         "homeassistant.config_entries",
         {
             "ConfigEntry": object,
-            "ConfigEntryState": type("ConfigEntryState", (), {"LOADED": "loaded", "NOT_LOADED": "not_loaded"}),
+            "ConfigEntryState": type(
+                "ConfigEntryState", (), {"LOADED": "loaded", "NOT_LOADED": "not_loaded"}
+            ),
+            "ConfigFlow": _ConfigFlow,
+            "OptionsFlow": _OptionsFlow,
         },
     ),
     ("homeassistant.const", {"Platform": _Platform}),
@@ -159,6 +187,17 @@ sys.modules["homeassistant.helpers"].config_validation = sys.modules[  # type: i
 sys.modules["homeassistant.helpers"].aiohttp_client = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.helpers.aiohttp_client"
 ]
+sys.modules["homeassistant.helpers"].selector = sys.modules[  # type: ignore[attr-defined]
+    "homeassistant.helpers.selector"
+]
+sys.modules["homeassistant.helpers"].entity_registry = sys.modules[  # type: ignore[attr-defined]
+    "homeassistant.helpers.entity_registry"
+]
 sys.modules["homeassistant.components"].websocket_api = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.components.websocket_api"
 ]
+# config_flow imports these at module load for schema defaults.
+sys.modules["homeassistant.const"].PERCENTAGE = "%"  # type: ignore[attr-defined]
+sys.modules["homeassistant.const"].UnitOfPower = type(  # type: ignore[attr-defined]
+    "UnitOfPower", (), {"WATT": "W", "KILO_WATT": "kW"}
+)
