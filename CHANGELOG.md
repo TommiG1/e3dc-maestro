@@ -11,6 +11,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.3] – Zusätzliche Erzeuger dauerhaft abwählbar (2026-10-26)
+
+Patch. Ausführlich: [docs/release-notes/v0.5.3.md](docs/release-notes/v0.5.3.md).
+
+### Korrekturen
+- Bewusst geleerte **Zusätzliche Erzeuger** / **Zusatz-Energie gesamt** bleiben leer nach Speichern und RSCP-Seed ([#34](https://github.com/TommiG1/hacs-e3dc-maestro/issues/34)).
+
+### Hinweise
+- Integration neu starten; Browser hart neu laden.
+
+---
+
 ## [0.5.2] – Just-in-Time-Netzladung und Modul 3 (2026-10-26)
 
 Stabiles Release. Enthält 0.5.2-beta.1 bis beta.4. Ausführlich: [docs/release-notes/v0.5.2.md](docs/release-notes/v0.5.2.md).
