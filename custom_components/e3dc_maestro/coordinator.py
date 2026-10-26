@@ -71,6 +71,7 @@ from .const import (
 from .cost_accounting import buy_prices_for_stats
 from .grid_charge_justify import JUSTIFIED_GRID_CHARGE_PHASES
 from .consumption_stats import ConsumptionStats
+from .soh_forecast import SohForecastResult, SohForecastService
 from .control_engine import (
     MaestroDecision,
     MaestroParams,
@@ -330,6 +331,10 @@ class E3DCMaestroCoordinator(
         self._low_yield_latch_date: date | None = None
         self._low_yield_stats_peak_kwh: float | None = None
         self._low_yield_today_kwh: float | None = None
+
+        # Device-reported module SOH → months-to-80 % forecast (≤1×/day)
+        self._soh_forecast = SohForecastService(hass)
+        self.soh_forecast: SohForecastResult | None = None
 
         # Battery & PV Sizing Advisor
         self.sizing_analysis: SizingAnalysisResult | None = None
@@ -672,6 +677,11 @@ class E3DCMaestroCoordinator(
                     )
             except Exception as err:
                 _LOGGER.debug("ConsumptionStats refresh failed: %s", err)
+
+        try:
+            self.soh_forecast = await self._soh_forecast.async_refresh()
+        except Exception as err:
+            _LOGGER.debug("SOH forecast refresh failed: %s", err)
 
         # F1: Refresh PV stats + compute 24h forecast (≤1×/h)
         if self._pv_stats is not None:

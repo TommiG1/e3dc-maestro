@@ -34,3 +34,6 @@ Bewusst **nicht** ausschließen:
 - `sensor.e3dc_maestro_*`
 - `sensor.s10e_pro_*` / `sensor.e3dc_*` (RSCP-Quellen)
 - Energy-/Power-Sensoren der PV-Anlage
+- Device-reported Modul-SOH (`*state_of_health_device_reported*` /
+  `battery-module-soh-reported`) — die SOH-Prognose unter Anlage → Batterie
+  braucht deren Long-term Statistics (überleben Purge; Rohverlauf allein nicht)

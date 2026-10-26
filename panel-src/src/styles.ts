@@ -2018,6 +2018,10 @@ export const styles = css`
   .pack-meta b.discharge {
     color: var(--warn);
   }
+  .pack-meta .soh-wait b {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
   .temp {
     margin-top: 12px;
   }

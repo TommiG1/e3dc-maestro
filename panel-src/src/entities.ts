@@ -98,6 +98,7 @@ export const DEFAULT_IDS = {
   selAuto: "select.e3dc_maestro_auto_optimierung_ziel",
   selTariff: "select.e3dc_maestro_tarif_modus",
   selStrategy: "select.e3dc_maestro_netzladung_strategie",
+  sohForecast: sensor("soh_prognose"),
 }
 
 export type EntityKey = keyof typeof DEFAULT_IDS;

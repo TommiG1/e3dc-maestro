@@ -668,6 +668,9 @@
       "seasonal_reserve_soc": {
         "name": "Notstromreserve (aktuell)"
       },
+      "soh_forecast": {
+        "name": "SOH-Prognose"
+      },
       "adaptive_reserve_soc": {
         "name": "Notstromreserve (adaptiv)"
       },

@@ -3,7 +3,7 @@ import { ref } from "lit/directives/ref.js";
 import { batteryFlowFromAmps, batteryGlyph } from "./battery-glyph";
 import "./maestro-chart";
 import { phaseHistoryOptions } from "./charts";
-import { isOn, num, plant, type HassEntity } from "./entities";
+import { E, isOn, num, plant, type HassEntity } from "./entities";
 import type { Fmt } from "./format";
 import type { I18n, Key } from "./i18n";
 import { memo } from "./memo";
@@ -14,6 +14,85 @@ type T = I18n["t"];
 
 const blank = (state: string | undefined): boolean =>
   !state || state === "unknown" || state === "unavailable";
+
+/** One pack row from sensor.e3dc_maestro_soh_prognose attributes. */
+export interface SohPackForecast {
+  name: string;
+  soh_pct?: number | null;
+  rate_pct_per_year?: number | null;
+  months_to_80?: number | null;
+  eta_80_iso?: string | null;
+  insufficient_history?: boolean;
+  days_until_ready?: number | null;
+  status?: string | null;
+}
+
+export type SohForecastView =
+  | { kind: "ready"; rate?: string; etaText?: string }
+  | { kind: "collecting"; days: number }
+  | { kind: "no_modules" };
+
+const asDays = (value: unknown): number | undefined => {
+  const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(n) ? Math.max(0, Math.ceil(n)) : undefined;
+};
+
+/** Ready forecast or collecting countdown for Anlage → Batterie. */
+export function sohForecastView(entity: HassEntity | undefined, packName: string): SohForecastView | undefined {
+  if (!entity || entity.state === "unavailable") return undefined;
+  const status = typeof entity.attributes.status === "string" ? entity.attributes.status : undefined;
+  if (status === "no_modules") return { kind: "no_modules" };
+
+  const packs = entity.attributes.packs;
+  const match =
+    Array.isArray(packs)
+      ? (packs.find((row) => row && typeof row === "object" && (row as SohPackForecast).name === packName) as
+          | SohPackForecast
+          | undefined)
+      : undefined;
+
+  const collecting =
+    match?.insufficient_history === true ||
+    match?.status === "collecting" ||
+    entity.attributes.insufficient_history === true ||
+    status === "collecting";
+
+  if (collecting) {
+    const days =
+      asDays(match?.days_until_ready) ??
+      asDays(entity.attributes.days_until_ready) ??
+      asDays(entity.state) ??
+      90;
+    return { kind: "collecting", days };
+  }
+
+  if (!match || blank(entity.state)) return undefined;
+  return { kind: "ready" };
+}
+
+/** @deprecated use sohForecastView — kept for tests that only need the ready pack row. */
+export function sohPackForecast(entity: HassEntity | undefined, packName: string): SohPackForecast | undefined {
+  const view = sohForecastView(entity, packName);
+  if (view?.kind !== "ready") return undefined;
+  const packs = entity?.attributes.packs;
+  if (!Array.isArray(packs)) return undefined;
+  return packs.find((row) => row && typeof row === "object" && (row as SohPackForecast).name === packName) as
+    | SohPackForecast
+    | undefined;
+}
+
+/** Format ``YYYY-MM`` as a short month label in the panel locale. */
+export function formatSohEta(iso: string | null | undefined, locale: string): string | undefined {
+  if (!iso || !/^\d{4}-\d{2}$/.test(iso)) return undefined;
+  const [y, m] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, 1));
+  const loc = locale.toLowerCase().startsWith("en") ? "en-GB" : locale || "de-DE";
+  return new Intl.DateTimeFormat(loc, {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
 
 /** RSCP reports a tiny denormal instead of 0 for some percentages. */
 export function formatPlant(entity: HassEntity | undefined, fmt: Fmt): string {
@@ -337,6 +416,20 @@ export function plantView(c: PlantCtx): TemplateResult {
     const tempScale = (deg: number) => Math.max(0, Math.min(100, (deg / 50) * 100));
     const soh = entities.soh ? num("soh") : undefined;
     const title = name || t("plantPack");
+    const forecastEntity = ent(c, E.sohForecast);
+    const forecastView = sohForecastView(forecastEntity, title);
+    const forecast = forecastView?.kind === "ready" ? sohPackForecast(forecastEntity, title) : undefined;
+    const etaLabel = forecast ? formatSohEta(forecast.eta_80_iso ?? undefined, c.fmt.loc) : undefined;
+    const rate =
+      forecast?.rate_pct_per_year !== undefined && forecast.rate_pct_per_year !== null && Number.isFinite(forecast.rate_pct_per_year)
+        ? `${c.fmt.n(forecast.rate_pct_per_year, 1)} %/a`
+        : undefined;
+    const months =
+      forecast?.months_to_80 !== undefined && forecast.months_to_80 !== null && Number.isFinite(forecast.months_to_80)
+        ? t("plantSohMonths", { n: c.fmt.n(forecast.months_to_80, 0) })
+        : undefined;
+    const etaText = etaLabel && months ? `${etaLabel} · ${months}` : etaLabel || months;
+    const waitDays = forecastView?.kind === "collecting" ? forecastView.days : undefined;
     return html`<article class="card pack">
       <div class="pack-visual">
         ${battery(`${title}, ${entities.energy ? value("energy") : ""}`, level, flow)}
@@ -349,6 +442,14 @@ export function plantView(c: PlantCtx): TemplateResult {
           ${entities.current ? html`<div><span>${t("plantCurrent")}</span><b class="${flow}">${value("current")}</b></div>` : nothing}
           ${entities.voltage ? html`<div><span>${t("plantVoltage")}</span><b>${value("voltage")}</b></div>` : nothing}
           ${entities.cycles ? html`<div><span>${t("plantCycles")}</span><b>${value("cycles")}</b></div>` : nothing}
+          ${rate ? html`<div title="${t("plantSohEtaHint")}"><span>${t("plantSohRate")}</span><b>${rate}</b></div>` : nothing}
+          ${etaText ? html`<div title="${t("plantSohEtaHint")}"><span>${t("plantSohEta")}</span><b>${etaText}</b></div>` : nothing}
+          ${waitDays !== undefined
+            ? html`<div class="soh-wait" title="${t("plantSohWaitHint")}"><span>${t("plantSohWait")}</span><b>${t("plantSohWaitDays", { n: c.fmt.n(waitDays, 0) })}</b></div>`
+            : nothing}
+          ${forecastView?.kind === "no_modules"
+            ? html`<div class="soh-wait"><span>${t("plantSohWait")}</span><b>${t("plantSohNoModules")}</b></div>`
+            : nothing}
         </div>
         ${tempText
           ? html`<div class="temp">

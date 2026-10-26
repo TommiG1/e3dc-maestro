@@ -733,6 +733,25 @@ SENSOR_DESCRIPTIONS: tuple[MaestroSensorDescription, ...] = (
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda coord: round(coord.stats.get("wallbox_energy_today_kwh", 0.0), 3),
     ),
+    MaestroSensorDescription(
+        key="soh_forecast",
+        name="SOH-Prognose",
+        icon="mdi:battery-heart-variant",
+        # Unit switches: "mo" when ready, "d" while collecting (see MaestroSensor).
+        native_unit_of_measurement="mo",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        stable_object_id="e3dc_maestro_soh_prognose",
+        value_fn=lambda coord: (
+            None
+            if coord.soh_forecast is None
+            else (
+                coord.soh_forecast.days_until_ready
+                if coord.soh_forecast.insufficient_history
+                else coord.soh_forecast.months_to_80
+            )
+        ),
+    ),
     # ── Battery & PV Sizing Advisor – read-only KPI sensors ─────────────────
     # (Interpolated from the 2D matrix based on the two slider values)
     MaestroSensorDescription(
@@ -919,6 +938,8 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
         "trajectory_phases",
         "history",
         "plan_slots",
+        "modules",
+        "packs",
     })
     # Heavy attribute payloads — suppress writes when value+attrs fingerprint unchanged.
     _HEAVY_KEYS = frozenset({
@@ -928,6 +949,7 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
         "forecast_data_quality",
         "debug_log",
         "price_plan",
+        "soh_forecast",
     })
 
     def __init__(self, coordinator: E3DCMaestroCoordinator, description: MaestroSensorDescription) -> None:
@@ -983,6 +1005,15 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    def native_unit_of_measurement(self) -> str | None:
+        if self.entity_description.key == "soh_forecast":
+            result = self.coordinator.soh_forecast
+            if result is not None and result.insufficient_history:
+                return "d"
+            return "mo"
+        return self.entity_description.native_unit_of_measurement
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         key = self.entity_description.key
         if key in _COST_SIM_KEYS:
@@ -1004,6 +1035,9 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                     getattr(params, "seasonal_reserve_enabled", False)
                 ),
             )
+        if key == "soh_forecast":
+            result = self.coordinator.soh_forecast
+            return result.as_attributes() if result is not None else None
         if key == "last_action":
             attrs = dict(self.coordinator.last_action_info)
             # News-Ticker: letzte Phasen-/Grund-Wechsel, neueste zuerst.

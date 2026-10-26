@@ -148,6 +148,7 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "selAuto": ("select", "auto_mode_objective"),
     "selTariff": ("select", "tariff_mode"),
     "selStrategy": ("select", "grid_charge_strategy"),
+    "sohForecast": ("sensor", "soh_forecast"),
 }
 
 # Platforms whose entities are tunable from the settings screen. The key is the
