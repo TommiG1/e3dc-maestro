@@ -23,7 +23,6 @@ wheels/
 
 # Virtual environments
 .venv
-.venv313
 .venv*
 env/
 venv/
