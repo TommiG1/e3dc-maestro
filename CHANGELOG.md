@@ -11,6 +11,27 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.2] – Just-in-Time-Netzladung und Modul 3 (2026-10-26)
+
+Stabiles Release. Enthält 0.5.2-beta.1 bis beta.4. Ausführlich: [docs/release-notes/v0.5.2.md](docs/release-notes/v0.5.2.md).
+
+### Neu
+- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/hacs-e3dc-maestro/issues/33)): im günstigen Fenster (Zeitfenster/Preisschwelle) erst laden, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst.
+- **Ostrom-** und **EPEX-Spot-Preiskurve**; **§14a Modul 3 (DE)** mit NT/ST/HT, optionaler Schicht und Tarif-Slots.
+- Prognose-Ansichten **Bilanz / Strategie / Vergleich**; **Debug herunterladen** (Support-Dump) und voller Debug-Ringpuffer.
+
+### Geändert
+- Netz und Tarif klarer sortiert; Entladeschutz statt „Hochtarif“; Modul-3-Optionen ohne Reload.
+
+### Korrekturen
+- HT-Schutz bei prognosebasierter Netzladung nur noch auf dem Planungsboden (#27); geplante NT-Ladung nicht mehr „ohne Rechtfertigung“.
+- Entladeschutz-Entity-IDs und Actions auf Name-Slug; Migration der Alt-IDs.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+
+---
+
 ## [0.5.2-beta.4] – Just-in-Time-Netzladung und Modul 3 (2026-10-25)
 
 > **Beta.** Enthält 0.5.2-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.4.md](docs/release-notes/v0.5.2-beta.4.md).
