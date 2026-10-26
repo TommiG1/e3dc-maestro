@@ -67,6 +67,6 @@ if (
     name: "E3DC Maestro",
     description:
       "Classic Maestro dashboard with overview, controls, diagnostics and help tabs. Requires Mushroom Cards and ApexCharts from HACS.",
-    documentationURL: "https://github.com/TommiG1/hacs-e3dc-maestro",
+    documentationURL: "https://github.com/TommiG1/e3dc-maestro",
   });
 }

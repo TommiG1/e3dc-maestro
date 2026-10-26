@@ -14,11 +14,11 @@
 
 <p align="center">
   <a href="https://glowdash.de/maestro/docs/"><img src="https://img.shields.io/badge/Handbuch-glowdash.de%2Fmaestro%2Fdocs-D1A85C?style=for-the-badge" alt="Handbuch"></a>
-  <a href="https://github.com/TommiG1/hacs-e3dc-maestro/discussions"><img src="https://img.shields.io/badge/GitHub-Discussions-238636?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Discussions"></a>
+  <a href="https://github.com/TommiG1/e3dc-maestro/discussions"><img src="https://img.shields.io/badge/GitHub-Discussions-238636?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Discussions"></a>
   <a href="https://www.paypal.com/paypalme/tommigraf"><img src="https://img.shields.io/badge/Spenden-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Spenden via PayPal"></a>
   <br>
   <a href="https://glowdash.de/maestro/"><img src="https://img.shields.io/badge/Website-glowdash.de%2Fmaestro-101214?style=for-the-badge" alt="Website"></a>
-  <a href="https://github.com/TommiG1/hacs-e3dc-maestro/releases"><img src="https://img.shields.io/github/v/release/TommiG1/hacs-e3dc-maestro?style=for-the-badge&label=Release&color=101214" alt="Release"></a>
+  <a href="https://github.com/TommiG1/e3dc-maestro/releases"><img src="https://img.shields.io/github/v/release/TommiG1/e3dc-maestro?style=for-the-badge&label=Release&color=101214" alt="Release"></a>
 </p>
 
 ![Maestro-Cockpit — Live](Screenshots/cockpit_01_live.png)
@@ -65,7 +65,7 @@ Maestro setzt **[E3DC RSCP](https://github.com/torbennehmer/hacs-e3dc)** voraus.
 
 ### 2. Maestro installieren
 
-**HACS (bis HA 2026.10):** Custom Repository `https://github.com/TommiG1/hacs-e3dc-maestro` → Integration → Download → Neustart.
+**HACS (bis HA 2026.10):** Custom Repository `https://github.com/TommiG1/e3dc-maestro` → Integration → Download → Neustart.
 
 **Marketplace (ab HA 2026.11):** Einstellungen → Marketplace → Maestro.
 
@@ -87,6 +87,6 @@ Integration hinzufügen → **Maestro** in der Seitenleiste. Onboarding inklusiv
 
 Home Assistant ≥ 2024.1 · E3DC RSCP aktiv · getestet u. a. mit S10E / S10E Pro · PV-Prognose optional.
 
-**Handbuch:** [glowdash.de/maestro/docs](https://glowdash.de/maestro/docs/) · Website: [glowdash.de/maestro](https://glowdash.de/maestro/) · [Discussions](https://github.com/TommiG1/hacs-e3dc-maestro/discussions) · [Issues](https://github.com/TommiG1/hacs-e3dc-maestro/issues) · [Releases](https://github.com/TommiG1/hacs-e3dc-maestro/releases)
+**Handbuch:** [glowdash.de/maestro/docs](https://glowdash.de/maestro/docs/) · Website: [glowdash.de/maestro](https://glowdash.de/maestro/) · [Discussions](https://github.com/TommiG1/e3dc-maestro/discussions) · [Issues](https://github.com/TommiG1/e3dc-maestro/issues) · [Releases](https://github.com/TommiG1/e3dc-maestro/releases)
 
 **E3DC Maestro** von Thomas Graf / GlowDash · Open Source ([AGPL-3.0](LICENSE)) · Basis: [E3DC RSCP](https://github.com/torbennehmer/hacs-e3dc) von Torben Nehmer

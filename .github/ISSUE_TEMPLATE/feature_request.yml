@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Feature ideas are easiest to discuss in **[Discussions → Feature-Wünsche](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/3-feature-wünsche-und-verbesserungen)**.
+        Feature ideas are easiest to discuss in **[Discussions → Feature-Wünsche](https://github.com/TommiG1/e3dc-maestro/discussions/categories/3-feature-wünsche-und-verbesserungen)**.
         Open an Issue here only if you already have a concrete, implementable proposal.
   - type: textarea
     id: problem

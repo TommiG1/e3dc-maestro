@@ -5,10 +5,10 @@
   "codeowners": ["@TommiG1"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "lovelace", "panel_custom", "websocket_api"],
-  "documentation": "https://github.com/TommiG1/hacs-e3dc-maestro",
+  "documentation": "https://github.com/TommiG1/e3dc-maestro",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/TommiG1/hacs-e3dc-maestro/issues",
+  "issue_tracker": "https://github.com/TommiG1/e3dc-maestro/issues",
   "requirements": [],
   "version": "0.5.3"
 }

@@ -16,7 +16,7 @@ einen eigenen Versionsabschnitt verschieben.
 Patch. Ausführlich: [docs/release-notes/v0.5.3.md](docs/release-notes/v0.5.3.md).
 
 ### Korrekturen
-- Bewusst geleerte **Zusätzliche Erzeuger** / **Zusatz-Energie gesamt** bleiben leer nach Speichern und RSCP-Seed ([#34](https://github.com/TommiG1/hacs-e3dc-maestro/issues/34)).
+- Bewusst geleerte **Zusätzliche Erzeuger** / **Zusatz-Energie gesamt** bleiben leer nach Speichern und RSCP-Seed ([#34](https://github.com/TommiG1/e3dc-maestro/issues/34)).
 
 ### Hinweise
 - Integration neu starten; Browser hart neu laden.
@@ -28,7 +28,7 @@ Patch. Ausführlich: [docs/release-notes/v0.5.3.md](docs/release-notes/v0.5.3.md
 Stabiles Release. Enthält 0.5.2-beta.1 bis beta.4. Ausführlich: [docs/release-notes/v0.5.2.md](docs/release-notes/v0.5.2.md).
 
 ### Neu
-- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/hacs-e3dc-maestro/issues/33)): im günstigen Fenster (Zeitfenster/Preisschwelle) erst laden, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst.
+- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/e3dc-maestro/issues/33)): im günstigen Fenster (Zeitfenster/Preisschwelle) erst laden, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst.
 - **Ostrom-** und **EPEX-Spot-Preiskurve**; **§14a Modul 3 (DE)** mit NT/ST/HT, optionaler Schicht und Tarif-Slots.
 - Prognose-Ansichten **Bilanz / Strategie / Vergleich**; **Debug herunterladen** (Support-Dump) und voller Debug-Ringpuffer.
 
@@ -49,7 +49,7 @@ Stabiles Release. Enthält 0.5.2-beta.1 bis beta.4. Ausführlich: [docs/release-
 > **Beta.** Enthält 0.5.2-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.2-beta.4.md](docs/release-notes/v0.5.2-beta.4.md).
 
 ### Neu
-- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/hacs-e3dc-maestro/issues/33)): Schalter unter Netz und Tarif → Grenzen. Im günstigen Fenster (Zeitfenster/Preisschwelle) startet die Netzladung erst, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst; ohne PV rechtzeitig mit max. Ladeleistung. Aus = sofort laden wie früher.
+- **Just-in-Time-Netzladung** ([#33](https://github.com/TommiG1/e3dc-maestro/issues/33)): Schalter unter Netz und Tarif → Grenzen. Im günstigen Fenster (Zeitfenster/Preisschwelle) startet die Netzladung erst, wenn die Restzeit knapp für Volllast bis zum Ziel reicht — PV zuerst; ohne PV rechtzeitig mit max. Ladeleistung. Aus = sofort laden wie früher.
 - **Ostrom-Preiskurve:** Melmager- (`data`/`date`, Cent→€) und oliverwehrens-Attribute (`prices`-Dict) werden für den Preisplan normalisiert. FAQ „Ostrom als Preis-Sensor“.
 - **EPEX Spot (`ha_epex_spot`):** Attribut `price_per_kwh` in der Preiskurve erkannt — Total-Price-Sensor inkl. Aufschlag/MwSt. für E.ON-/LUOX-ähnliche Spot-Tarife.
 - **§14a Modul 3 (DE):** variable Netzentgelte NT/ST/HT unter Netz und Tarif — Fenster und ct/kWh aus dem VNB-Preisblatt, optional Schicht auf die Preiskurve (mit Hinweis gegen Doppelzählung), MwSt. Aus/19 %/eigener Satz, Tarif-Slots aus Modul 3 füllen. FAQ „Modul 3 · variable Netzentgelte“.
@@ -215,7 +215,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 > **Beta.** Enthält 0.5.1-beta.5. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.1-beta.6.md](docs/release-notes/v0.5.1-beta.6.md).
 
 ### Geändert
-- **Prognosebasierte Netzlademenge** rechnet den Bedarf vom Ende des aktuellen günstigen Fensters bis zum nächsten ([#26](https://github.com/TommiG1/hacs-e3dc-maestro/issues/26)), nicht mehr das Defizit des Kalendertags „morgen“. Live-Steuerung und Prognosekurve nutzen dieselbe Logik.
+- **Prognosebasierte Netzlademenge** rechnet den Bedarf vom Ende des aktuellen günstigen Fensters bis zum nächsten ([#26](https://github.com/TommiG1/e3dc-maestro/issues/26)), nicht mehr das Defizit des Kalendertags „morgen“. Live-Steuerung und Prognosekurve nutzen dieselbe Logik.
 - **Max. Netzladung/Tag** ist nur noch eine Sicherheitsgrenze (**0 = keine**); Default und alter 3‑kWh-Standard werden auf 0 migriert. Der Preisplan plant ohne Tagesbudget.
 - **Sicherheitsfaktor Verbrauch** gilt auch für prognosebasierte Netzladung bei Zeitfenster und Preisschwelle.
 
@@ -544,14 +544,14 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 ## [0.4.0-beta.6] – Netzladung im Tiefpreis ohne künstliche Bremse (2026-10-10)
 
 > **Beta.** Inhalt von beta.5 plus Follow-up zu
-> [#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15):
+> [#15](https://github.com/TommiG1/e3dc-maestro/issues/15):
 > Schnelllade-Boden, Morning-Cap, Astro-Wait, Schonladung und Anlauf-Rampe
 > blockieren eine bewusst angeforderte Netzladung nicht mehr. Entspricht dem
 > Stable-Fix 0.3.30; gilt zusätzlich für die Preisplan-Netzladung.
 
 ### Behoben
 - **Schnelllade-Boden blockierte NT-Netzladung**
-  ([#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15) Follow-up):
+  ([#15](https://github.com/TommiG1/e3dc-maestro/issues/15) Follow-up):
   Unter dem Floor-SoC endete die Entscheidung in `fast_floor`
   (`POWER_MODE_NORMAL`, nur PV) und verhinderte `grid_charge`. Morgen-Cap und
   Astro-Wait hatten denselben Effekt. Jetzt weichen alle drei, solange
@@ -573,7 +573,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 ### Behoben
 - **Schnelllade-Boden / Morning-Cap / Astro-Wait blockierten die aktive
   Netzladung im low-Slot**
-  ([#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15) Follow-up):
+  ([#15](https://github.com/TommiG1/e3dc-maestro/issues/15) Follow-up):
   Solange Ziel und Tagesbudget offen sind, weichen diese Phasen. Schonladung
   und Anlauf-Rampe greifen für `grid_charge` nicht mehr.
 
@@ -598,7 +598,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
   hinterlegten Quell-Sensoren — beide Dashboards (Classic und Modern)
   funktionieren jetzt ohne manuelle Anpassung, installationsunabhängig.
 - Lade-/Entlade-Schwingen im günstigen Slot
-  ([#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15)) – siehe
+  ([#15](https://github.com/TommiG1/e3dc-maestro/issues/15)) – siehe
   0.3.29 unten (neue Option „Entladung im low-Slot nach Ziel sperren“).
 
 ### Neu
@@ -672,7 +672,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 
 ### Behoben
 - Lade-/Entlade-Schwingen im günstigen Slot
-  ([#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15)) – siehe
+  ([#15](https://github.com/TommiG1/e3dc-maestro/issues/15)) – siehe
   0.3.29 unten (neue Option „Entladung im low-Slot nach Ziel sperren“).
 
 ---
@@ -681,7 +681,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 
 ### Behoben
 - **Lade-/Entlade-Schwingen bei aktiver Netzladung im low-Slot**
-  ([#15](https://github.com/TommiG1/hacs-e3dc-maestro/issues/15)): War das
+  ([#15](https://github.com/TommiG1/e3dc-maestro/issues/15)): War das
   Netzlade-Ziel (z. B. 90 %) erreicht, hörte Maestro nur mit dem Laden auf. Das
   Haus entlud den Akku sofort wieder unter das Ziel, einige Minuten später lud
   Maestro erneut aus dem Netz nach – im Dauertakt. Jetzt sperrt Maestro nach
@@ -702,7 +702,7 @@ Stabiles Release. Enthält 0.5.1-beta.1 bis beta.10. Ausführlich: [docs/release
 
 ### Behoben
 - **Korridor-Pause schickte PV-Überschuss ins Netz statt in den Akku**
-  ([#16](https://github.com/TommiG1/hacs-e3dc-maestro/issues/16)):
+  ([#16](https://github.com/TommiG1/e3dc-maestro/issues/16)):
   - Mit ausgeschaltetem Spreading sperrt die Korridor-Pause die Ladung nicht
     mehr auf 0 W, sondern gibt die maximale Ladeleistung frei. Der E3DC lädt
     weiterhin nur aus PV-Überschuss, nimmt ihn aber sofort mit. Mit aktivem
@@ -1024,7 +1024,7 @@ längst um ein Vielfaches deckte (Feldfall 28.08.2026: SoC 85 %, Restbedarf
 
 ## [0.3.15] – Aktive Netzladung im low-Slot (NT-Fenster) (2026-08-28)
 
-**Feature.** Follow-up zu [#2](https://github.com/TommiG1/hacs-e3dc-maestro/issues/2):
+**Feature.** Follow-up zu [#2](https://github.com/TommiG1/e3dc-maestro/issues/2):
 Ein `low`-Slot kann den Akku jetzt aktiv aus dem Netz nachladen — für klassische
 NT-Verträge, um die Zeit bis zur PV-Deckung zu überbrücken.
 
@@ -1035,7 +1035,7 @@ NT-Verträge, um die Zeit bis zur PV-Deckung zu überbrücken.
   **Netzlade-Ziel (% SoC)** — unabhängig vom Tarif-Modus. Damit überbrückt ein
   klassischer NT-Vertrag die Zeit bis zur PV-Deckung, statt später im teureren
   Normaltarif nachladen zu müssen (Follow-up zu
-  [#2](https://github.com/TommiG1/hacs-e3dc-maestro/issues/2)). Die aus dem
+  [#2](https://github.com/TommiG1/e3dc-maestro/issues/2)). Die aus dem
   Netz geladene Energie ist durch das Tagesbudget **Max. Netzladung/Tag (kWh)**
   begrenzt (dieses wird jetzt erstmals in der Engine ausgewertet).
 - **Prognosebasierte Netzlade-Menge (Option):** Mit **Netzlade-Menge
@@ -1070,7 +1070,7 @@ einfach deaktiviert (Standard).
 herum geregelt. Die Entladung wurde gesperrt, solange der SoC **über** der
 HT-Reserve lag — also gerade dann, wenn der Akku das Haus versorgen sollte.
 Erst wenn der Akku fast leer war, wurde entladen. Folge: voller Akku und
-teurer Netzbezug im Hochtarif-Fenster (siehe [#2](https://github.com/TommiG1/hacs-e3dc-maestro/issues/2)).
+teurer Netzbezug im Hochtarif-Fenster (siehe [#2](https://github.com/TommiG1/e3dc-maestro/issues/2)).
 
 ### Behoben
 - **Floor-Semantik wie bei der Notstromreserve:** Im `high`-Slot versorgt der

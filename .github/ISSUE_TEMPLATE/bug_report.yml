@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. **Questions and “how do I …?” belong in [Discussions → Hilfe](https://github.com/TommiG1/hacs-e3dc-maestro/discussions/categories/2-hilfe-zu-setup-sensoren-und-regelung).**
+        Thanks for the report. **Questions and “how do I …?” belong in [Discussions → Hilfe](https://github.com/TommiG1/e3dc-maestro/discussions/categories/2-hilfe-zu-setup-sensoren-und-regelung).**
   - type: input
     id: version
     attributes:

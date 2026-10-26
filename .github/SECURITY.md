@@ -8,7 +8,7 @@ Security fixes are applied to the current `main` / latest release line of E3DC M
 
 Please **do not** open a public Issue for security-sensitive findings.
 
-- Prefer GitHub **[Private vulnerability reporting](https://github.com/TommiG1/hacs-e3dc-maestro/security/advisories/new)** if available, or
+- Prefer GitHub **[Private vulnerability reporting](https://github.com/TommiG1/e3dc-maestro/security/advisories/new)** if available, or
 - Contact the maintainer via the repository (TommiG1) without posting secrets, tokens, or credentials.
 
 Include: affected version, impact, and steps to reproduce (redacted).
