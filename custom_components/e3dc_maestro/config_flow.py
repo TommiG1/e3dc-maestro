@@ -376,27 +376,20 @@ _RSCP_MULTI_SUFFIX_MAP: dict[str, str] = {
 def _normalize_list_source_options(opts: dict[str, Any]) -> dict[str, Any]:
     """Coerce legacy string producer options to lists for EntitySelector(multiple).
 
-    Empty selections drop the key so runtime RSCP fallback stays available.
+    Empty selections stay as ``[]`` so an explicit clear survives restart and is
+    not re-filled by RSCP seeding (missing key ≠ cleared).
     """
     out = dict(opts)
     for key in _RSCP_MULTI_SUFFIX_MAP:
         if key not in out:
             continue
-        items = as_entity_list(out[key], max_items=MAX_ADDITIONAL_PRODUCERS)
-        if items:
-            out[key] = items
-        else:
-            out.pop(key, None)
+        out[key] = as_entity_list(out[key], max_items=MAX_ADDITIONAL_PRODUCERS)
     return out
 
 
 def _merge_list_source_options(target: dict[str, Any], user_input: dict[str, Any]) -> None:
-    """Update target with user_input; clear producer keys when the multi-select is empty."""
-    normalized = _normalize_list_source_options(user_input)
-    target.update(normalized)
-    for key in _RSCP_MULTI_SUFFIX_MAP:
-        if key in user_input and key not in normalized:
-            target.pop(key, None)
+    """Update target with user_input, including empty producer multi-selects."""
+    target.update(_normalize_list_source_options(user_input))
 
 
 def _suggested_list_source_options(opts: dict[str, Any]) -> dict[str, Any]:
@@ -421,15 +414,19 @@ _SEEDABLE_SOURCE_KEYS: tuple[str, ...] = (
 def seed_missing_rscp_source_options(hass, options: dict[str, Any]) -> dict[str, Any] | None:
     """Fill missing optional source sensors from RSCP autodetection.
 
-    Never overwrites an existing non-empty value. Returns updated options or None.
+    Never overwrites an existing value. An explicit empty list ``[]`` means the
+    user cleared the multi-select and must not be re-seeded. Returns updated
+    options or None.
     """
     detected = _autodetect_rscp_sources(hass)
     new_options = dict(options)
     changed = False
     for key in _SEEDABLE_SOURCE_KEYS:
-        current = new_options.get(key)
-        if current not in (None, "", []):
-            continue
+        if key in new_options:
+            current = new_options[key]
+            # Present key: keep [] (explicit clear) and any real value.
+            if current == [] or current not in (None, ""):
+                continue
         if key not in detected:
             continue
         new_options[key] = detected[key]

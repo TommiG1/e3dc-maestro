@@ -407,12 +407,12 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             else:
                 errors[key] = "entities"
                 continue
-            # Empty producer lists clear the option (RSCP fallback can apply).
+            # Empty producer lists stay as [] (explicit clear; do not re-seed).
             if not value and key in {
                 "additional_generation_sensor",
                 "additional_energy_total_sensor",
             }:
-                cleaned[key] = None
+                cleaned[key] = []
                 continue
         reason = _check(spec, value, known)
         if reason:
