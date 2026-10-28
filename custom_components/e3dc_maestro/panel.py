@@ -32,6 +32,7 @@ from .const import (
     CONF_PV_FORECAST_ENABLED,
     DOMAIN,
     PAUSE_HOURS,
+    farm_controller_entry_ids,
 )
 from .frontend_cache import asset_query
 
@@ -290,12 +291,43 @@ def _prefer_writable(current: Any | None, candidate: Any) -> Any:
     return current
 
 
+def _is_farm_entry(ent: Any, farm_entry_ids: frozenset[str]) -> bool:
+    entry_id = getattr(ent, "config_entry_id", None)
+    return bool(entry_id) and entry_id in farm_entry_ids
+
+
+def _prefer_farm_then(
+    current: Any | None,
+    candidate: Any,
+    farm_entry_ids: frozenset[str],
+    prefer,
+) -> Any:
+    """Farm-controller entities win over master/slave copies of the same key."""
+    if current is None:
+        return candidate
+    cur_farm = _is_farm_entry(current, farm_entry_ids)
+    cand_farm = _is_farm_entry(candidate, farm_entry_ids)
+    if cand_farm != cur_farm:
+        return candidate if cand_farm else current
+    return prefer(current, candidate)
+
+
 def _writable_ids(fields: dict[str, Any]) -> dict[str, str]:
     return {key: ent.entity_id for key, ent in fields.items() if getattr(ent, "domain", None) in _WRITABLE}
 
 
-def plant_from_entries(reg_entries: list[Any], devices: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Group enabled e3dc_rscp registry entries into system, pack, module and control maps."""
+def plant_from_entries(
+    reg_entries: list[Any],
+    devices: dict[str, dict[str, Any]],
+    farm_entry_ids: frozenset[str] | set[str] | None = None,
+) -> dict[str, Any]:
+    """Group enabled e3dc_rscp registry entries into system, pack, module and control maps.
+
+    When a farm controller entry is present, system scalars and writable system
+    controls prefer that entry over master/slave duplicates. Packs, modules and
+    wallboxes stay per device so every physical unit remains visible.
+    """
+    farm_ids = frozenset(farm_entry_ids or ())
     scalar_of = {translation: key for key, translation in _PLANT_KEYS.items()}
     pack_of = {translation: key for key, translation in _PACK_KEYS.items()}
     module_of = {translation: key for key, translation in _MODULE_KEYS.items()}
@@ -319,13 +351,15 @@ def plant_from_entries(reg_entries: list[Any], devices: dict[str, dict[str, Any]
         device_id = getattr(ent, "device_id", None) or ""
         if translation in scalar_of:
             key = scalar_of[translation]
-            scalars[key] = _prefer_sensor(scalars.get(key), ent)
+            scalars[key] = _prefer_farm_then(scalars.get(key), ent, farm_ids, _prefer_sensor)
         if translation in general_of:
             key = general_of[translation]
-            general[key] = _prefer_writable(general.get(key), ent)
+            general[key] = _prefer_farm_then(general.get(key), ent, farm_ids, _prefer_writable)
         if translation in wallbox_system_of:
             key = wallbox_system_of[translation]
-            wallbox_system[key] = _prefer_writable(wallbox_system.get(key), ent)
+            wallbox_system[key] = _prefer_farm_then(
+                wallbox_system.get(key), ent, farm_ids, _prefer_writable
+            )
         if translation in pack_of:
             slot = packs.setdefault(device_id, {})
             key = pack_of[translation]
@@ -446,7 +480,7 @@ def _rscp_plant(hass: HomeAssistant, registry: Any) -> dict[str, Any]:
     facts = _device_facts(hass, device_ids)
     parents = {via for fact in facts.values() if (via := fact.get("via")) and via not in facts}
     facts.update(_device_facts(hass, parents))
-    return plant_from_entries(reg_entries, facts)
+    return plant_from_entries(reg_entries, facts, farm_controller_entry_ids(hass))
 
 
 def panel_module_url() -> str:

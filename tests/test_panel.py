@@ -304,6 +304,95 @@ def test_plant_from_entries_groups_packs_and_skips_disabled():
     assert result["identity"] == {"name": "S10", "model": "S10E_Pro", "serial": "702207024837", "firmware": "P10_2026_027"}
 
 
+def test_plant_from_entries_prefers_farm_controller_scalars():
+    """Farm system charge/discharge max wins over an earlier master copy."""
+    entries = [
+        SimpleNamespace(
+            translation_key="system-battery-charge-max",
+            entity_id="sensor.master_charge_max",
+            domain="sensor",
+            device_id="master",
+            config_entry_id="child",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="system-battery-discharge-max",
+            entity_id="sensor.master_discharge_max",
+            domain="sensor",
+            device_id="master",
+            config_entry_id="child",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="system-battery-charge-max",
+            entity_id="sensor.farm_charge_max",
+            domain="sensor",
+            device_id="farm",
+            config_entry_id="farm",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="system-battery-discharge-max",
+            entity_id="sensor.farm_discharge_max",
+            domain="sensor",
+            device_id="farm",
+            config_entry_id="farm",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="autarky",
+            entity_id="sensor.farm_autarky",
+            domain="sensor",
+            device_id="farm",
+            config_entry_id="farm",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="pset-weatherregulationenabled",
+            entity_id="switch.master_weather",
+            domain="switch",
+            device_id="master",
+            config_entry_id="child",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="pset-weatherregulationenabled",
+            entity_id="switch.farm_weather",
+            domain="switch",
+            device_id="farm",
+            config_entry_id="farm",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-pack-state-of-health",
+            entity_id="sensor.master_pack_soh",
+            domain="sensor",
+            device_id="pack_m",
+            config_entry_id="child",
+            disabled_by=None,
+        ),
+    ]
+    result = panel.plant_from_entries(
+        entries,
+        {
+            "master": {"name": "Master", "via": None},
+            "farm": {"name": "Farm", "via": None, "model": "S10E Farm Controller"},
+            "pack_m": {"name": "Pack Master", "via": None},
+        },
+        farm_entry_ids={"farm"},
+    )
+
+    assert result["entities"]["chargeMax"] == "sensor.farm_charge_max"
+    assert result["entities"]["dischargeMax"] == "sensor.farm_discharge_max"
+    assert result["entities"]["autarky"] == "sensor.farm_autarky"
+    assert result["controls"]["general"]["weather"] == "switch.farm_weather"
+    assert result["identity"]["name"] == "Farm"
+    # Physical packs stay visible even when they belong to a child entry.
+    assert result["packs"] == [
+        {"name": "Pack Master", "entities": {"soh": "sensor.master_pack_soh"}, "modules": []}
+    ]
+
+
 def test_panel_entities_settings_map_keeps_renames_and_skips_sensors(monkeypatch):
     registry = _Registry(
         {},

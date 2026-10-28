@@ -23,6 +23,17 @@ VERSION = _load_manifest_version()
 
 # Integration expects e3dc_rscp to be configured
 E3DC_RSCP_DOMAIN = "e3dc_rscp"
+# hacs-e3dc config entry flag for the farming controller (aggregated farm).
+RSCP_CONF_FARMCONTROLLER = "farmcontroller"
+
+
+def farm_controller_entry_ids(hass: Any) -> frozenset[str]:
+    """Return e3dc_rscp config entry ids that are farm controllers."""
+    return frozenset(
+        entry.entry_id
+        for entry in hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
+        if entry.data.get(RSCP_CONF_FARMCONTROLLER)
+    )
 
 # Services provided by e3dc_rscp that we call
 SERVICE_SET_POWER_LIMITS = "set_power_limits"

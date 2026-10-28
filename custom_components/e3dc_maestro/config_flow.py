@@ -251,6 +251,7 @@ from .const import (
     DEFAULT_SIZING_PV_STEP_KWP,
     DOMAIN,
     E3DC_RSCP_DOMAIN,
+    farm_controller_entry_ids,
     WALLBOX_TYPE_E3DC,
     WALLBOX_TYPE_GENERIC,
     WALLBOX_PROVIDERS,
@@ -554,8 +555,26 @@ def _autodetect_wallbox_plug(hass, entry_ids: set[str] | None = None) -> str | N
     )
 
 
+def _rscp_sensor_rows(hass, entry_ids: set[str]) -> list[tuple[str, str]]:
+    """RSCP sensor entity_id + config_entry_id pairs (farm controllers first)."""
+    farm_ids = farm_controller_entry_ids(hass)
+    registry = er.async_get(hass)
+    farm: list[tuple[str, str]] = []
+    other: list[tuple[str, str]] = []
+    for ent in registry.entities.values():
+        entry_id = ent.config_entry_id
+        if entry_id not in entry_ids or not ent.entity_id.startswith("sensor."):
+            continue
+        row = (ent.entity_id, entry_id)
+        (farm if entry_id in farm_ids else other).append(row)
+    return farm + other
+
+
 def _autodetect_rscp_sources(hass) -> dict[str, Any]:
     """Resolve default sensor entity_ids from the e3dc_rscp integration via suffix matching.
+
+    When a farm controller entry exists, its sensors win over master/slave copies
+    of the same suffix. Wallbox sensors stay on the child (farm has none).
 
     Also detects openWB chargepoint sensors as a fallback wallbox source when no
     E3DC wallbox sensor is present.
@@ -564,18 +583,21 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
     rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
     if rscp_entries:
         entry_ids = {e.entry_id for e in rscp_entries}
-        registry = er.async_get(hass)
-        rscp_sensor_ids = [
-            ent.entity_id
-            for ent in registry.entities.values()
-            if ent.config_entry_id in entry_ids and ent.entity_id.startswith("sensor.")
-        ]
+        rows = _rscp_sensor_rows(hass, entry_ids)
+        rscp_sensor_ids = [eid for eid, _ in rows]
         for key, suffix in _RSCP_SUFFIX_MAP.items():
             match = next((eid for eid in rscp_sensor_ids if eid.endswith(suffix)), None)
             if match:
                 out[key] = match
+        farm_ids = farm_controller_entry_ids(hass)
         for key, suffix in _RSCP_MULTI_SUFFIX_MAP.items():
             matches = sorted(eid for eid in rscp_sensor_ids if eid.endswith(suffix))
+            if farm_ids:
+                farm_matches = sorted(
+                    eid for eid, entry_id in rows if eid.endswith(suffix) and entry_id in farm_ids
+                )
+                if farm_matches:
+                    matches = farm_matches
             if matches:
                 out[key] = matches[:MAX_ADDITIONAL_PRODUCERS]
     # _transfer_to_from_grid liefert positiv = Bezug → Vorzeichen automatisch invertieren.
@@ -638,17 +660,15 @@ _RSCP_SYSTEM_PARAM_LABELS: dict[str, tuple[str, str]] = {
 
 
 def _autodetect_rscp_system_params(hass) -> dict[str, Any]:
-    """Read numeric system parameters (Wechselrichter, Batterie, Einspeisegrenze) from RSCP states."""
+    """Read numeric system parameters (Wechselrichter, Batterie, Einspeisegrenze) from RSCP states.
+
+    Farm-controller sensors win over master/slave duplicates of the same suffix.
+    """
     rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
     if not rscp_entries:
         return {}
     entry_ids = {e.entry_id for e in rscp_entries}
-    registry = er.async_get(hass)
-    rscp_sensor_ids = [
-        ent.entity_id
-        for ent in registry.entities.values()
-        if ent.config_entry_id in entry_ids and ent.entity_id.startswith("sensor.")
-    ]
+    rscp_sensor_ids = [eid for eid, _ in _rscp_sensor_rows(hass, entry_ids)]
     out: dict[str, Any] = {}
     for key, (suffix, mult) in _RSCP_SYSTEM_PARAM_MAP.items():
         eid = next((s for s in rscp_sensor_ids if s.endswith(suffix)), None)
@@ -1142,12 +1162,7 @@ async def _autodetect_sizing_sensors(hass) -> dict[str, Any]:
     rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
     if rscp_entries:
         entry_ids = {e.entry_id for e in rscp_entries}
-        registry = er.async_get(hass)
-        sensor_ids = [
-            ent.entity_id
-            for ent in registry.entities.values()
-            if ent.config_entry_id in entry_ids and ent.entity_id.startswith("sensor.")
-        ]
+        sensor_ids = [eid for eid, _ in _rscp_sensor_rows(hass, entry_ids)]
         for key, suffix in _RSCP_ENERGY_SUFFIX_MAP.items():
             match = next((eid for eid in sensor_ids if eid.endswith(suffix)), None)
             if match:
