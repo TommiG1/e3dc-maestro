@@ -11,6 +11,22 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.4-beta.1] – Farm-Controller und SOH-Prognose (2026-10-28)
+
+Beta nach 0.5.3. Ausführlich: [docs/release-notes/v0.5.4-beta.1.md](docs/release-notes/v0.5.4-beta.1.md).
+
+### Neu
+- **SOH-Prognose** bis 80 % unter Anlage → Batterie (Long-term Statistics der Modul-SOH).
+
+### Korrekturen
+- **E3DC-Farm:** Anlagen-Scalars und Autodetect bevorzugen den Farm Controller statt Master/Slave.
+
+### Hinweise
+- Home Assistant neu starten; Browser hart neu laden.
+- Bestehende Farm-Installationen: Quellsensoren und `max_charge_power` auf den Farm Controller prüfen.
+
+---
+
 ## [0.5.3] – Zusätzliche Erzeuger dauerhaft abwählbar (2026-10-26)
 
 Patch. Ausführlich: [docs/release-notes/v0.5.3.md](docs/release-notes/v0.5.3.md).
