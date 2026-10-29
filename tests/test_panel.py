@@ -137,9 +137,13 @@ class _Registry:
 
 
 def _hass_with_entries(*entries):
+    filled = [
+        e if getattr(e, "data", None) is not None else SimpleNamespace(**vars(e), data={})
+        for e in entries
+    ]
     return SimpleNamespace(
         data={},
-        config_entries=SimpleNamespace(async_entries=lambda domain: list(entries)),
+        config_entries=SimpleNamespace(async_entries=lambda _domain: list(filled)),
     )
 
 

@@ -32,7 +32,7 @@ def farm_controller_entry_ids(hass: Any) -> frozenset[str]:
     return frozenset(
         entry.entry_id
         for entry in hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
-        if entry.data.get(RSCP_CONF_FARMCONTROLLER)
+        if (getattr(entry, "data", None) or {}).get(RSCP_CONF_FARMCONTROLLER)
     )
 
 # Services provided by e3dc_rscp that we call
