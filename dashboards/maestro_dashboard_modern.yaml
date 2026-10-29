@@ -5,6 +5,7 @@
 # Das klassische Dashboard (dashboards/maestro_dashboard.yaml) bleibt unverändert.
 #
 # Voraussetzungen (HACS → Frontend):
+#   - button-card            https://github.com/custom-cards/button-card
 #   - mini-graph-card        https://github.com/kalkih/mini-graph-card
 #   - apexcharts-card        https://github.com/RomRider/apexcharts-card
 #   - power-flow-card-plus   https://github.com/flixlix/power-flow-card-plus
