@@ -3,14 +3,16 @@ from __future__ import annotations
 
 from homeassistant.helpers import selector
 
+EntityDomain = str | list[str]
 
-def entity_selector(domain: str = "sensor") -> selector.EntitySelector:
+
+def entity_selector(domain: EntityDomain = "sensor") -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=domain)
     )
 
 
-def entities_selector(domain: str = "sensor") -> selector.EntitySelector:
+def entities_selector(domain: EntityDomain = "sensor") -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=domain, multiple=True)
     )

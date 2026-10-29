@@ -178,6 +178,9 @@ export const HELP: readonly HelpChapter[] = [
       section("faq-ostrom", "helpFaqOstrom", "helpFaqOstromBody", {
         links: [{ id: "faq-energyforecast", label: "helpFaqEnergyforecast" }],
       }),
+      section("faq-octopus", "helpFaqOctopus", "helpFaqOctopusBody", {
+        links: [{ id: "faq-energyforecast", label: "helpFaqEnergyforecast" }],
+      }),
       section("faq-epex", "helpFaqEpex", "helpFaqEpexBody", {
         links: [{ id: "faq-energyforecast", label: "helpFaqEnergyforecast" }],
       }),

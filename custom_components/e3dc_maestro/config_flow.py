@@ -842,7 +842,8 @@ STEP_TARIFF_SCHEMA = vol.Schema(
         vol.Optional(CONF_BATTERY_CAPEX_EUR, default=DEFAULT_BATTERY_CAPEX_EUR): _number_selector(0, 50000, 100, "€"),
         vol.Optional(CONF_BATTERY_TOTAL_CYCLES, default=DEFAULT_BATTERY_TOTAL_CYCLES): _number_selector(500, 20000, 100, "Zyklen"),
         vol.Required(CONF_DYNAMIC_TARIFF_ENABLED, default=False): selector.BooleanSelector(),
-        vol.Optional(CONF_PRICE_SENSOR): _entity_selector(),
+        # sensor = Tibber/aWATTar/Ostrom/EPEX; event = Octopus day-rate curve
+        vol.Optional(CONF_PRICE_SENSOR): _entity_selector(["sensor", "event"]),
         vol.Optional(CONF_ENERGYFORECAST_TOKEN, default=""): selector.TextSelector(
             selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
         ),

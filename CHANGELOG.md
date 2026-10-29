@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Octopus Energy-Preiskurve:** BottlecapDave-Events `current_day_rates` / `next_day_rates` (Attribut `rates` / `value_inc_vat`) und Sensor `current_rate` als Preisquelle; `next_day` wird automatisch mitgezogen. FAQ „Octopus Energy als Preisquelle“.
+
 ---
 
 ## [0.5.4-beta.1] – Farm-Controller und SOH-Prognose (2026-10-28)

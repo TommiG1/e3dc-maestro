@@ -8,9 +8,10 @@ Supported sensor attribute shapes (first match wins):
   Tibber-style template sensors, the aWATTar simulation sensor)
 * ``today`` / ``tomorrow``          – list of floats, 24 (hourly), 48 (30 min) or
   96 (15 min) values starting at local midnight; ``None`` entries are unknown
-* ``prices`` / ``data`` / ``forecast`` – flat list of dicts with ``startsAt`` / ``start`` /
-  ``start_time`` / ``from`` / ``datetime`` and ``total`` / ``value`` / ``price`` /
-  ``marketprice`` / ``price_per_kwh`` (EPEX Spot HACS)
+* ``prices`` / ``data`` / ``forecast`` / ``rates`` – flat list of dicts with
+  ``startsAt`` / ``start`` / ``start_time`` / ``from`` / ``datetime`` and ``total`` /
+  ``value`` / ``price`` / ``marketprice`` / ``price_per_kwh`` / ``value_inc_vat``
+  (EPEX Spot HACS; Octopus Energy day-rate events)
 
 Prices are returned as-is (€/kWh expected). Unit conversion is the caller's job.
 """
@@ -23,8 +24,8 @@ from typing import Any
 
 _START_KEYS = ("start", "startsAt", "start_time", "from", "datetime", "period_start")
 _END_KEYS = ("end", "endsAt", "end_time", "to")
-_VALUE_KEYS = ("value", "total", "price", "marketprice", "price_per_kwh")
-_FLAT_LIST_KEYS = ("raw_today", "raw_tomorrow", "prices", "data", "forecast")
+_VALUE_KEYS = ("value", "total", "price", "marketprice", "price_per_kwh", "value_inc_vat")
+_FLAT_LIST_KEYS = ("raw_today", "raw_tomorrow", "prices", "data", "forecast", "rates")
 _FLOAT_LIST_RESOLUTIONS = {23: 1.0, 24: 1.0, 25: 1.0, 48: 0.5, 92: 0.25, 96: 0.25, 100: 0.25}
 _GAP_TOLERANCE_S = 90.0
 _TZ_NO_COLON = re.compile(r"([+-]\d{2})(\d{2})$")
@@ -197,3 +198,11 @@ def read_price_horizon(
 ) -> PriceHorizon | None:
     """Convenience: attributes → contiguous horizon from now (or ``None``)."""
     return build_horizon(extract_price_slots(attrs, now), now, max_hours)
+
+
+def price_at(attrs: dict[str, Any], now: _dt.datetime) -> float | None:
+    """Current slot price from curve attributes, or ``None`` if unknown."""
+    for slot in extract_price_slots(attrs, now):
+        if slot.start <= now < slot.end:
+            return slot.price
+    return None

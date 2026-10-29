@@ -646,10 +646,14 @@ class E3DCMaestroCoordinator(
             house_power_instant=_instant_house,
         )
 
-        # Current electricity price (optional)
+        # Current electricity price (optional). Octopus day-rate events have a
+        # timestamp state — fall back to the slot that covers ``now``.
         current_price: float | None = None
         if opts.get(CONF_DYNAMIC_TARIFF_ENABLED) and opts.get(CONF_PRICE_SENSOR):
-            current_price = self._read_float(opts[CONF_PRICE_SENSOR])
+            price_entity = opts[CONF_PRICE_SENSOR]
+            current_price = self._read_float(price_entity)
+            if current_price is None:
+                current_price = self._current_price_from_sensor(price_entity, now)
 
         # Phase D / F1: refresh rolling consumption stats (≤1×/h).
         # Always run when the sensor is configured – the forecast also needs it,

@@ -18,8 +18,9 @@ from .energyforecast import API_URL, extend_horizon, slots_from_payload
 from .grid_charge_strategy import plan_tuning
 from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
 from .modul3 import add_modul3_to_horizon, parse_modul3_profile
+from .octopus_prices import merge_octopus_rate_attrs, related_octopus_rate_entity_ids
 from .ostrom_prices import normalize_ostrom_curve_attrs
-from .price_curve import PriceHorizon, read_price_horizon
+from .price_curve import PriceHorizon, price_at, read_price_horizon
 from .price_plan_runner import STATUS_OK, PricePlanSnapshot, compute_price_plan
 from .tibber_prices import is_tibber_electricity_price, price_slots_for_home
 
@@ -77,6 +78,39 @@ class CoordinatorPricePlanMixin:
             message=plan.reason,
         )
 
+    def _price_curve_attrs(self, sensor_id: str) -> dict[str, Any]:
+        """Attribute der Preisquelle; Octopus: current+next day ``rates`` mergen."""
+        st = self.hass.states.get(sensor_id)
+        attrs: dict[str, Any] = {}
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            attrs = dict(st.attributes)
+
+        siblings = related_octopus_rate_entity_ids(sensor_id)
+        if not siblings:
+            return attrs
+        maps: list[dict[str, Any]] = []
+        for eid in siblings:
+            sst = self.hass.states.get(eid)
+            if sst is None or sst.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            maps.append(dict(sst.attributes))
+        merged = merge_octopus_rate_attrs(*maps) if maps else None
+        if merged is None:
+            return attrs
+        out = dict(attrs)
+        out.update(merged)
+        return out
+
+    def _current_price_from_sensor(self, sensor_id: str, now: datetime) -> float | None:
+        """Numerischer State, sonst Slotpreis aus Octopus-/Kurven-Attributen."""
+        st = self.hass.states.get(sensor_id)
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, None, ""):
+            try:
+                return float(st.state)
+            except (TypeError, ValueError):
+                pass
+        return price_at(self._price_curve_attrs(sensor_id), now)
+
     async def _async_price_horizon(self, now: datetime) -> PriceHorizon | None:
         """Preiskurve ab jetzt aus dem Preis-Sensor (oder der Tibber-Aktion).
 
@@ -87,10 +121,8 @@ class CoordinatorPricePlanMixin:
         sensor_id = self.entry.options.get(CONF_PRICE_SENSOR)
         if not sensor_id:
             return None
-        attrs: dict = {}
         st = self.hass.states.get(sensor_id)
-        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            attrs = dict(st.attributes)
+        attrs = self._price_curve_attrs(sensor_id)
         horizon = read_price_horizon(attrs, now)
         if horizon is None:
             ostrom_attrs = normalize_ostrom_curve_attrs(attrs)

@@ -61,6 +61,8 @@ export interface OptionBlock {
 
 const sensor = ["sensor"] as const;
 const energy = ["sensor"] as const;
+/** Tibber/aWATTar/Ostrom/EPEX sensors; Octopus day-rate curve events. */
+const priceSource = ["sensor", "event"] as const;
 
 const num = (key: string, min: number, max: number, step = 1, unit?: string): OptionField => ({ key, kind: "number", min, max, step, unit });
 const entity = (key: string, domains: readonly string[], required = false): OptionField => ({
@@ -111,7 +113,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     area: "tariff",
     title: "secPriceSensor",
     hint: "secPriceSensorHint",
-    fields: [entity("price_sensor", sensor)],
+    fields: [entity("price_sensor", priceSource)],
     bundle: true,
     tariffBand: "price",
   },
