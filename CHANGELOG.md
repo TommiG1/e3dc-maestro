@@ -9,8 +9,21 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.4-beta.2] – Octopus Energy-Preiskurve (2026-10-29)
+
+Beta nach 0.5.4-beta.1. Ausführlich: [docs/release-notes/v0.5.4-beta.2.md](docs/release-notes/v0.5.4-beta.2.md).
+
 ### Neu
 - **Octopus Energy-Preiskurve:** BottlecapDave-Events `current_day_rates` / `next_day_rates` (Attribut `rates` / `value_inc_vat`) und Sensor `current_rate` als Preisquelle; `next_day` wird automatisch mitgezogen. FAQ „Octopus Energy als Preisquelle“.
+
+### Korrekturen
+- Farm-Controller-Lookup und Panel-Tests vertragen Config-Entries ohne `data`.
+
+### Hinweise
+- Home Assistant neu starten; Browser hart neu laden.
+- Octopus Day-Rate-Events in der Octopus-Integration aktivieren, dann Event oder `current_rate` unter Netz und Tarif wählen.
 
 ---
 
