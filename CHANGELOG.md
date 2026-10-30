@@ -11,6 +11,26 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.4] – Farm, Octopus Energy, Schwacher PV und Maestro News (2026-10-30)
+
+Stabiles Release. Enthält 0.5.4-beta.1 bis beta.4 sowie Maestro News. Ausführlich: [docs/release-notes/v0.5.4.md](docs/release-notes/v0.5.4.md).
+
+### Neu
+- **Farm-Controller** bevorzugt für Anlagen-Scalars und Autodetect.
+- **SOH-Prognose** bis 80 % unter Anlage → Batterie.
+- **Octopus Energy-Preiskurve** (Day-Rate-Events / `current_rate`).
+- **Maestro News** am Logo: Badge bei neuem Beitrag, Mehr für die letzten drei.
+
+### Korrekturen
+- **HT/NT-Schutz:** nur Entladung gesperrt; PV darf unter der Reserve weiter laden (#37).
+- **Schwacher PV:** Solcast-Abwertungen am Vormittag/Mittag; Latch nur nach unten; Restprognose unabhängig von Verzögerung/Spreading; Quote = erzeugt + Rest-P50.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+- Farm-/Octopus-/Restprognose-Hinweise siehe Release Notes.
+
+---
+
 ## [0.5.4-beta.4] – Schwacher PV / Solcast-Abwertung (2026-10-30)
 
 Beta nach 0.5.4-beta.3. Ausführlich: [docs/release-notes/v0.5.4-beta.4.md](docs/release-notes/v0.5.4-beta.4.md).
