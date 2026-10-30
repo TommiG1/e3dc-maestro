@@ -11,6 +11,22 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.4-beta.3] – HT/NT-Schutz: PV-Laden unter Reserve (2026-10-30)
+
+Beta nach 0.5.4-beta.2. Ausführlich: [docs/release-notes/v0.5.4-beta.3.md](docs/release-notes/v0.5.4-beta.3.md).
+
+### Korrekturen
+- **HT/NT-Schutz:** Bei SoC ≤ HT-Reserve sperrt Maestro nur noch die Entladung
+  (`NORMAL` + Entlade-Cap 0 W). Zuvor setzte die Phase `POWER_MODE_IDLE` und
+  blockierte damit auch PV-Ladung – Überschuss ging ins Netz, obwohl die
+  Reserve noch nicht gefüllt war (Discussion #37).
+
+### Hinweise
+- Home Assistant neu starten.
+- Keine Config-Änderung nötig.
+
+---
+
 ## [0.5.4-beta.2] – Octopus Energy-Preiskurve (2026-10-29)
 
 Beta nach 0.5.4-beta.1. Ausführlich: [docs/release-notes/v0.5.4-beta.2.md](docs/release-notes/v0.5.4-beta.2.md).

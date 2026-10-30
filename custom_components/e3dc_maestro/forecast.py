@@ -323,7 +323,9 @@ def simulate_next_24h(
             # Forced discharge: cover house consumption.
             bat_net_w = -min(max_disch_w, cons_w)
         elif decision.power_mode == POWER_MODE_IDLE:
-            # Hard idle (z. B. HT-Schutz): kein Akku-Fluss.
+            # Hard idle (Vorentladung passiv, Force-Discharge-Pause): kein
+            # Akku-Fluss. HT-Schutz und Notstromreserve nutzen NORMAL +
+            # discharge_power_limit=0, damit PV-Ladung weiter möglich bleibt.
             bat_net_w = 0.0
         elif decision.power_mode in (POWER_MODE_CHARGE, POWER_MODE_CHARGE_FROM_GRID) and (
             decision.charge_power_limit is not None and decision.charge_power_limit > 1
@@ -334,7 +336,8 @@ def simulate_next_24h(
             # NORMAL (auch mit charge_power_limit=1 als „Laden gesperrt"-Sentinel):
             # passive PV-Pufferung + freies Entladen bei Defizit – außer
             # discharge_power_limit sperrt die Entladung (Notstromreserve §4,
-            # EVCC-Now-Pause §5: nur Entladung gesperrt, Laden bleibt frei).
+            # HT-Schutz §6, EVCC-Now-Pause §5: nur Entladung gesperrt,
+            # Laden bleibt frei).
             charge_cap = params.max_charge_power
             if decision.charge_power_limit is not None:
                 charge_cap = min(charge_cap, max(0, int(decision.charge_power_limit)))

@@ -1604,6 +1604,10 @@ def _decide_core(
         # Entladung gesperrt, damit der Rest des HT-Fensters abgesichert bleibt.
         # Oberhalb der Reserve fällt die Entscheidung durch → normaler
         # Eigenverbrauch (POWER_MODE_NORMAL im Catch-all).
+        #
+        # POWER_MODE_IDLE nicht verwenden: RSCP-Modus "1" sperrt auch die Ladung
+        # (siehe §4 Notstromreserve). Discussion #37: PV-Überschuss unter der
+        # HT-Reserve muss weiter in den Akku dürfen.
         if state.soc <= ht_min:
             slot_start = active_slot.start_h if active_slot else 0.0
             slot_end = active_slot.end_h if active_slot else 24.0
@@ -1614,7 +1618,9 @@ def _decide_core(
                     f"SoC {state.soc:.0f}% ≤ HT-Reserve {ht_min:.0f}% ({ht_min_source}) – "
                     f"Entladung gesperrt"
                 ),
-                power_mode=POWER_MODE_IDLE,
+                power_mode=POWER_MODE_NORMAL,
+                charge_power_limit=None,
+                discharge_power_limit=0.0,
                 target_soc=target,
             )
     # ── 6.4 Low-Slot-Halten: Netzlade-Ziel erreicht → Entladung sperren ───────────────

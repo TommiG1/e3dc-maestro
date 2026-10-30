@@ -104,7 +104,8 @@ def decision_explanation(coord) -> str:
         text = (
             "Hochtarif-Schutz: Der SoC hat die HT-Reserve erreicht – Maestro "
             "sperrt die weitere Entladung, damit für den Rest des teuren "
-            "Hochtarif-Fensters genug Kapazität erhalten bleibt."
+            "Hochtarif-Fensters genug Kapazität erhalten bleibt. "
+            "PV-Überschuss darf weiter in den Akku."
         )
     elif phase in ("grid_charge", "grid_hold") and dec.reason.startswith("Preisplan"):
         text = (

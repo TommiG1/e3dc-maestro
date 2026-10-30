@@ -48,6 +48,7 @@ from custom_components.e3dc_maestro.const import (
     POWER_MODE_CHARGE,
     POWER_MODE_IDLE,
     POWER_MODE_DISCHARGE,
+    POWER_MODE_NORMAL,
 )
 
 
@@ -209,6 +210,32 @@ class TestHTProtection:
         params = MaestroParams(**{**DEFAULT_PARAMS.__dict__, "ht_min": 50, "ht_sockel": 10})
         decision = decide(state, params, _now(1, 15, 10))  # winter → ht_min≈50
         assert decision.phase == PHASE_HT_PROTECTION
+
+    def test_blocks_discharge_only_allows_pv_charge(self):
+        """Discussion #37: SoC ≤ HT-Reserve → nur Entladung sperren.
+
+        POWER_MODE_IDLE würde RSCP-Modus \"1\" setzen und auch PV-Ladung
+        hart sperren. Analog zur Notstromreserve: NORMAL + discharge_limit=0,
+        charge_power_limit=None → E3DC darf PV-Überschuss weiter speichern.
+        """
+        # seasonal_reserve aus: sonst greift §4 vor HT und maskiert den Fix.
+        params = MaestroParams(
+            **{
+                **DEFAULT_PARAMS.__dict__,
+                "ht_min": 50,
+                "ht_sockel": 10,
+                "seasonal_reserve_enabled": False,
+                "charge_threshold": 10,
+            }
+        )
+        state = MaestroState(
+            soc=30, pv_power=4000, house_power=800, grid_power=0, battery_power=0,
+        )
+        decision = decide(state, params, _now(1, 15, 10))  # winter HT-Fenster
+        assert decision.phase == PHASE_HT_PROTECTION
+        assert decision.power_mode == POWER_MODE_NORMAL
+        assert decision.charge_power_limit is None
+        assert decision.discharge_power_limit == 0.0
 
     def test_inactive_outside_window(self):
         state = MaestroState(soc=60, pv_power=2000, house_power=800, grid_power=0, battery_power=500)
