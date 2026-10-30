@@ -66,6 +66,9 @@ class MaestroState:
     # Schwacher-PV-Tag: Tagesprognose + Referenz-Peak aus PV-Statistik
     pv_forecast_today_kwh: float | None = None        # heute erwarteter Tagesertrag (kWh, Solcast prognose_heute)
     pv_stats_peak_kwh: float | None = None            # historischer Tages-Peak (kWh) aus PV-Statistik
+    # Bereits erzeugte PV heute (Haupt + Zusatz, kWh). Zusammen mit
+    # pv_forecast_remaining_kwh → erwarteter Tagesertrag für die Quote.
+    pv_produced_today_kwh: float | None = None
     # Rohwerte vor EWMA (Coordinator); für Schwacher-PV-Tag-Surplus ohne Glättungs-Lag
     pv_power_instant: float | None = None
     house_power_instant: float | None = None
@@ -606,6 +609,36 @@ def reference_pv_yield_kwh(
     return max(candidates) if candidates else 0.0
 
 
+def expected_day_yield_kwh(state: MaestroState) -> float | None:
+    """Erwarteter Tagesertrag (kWh) für die Schwacher-PV-Tag-Quote.
+
+    Bevorzugt ``erzeugt_heute + Rest-P50`` (Realität + Restprognose). Fehlt
+    einer der beiden Werte, Fallback auf die (ggf. gelatchte) Tagesprognose.
+    Liegen beide Quellen vor, gilt das Minimum – damit eine Solcast-Abwertung
+    der Tagesprognose und ein Restabsturz gleichermaßen greifen, ohne dass ein
+    Wiederanstieg der Restprognose die Quote nach oben flackern lässt.
+    """
+    produced = state.pv_produced_today_kwh
+    remaining = state.pv_forecast_remaining_kwh
+    combined: float | None = None
+    if (
+        produced is not None
+        and remaining is not None
+        and produced >= 0
+        and remaining >= 0
+    ):
+        combined = produced + remaining
+
+    forecast = state.pv_forecast_today_kwh
+    if combined is not None and forecast is not None and forecast >= 0:
+        return min(combined, forecast)
+    if combined is not None:
+        return combined
+    if forecast is not None and forecast >= 0:
+        return forecast
+    return None
+
+
 def is_low_yield_day(
     state: MaestroState,
     params: MaestroParams,
@@ -613,11 +646,14 @@ def is_low_yield_day(
     stats_peak_kwh: float | None = None,
     dt: datetime | None = None,
 ) -> bool:
-    """True wenn ``pv_forecast_today_kwh / reference ≤ low_yield_threshold``.
+    """True wenn erwarteter Tagesertrag / Referenz ≤ ``low_yield_threshold``.
+
+    Der erwartete Tagesertrag kommt aus :func:`expected_day_yield_kwh`
+    (erzeugt + Rest-P50, sonst gelatchte Tagesprognose).
 
     Voraussetzungen:
       * Feature aktiv (``params.low_yield_priority_enabled``)
-      * Tagesprognose vorhanden (``state.pv_forecast_today_kwh``)
+      * Erwarteter Tagesertrag vorhanden
       * Referenz > 0 (sonst keine Aussage möglich)
 
     ``dt`` wird an :func:`reference_pv_yield_kwh` durchgereicht (Phase 3,
@@ -625,14 +661,30 @@ def is_low_yield_day(
     """
     if not params.low_yield_priority_enabled:
         return False
-    if state.pv_forecast_today_kwh is None or state.pv_forecast_today_kwh < 0:
+    expected = expected_day_yield_kwh(state)
+    if expected is None:
         return False
     peak = stats_peak_kwh if stats_peak_kwh is not None else state.pv_stats_peak_kwh
     reference = reference_pv_yield_kwh(params, stats_peak_kwh=peak, dt=dt)
     if reference <= 0:
         return False
-    ratio = state.pv_forecast_today_kwh / reference
+    ratio = expected / reference
     return ratio <= params.low_yield_threshold
+
+
+def latch_day_forecast_kwh(
+    latched_kwh: float | None,
+    live_kwh: float,
+) -> float:
+    """Pessimistischer Tagesprognose-Latch innerhalb eines lokalen Tags.
+
+    Erster Wert setzt den Latch. Spätere Solcast-Updates dürfen nur nach unten
+    ziehen (Tag kann schwach werden), nie wieder nach oben (kein Flackern zurück
+    auf „guter Tag“).
+    """
+    if latched_kwh is None:
+        return live_kwh
+    return min(latched_kwh, live_kwh)
 
 
 def _pv_surplus_w(state: MaestroState, *, instant: bool = False) -> float:
@@ -719,11 +771,12 @@ def _is_forecast_insufficient(
     Vergleicht die pessimistische Restprognose (P10, Fallback P50 mit Abschlag) mit dem
     verbleibenden Ladebedarf bis ``target`` inklusive Sicherheitsfaktor. Ist die
     Prognose kleiner, hat der Akku Vorrang (kein Spreading, voller PV-Überschuss
-    in den Akku). Inaktiv wenn PV-Forecast aus, Spreading aus oder keine
-    Prognosedaten vorhanden sind (→ keine Regression).
+    in den Akku).
+
+    Unabhängig von ``pv_forecast_enabled`` (nur PV-Verzögerung) und Spreading:
+    sobald Restprognose-Daten vorliegen, kann das Gate greifen. Ohne Prognosedaten
+    bleibt es inaktiv.
     """
-    if not params.pv_forecast_enabled or not params.spreading_enabled:
-        return False
     remaining = _conservative_remaining_kwh(state)
     if remaining is None:
         return False

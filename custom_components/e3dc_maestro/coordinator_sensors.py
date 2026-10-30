@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -20,7 +20,6 @@ from .const import (
     CONF_GRID_POWER_SENSOR,
     CONF_HOUSE_CONSUMPTION_TODAY_SENSOR,
     CONF_HOUSE_POWER_SENSOR,
-    CONF_PV_FORECAST_ENABLED,
     CONF_PV_FORECAST_SENSOR,
     CONF_PV_FORECAST_TODAY_SENSOR,
     CONF_PV_POWER_SENSOR,
@@ -35,9 +34,11 @@ from .const import (
     RSCP_SUFFIX_ADDITIONAL_TOTAL,
     RSCP_SUFFIX_HOUSE_CONSUMPTION_TODAY,
     RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY,
+    STAT_PV_ADDITIONAL_TODAY,
+    STAT_PV_PRODUCTION_TODAY,
     as_entity_list,
 )
-from .control_engine import MaestroState
+from .control_engine import MaestroState, latch_day_forecast_kwh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,15 +75,20 @@ class CoordinatorSensorsMixin:
         if grid is not None and opts.get(CONF_GRID_POWER_INVERT, False):
             grid = -grid
         batt = self._read_power_w(opts[CONF_BATTERY_POWER_SENSOR], required=True)
+        # Restprognose (P50/P10) immer lesen, sobald ein Sensor konfiguriert ist.
+        # Der Schalter „PV-Prognose-Verzögerung“ steuert nur die pv_delay-Phase;
+        # Akku-Priorität bei unzureichender Restprognose braucht die Werte auch
+        # wenn die Verzögerung aus ist (analog Morgen-PV).
         forecast: float | None = None
         forecast_p10: float | None = None
-        if opts.get(CONF_PV_FORECAST_ENABLED) and opts.get(CONF_PV_FORECAST_SENSOR):
-            forecast = self._read_float(opts[CONF_PV_FORECAST_SENSOR], required=False)
+        forecast_sensor = opts.get(CONF_PV_FORECAST_SENSOR)
+        if forecast_sensor:
+            forecast = self._read_float(forecast_sensor, required=False)
             # Konservative P10-Restprognose aus dem Sensor-Attribut (Solcast:
             # "estimate10"). Fehlt das Attribut (andere Quelle) → None, das Gate
             # fällt dann auf den P50-State zurück.
             forecast_p10 = self._read_attr_float(
-                opts[CONF_PV_FORECAST_SENSOR], PV_FORECAST_P10_ATTR
+                forecast_sensor, PV_FORECAST_P10_ATTR
             )
 
         # Morgen-PV immer lesen, sobald ein Sensor gewählt ist. Die Anzeige
@@ -119,6 +125,7 @@ class CoordinatorSensorsMixin:
 
         # Schwacher-PV-Tag: Tagesprognose + historischer Peak einlesen, latchen.
         today_pv_kwh, peak_pv_kwh = self._resolve_low_yield_inputs(opts)
+        produced_today_kwh = self._read_pv_produced_today_kwh(opts)
 
         return MaestroState(
             soc=soc,
@@ -136,18 +143,20 @@ class CoordinatorSensorsMixin:
             tomorrow_consumption_kwh=tomorrow_consumption,
             pv_forecast_today_kwh=today_pv_kwh,
             pv_stats_peak_kwh=peak_pv_kwh,
+            pv_produced_today_kwh=produced_today_kwh,
         )
 
 
     def _resolve_low_yield_inputs(
         self, opts: dict[str, Any]
     ) -> tuple[float | None, float | None]:
-        """Lese Tagesprognose + historischen Peak; latch nur die Eingangswerte.
+        """Lese Tagesprognose + historischen Peak; latch pessimistisch.
 
         Rückgabe ``(today_kwh, peak_kwh)`` für die ``MaestroState``-Felder.
-        Die Tagesprognose wird einmal pro lokalem Tag festgehalten, damit
-        Solcast-Updates den Tag nicht hin- und herschalten. Schwelle und
-        Referenz-Parameter werden in ``_is_low_yield_day_active`` live
+        Pro lokalem Tag setzt der erste gültige Wert den Latch; spätere
+        Solcast-Updates dürfen nur nach unten ziehen (Tag kann schwach
+        werden), nie nach oben (kein Flackern zurück auf „guter Tag“).
+        Schwelle und Referenz werden in ``_is_low_yield_day_active`` live
         ausgewertet.
         """
         if not self._params.low_yield_priority_enabled:
@@ -165,9 +174,8 @@ class CoordinatorSensorsMixin:
         if self._pv_stats is not None and self._pv_stats.data_days >= 7:
             peak_kwh = self._pv_stats.peak_daily_yield_kwh()
 
-        # Latchen: nur einmal pro lokalem Tag aktualisieren. Vor dem ersten
-        # validen Wert (z. B. direkt nach HA-Start ohne Solcast-Update) bleibt
-        # der Latch leer und das Feature ist inaktiv.
+        # Latch: erster Wert pro Tag, danach nur Abwertungen. Vor dem ersten
+        # validen Wert bleibt der Latch leer und das Feature ist inaktiv.
         local_today = dt_util.now().date()
         if today_kwh is not None and today_kwh >= 0:
             if (
@@ -177,6 +185,10 @@ class CoordinatorSensorsMixin:
                 self._low_yield_today_kwh = today_kwh
                 self._low_yield_stats_peak_kwh = peak_kwh
                 self._low_yield_latch_date = local_today
+            else:
+                self._low_yield_today_kwh = latch_day_forecast_kwh(
+                    self._low_yield_today_kwh, today_kwh
+                )
 
         return (self._low_yield_today_kwh, self._low_yield_stats_peak_kwh)
 
@@ -234,6 +246,21 @@ class CoordinatorSensorsMixin:
         return self._read_native_today_kwh(
             opts, CONF_PV_PRODUCTION_TODAY_SENSOR, RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY
         )
+
+    def _read_pv_produced_today_kwh(self, opts: dict) -> float | None:
+        """Gesamt-PV heute (Haupt + Zusatz) für erwarteten Tagesertrag.
+
+        Hauptzähler live; Zusatz aus dem letzten Stats-Tick (asynchroner
+        Tageszähler). Ohne Hauptzähler Fallback auf die kombinierte Stats-Summe.
+        """
+        main = self._read_pv_production_today_kwh(opts)
+        stats = getattr(self, "stats", None) or {}
+        if main is not None:
+            add = float(stats.get(STAT_PV_ADDITIONAL_TODAY, 0.0) or 0.0)
+            return max(0.0, main + add)
+        if STAT_PV_PRODUCTION_TODAY in stats:
+            return max(0.0, float(stats.get(STAT_PV_PRODUCTION_TODAY) or 0.0))
+        return None
 
     def _read_house_consumption_today_kwh(self, opts: dict) -> float | None:
         return self._read_native_today_kwh(

@@ -9,6 +9,21 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Korrekturen
+- **Schwacher PV / Restprognose:** Solcast-Abwertungen am Vormittag/Mittag werden
+  erkannt. Die Tagesprognose für den Schwacher-PV-Tag darf innerhalb des Tages
+  nur noch nach unten nachziehen (kein Flackern zurück auf „guter Tag“). Die
+  Restprognose (P50/P10) wird gelesen, sobald ein Sensor konfiguriert ist – auch
+  wenn „PV-Prognose-Verzögerung“ aus ist. Das Restprognose-Gate (Akku-Priorität
+  bei zu wenig Rest-PV) hängt nicht mehr an Verzögerung oder Spreading.
+- **PV-Tag-Quote:** Erwarteter Tagesertrag = bereits erzeugt + Rest-P50 (sonst
+  gelatchte Tagesprognose). Damit erkennt Maestro schwache Tage auch dann, wenn
+  die Mitternachts-Tagesprognose noch „gut“ wirkt, der Rest aber eingebrochen ist.
+
+### Hinweise
+- Home Assistant neu starten.
+- Keine Config-Änderung nötig; Restprognose-Sensor muss wie bisher konfiguriert sein.
+
 ---
 
 ## [0.5.4-beta.3] – HT/NT-Schutz: PV-Laden unter Reserve (2026-10-30)

@@ -3372,7 +3372,9 @@ class TestTariffModeConstraint:
 
 from custom_components.e3dc_maestro.const import POWER_MODE_CHARGE, POWER_MODE_NORMAL
 from custom_components.e3dc_maestro.control_engine import (
+    expected_day_yield_kwh,
     is_low_yield_day,
+    latch_day_forecast_kwh,
     reference_pv_yield_kwh,
     spreading_active,
 )
@@ -3461,6 +3463,88 @@ class TestIsLowYieldDay:
             pv_forecast_today_kwh=None,
         )
         assert is_low_yield_day(s, p) is False
+
+
+class TestLatchDayForecast:
+    """Pessimistischer Tagesprognose-Latch (nur nach unten)."""
+
+    def test_sets_first_value(self):
+        assert latch_day_forecast_kwh(None, 65.2552) == pytest.approx(65.2552)
+
+    def test_revises_downward(self):
+        assert latch_day_forecast_kwh(65.2552, 43.0123) == pytest.approx(43.0123)
+
+    def test_ignores_upward_revision(self):
+        assert latch_day_forecast_kwh(43.0123, 55.0) == pytest.approx(43.0123)
+
+    def test_downward_revision_flips_low_yield_day(self):
+        """Feldfall: Mitternacht 65 kWh (kein schwacher Tag) → Solcast 43 kWh."""
+        p = _low_yield_params(
+            low_yield_threshold=0.6,
+            low_yield_reference_kwh=107.25,
+            installed_kwp=0.0,
+            low_yield_reference_kwh_per_kwp=0.0,
+        )
+        latched = latch_day_forecast_kwh(65.2552, 43.0123)
+        s_morning = MaestroState(
+            soc=52, pv_power=1400, house_power=2200, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=65.2552,
+        )
+        s_noon = MaestroState(
+            soc=52, pv_power=1400, house_power=2200, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=latched,
+        )
+        assert is_low_yield_day(s_morning, p) is False
+        assert is_low_yield_day(s_noon, p) is True
+
+
+class TestExpectedDayYield:
+    """Erwarteter Tagesertrag = erzeugt + Rest-P50 (sonst gelatchte Prognose)."""
+
+    def test_prefers_produced_plus_remaining(self):
+        s = MaestroState(
+            soc=50, pv_power=0, house_power=0, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=65.0,
+            pv_produced_today_kwh=30.364,
+            pv_forecast_remaining_kwh=6.4437,
+        )
+        assert expected_day_yield_kwh(s) == pytest.approx(36.8077)
+
+    def test_min_with_latched_forecast(self):
+        """Kombiniert und gelatchte Prognose → Minimum (kein Aufwärts-Flackern)."""
+        s = MaestroState(
+            soc=50, pv_power=0, house_power=0, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=43.0,
+            pv_produced_today_kwh=30.0,
+            pv_forecast_remaining_kwh=20.0,  # Rest kurz wieder hoch
+        )
+        assert expected_day_yield_kwh(s) == pytest.approx(43.0)
+
+    def test_falls_back_to_forecast_without_remaining(self):
+        s = MaestroState(
+            soc=50, pv_power=0, house_power=0, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=65.0,
+            pv_produced_today_kwh=10.0,
+            pv_forecast_remaining_kwh=None,
+        )
+        assert expected_day_yield_kwh(s) == pytest.approx(65.0)
+
+    def test_produced_plus_remaining_detects_weak_day(self):
+        """Feldfall: gelatchte Quote 0.608, erwartet ~37/107 ≈ 0.34 → schwach."""
+        p = _low_yield_params(
+            low_yield_threshold=0.6,
+            low_yield_reference_kwh=107.25,
+            installed_kwp=0.0,
+            low_yield_reference_kwh_per_kwp=0.0,
+        )
+        s = MaestroState(
+            soc=52, pv_power=1400, house_power=2200, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=65.2552,
+            pv_produced_today_kwh=30.364,
+            pv_forecast_remaining_kwh=6.4437,
+        )
+        assert expected_day_yield_kwh(s) == pytest.approx(36.8077)
+        assert is_low_yield_day(s, p) is True
 
 
 class TestLowYieldDecide:
@@ -3955,13 +4039,22 @@ class TestIsForecastInsufficient:
         )
         assert _is_forecast_insufficient(s, p, target=90.0) is False
 
-    def test_inactive_when_forecast_disabled(self):
+    def test_active_when_forecast_delay_disabled(self):
+        """pv_delay-Schalter aus: Gate bleibt aktiv, sobald Restprognose da ist."""
         p = _forecast_gate_params(pv_forecast_enabled=False)
         s = MaestroState(
             soc=30, pv_power=4000, house_power=800, grid_power=0, battery_power=0,
             pv_forecast_remaining_p10_kwh=2.0,
         )
-        assert _is_forecast_insufficient(s, p, target=90.0) is False
+        assert _is_forecast_insufficient(s, p, target=90.0) is True
+
+    def test_active_when_spreading_disabled(self):
+        p = _forecast_gate_params(spreading_enabled=False)
+        s = MaestroState(
+            soc=30, pv_power=4000, house_power=800, grid_power=0, battery_power=0,
+            pv_forecast_remaining_p10_kwh=2.0,
+        )
+        assert _is_forecast_insufficient(s, p, target=90.0) is True
 
     def test_inactive_when_battery_at_target(self):
         p = _forecast_gate_params()
@@ -4018,16 +4111,57 @@ class TestForecastGateDecide:
         assert d.charge_power_limit is not None
         assert d.charge_power_limit < p.max_charge_power
 
-    def test_forecast_disabled_keeps_normal_spreading(self):
-        p = _forecast_gate_params(pv_forecast_enabled=False)
+    def test_forecast_delay_off_still_triggers_battery_priority(self):
+        """Verzögerung aus + Spreading aus: Restabsturz muss trotzdem greifen."""
+        p = _forecast_gate_params(
+            pv_forecast_enabled=False,
+            spreading_enabled=False,
+        )
+        # needed ≈ (90-40)/100 * 17.5 * 1.5 = 13.125; P10=2.0 → insufficient
         s = MaestroState(
-            soc=51, pv_power=3000, house_power=600, grid_power=0, battery_power=0,
+            soc=40, pv_power=3000, house_power=600, grid_power=0, battery_power=0,
             pv_forecast_remaining_p10_kwh=2.0,
         )
         d = decide(s, p, _now(6, 15, 11))
-        assert "Prognose unzureichend" not in (d.reason or "")
-        assert d.charge_power_limit is not None
-        assert d.charge_power_limit < p.max_charge_power
+        assert d.battery_priority is True
+        assert d.phase == PHASE_CORRIDOR
+        assert d.charge_power_limit == p.max_charge_power
+        assert "Prognose unzureichend" in d.reason
+
+    def test_field_case_solcast_crash_30_oct_2026(self):
+        """Feldfall 30.10.2026: gelatchte Tagesquote knapp über Schwelle (65/107),
+        Solcast-Rest P10 3.4 kWh, Verzögerung+Spreading aus → Akku-Priorität.
+        """
+        p = _forecast_gate_params(
+            pv_forecast_enabled=False,
+            spreading_enabled=False,
+            low_yield_priority_enabled=True,
+            low_yield_threshold=0.6,
+            # Exakt Feldreferenz: 19.5 kWp × 5.5 (kein höherer Override/Stats-Peak)
+            installed_kwp=19.5,
+            low_yield_reference_kwh=0.0,
+            low_yield_reference_kwh_per_kwp=5.5,
+            battery_capacity_kwh=20.0,
+            pv_forecast_safety_factor=1.5,
+            charge_target=100,
+        )
+        # 65.2552 / 107.25 ≈ 0.608 > 0.6 → kein gelatchter Schwacher-PV-Tag.
+        # needed = 0.48 * 20 * 1.5 = 14.4; P10 3.38 < 14.4 → Gate aktiv.
+        s = MaestroState(
+            soc=52,
+            pv_power=1431,
+            house_power=2175,
+            grid_power=-10,
+            battery_power=-852,
+            pv_forecast_today_kwh=65.2552,
+            pv_forecast_remaining_kwh=6.4437,
+            pv_forecast_remaining_p10_kwh=3.3824,
+        )
+        d = decide(s, p, _now(10, 30, 13, 15))
+        assert d.battery_priority is True
+        assert d.phase == PHASE_CORRIDOR
+        assert d.charge_power_limit == p.max_charge_power
+        assert "Prognose unzureichend" in d.reason
 
 
 class TestLowSlotHold:

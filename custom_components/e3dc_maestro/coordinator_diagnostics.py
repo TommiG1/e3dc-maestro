@@ -167,13 +167,12 @@ class CoordinatorDiagnosticsMixin:
 
 
     def _is_low_yield_day_active(self) -> bool:
-        """Schwacher Tag aus gelatchter Prognose + aktuellen Params (Schwelle live)."""
+        """Schwacher Tag aus erwartetem Tagesertrag + aktuellen Params (Schwelle live)."""
         if not self._params.low_yield_priority_enabled:
-            return False
-        if self._low_yield_today_kwh is None or self._low_yield_today_kwh < 0:
             return False
         from .control_engine import MaestroState, is_low_yield_day
 
+        live = self.data.get("state") if self.data else None
         probe = MaestroState(
             soc=0,
             pv_power=0,
@@ -182,6 +181,12 @@ class CoordinatorDiagnosticsMixin:
             battery_power=0,
             pv_forecast_today_kwh=self._low_yield_today_kwh,
             pv_stats_peak_kwh=self._low_yield_stats_peak_kwh,
+            pv_produced_today_kwh=(
+                getattr(live, "pv_produced_today_kwh", None) if live else None
+            ),
+            pv_forecast_remaining_kwh=(
+                getattr(live, "pv_forecast_remaining_kwh", None) if live else None
+            ),
         )
         return is_low_yield_day(
             probe,
@@ -193,13 +198,13 @@ class CoordinatorDiagnosticsMixin:
 
     @property
     def low_yield_day_active(self) -> bool:
-        """True wenn gelatchte Tagesprognose unter der aktuellen Schwelle liegt."""
+        """True wenn erwarteter Tagesertrag unter der aktuellen Schwelle liegt."""
         return self._is_low_yield_day_active()
 
 
     @property
     def low_yield_today_kwh(self) -> float | None:
-        """Aktuelle Tagesprognose (kWh), wie sie für die Latch-Auswertung genutzt wurde."""
+        """Gelatchte Solcast-Tagesprognose (kWh); Anzeige der Prognosequelle."""
         return self._low_yield_today_kwh
 
 
@@ -217,11 +222,21 @@ class CoordinatorDiagnosticsMixin:
 
     @property
     def low_yield_ratio(self) -> float | None:
-        """Verhältnis Tagesprognose / Referenz (0–1+) oder None."""
+        """Verhältnis erwarteter Tagesertrag / Referenz (0–1+) oder None.
+
+        Erwarteter Tagesertrag = erzeugt + Rest-P50 (sonst gelatchte Prognose).
+        """
+        from .control_engine import expected_day_yield_kwh
+
         ref = self.low_yield_reference_kwh
-        if ref is None or ref <= 0 or self._low_yield_today_kwh is None:
+        expected: float | None = None
+        if self.data and "state" in self.data:
+            expected = expected_day_yield_kwh(self.data["state"])
+        if expected is None:
+            expected = self._low_yield_today_kwh
+        if ref is None or ref <= 0 or expected is None:
             return None
-        return round(self._low_yield_today_kwh / ref, 3)
+        return round(expected / ref, 3)
 
 
     @property
