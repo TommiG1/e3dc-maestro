@@ -3,13 +3,16 @@ import { HELP, matchingSections, type HelpAction } from "./help-content";
 import type { I18n } from "./i18n";
 import { LADDER, LADDER_BANDS, ladderActive } from "./ladder";
 
+/** Public news index; opens outside Home Assistant. */
+const NEWS_URL = "https://glowdash.de/maestro/news/";
+
 const byId = new Map(LADDER.map((step) => [step.id, step]));
 
 const trap = (e: KeyboardEvent) => {
   if (e.key !== "Tab") return;
   const root = e.currentTarget;
   if (!(root instanceof HTMLElement)) return;
-  const items = [...root.querySelectorAll<HTMLElement>("button, input, summary")].filter((el) => !el.hidden && el.offsetParent !== null);
+  const items = [...root.querySelectorAll<HTMLElement>("button, input, summary, a[href]")].filter((el) => !el.hidden && el.offsetParent !== null);
   const first = items[0];
   const last = items[items.length - 1];
   if (!first || !last) return;
@@ -109,6 +112,7 @@ export const helpOverlay = (ctx: HelpCtx): TemplateResult => {
           @input=${(e: Event) => ctx.onQuery((e.target as HTMLInputElement).value)}
         />
       </label>
+      <a class="help-news" href=${NEWS_URL} target="_blank" rel="noopener noreferrer">${t("helpNews")}</a>
       <details class="help-fold">
         <summary>${t("helpToc")}</summary>
         <nav class="help-toc" aria-label=${t("helpToc")}>${toc(ctx, hits)}</nav>

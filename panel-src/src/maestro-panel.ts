@@ -89,6 +89,20 @@ import {
   saveDismissed,
   type AlertKey,
 } from "./alert-banner";
+import {
+  applyNewsFetch,
+  loadNewsCampaignAck,
+  loadNewsHintsEnabled,
+  loadSeenGuid,
+  NEWS_SITE_URL,
+  NEWS_TIP_CAMPAIGN,
+  parseNewsItem,
+  parseNewsItems,
+  saveNewsCampaignAck,
+  saveNewsHintsEnabled,
+  saveSeenGuid,
+  type NewsItem,
+} from "./news";
 import { loadBatteryStyle, saveBatteryStyle, type BatteryStyleId } from "./battery-style";
 import { loadFlowStyle, saveFlowStyle, type FlowStyleId } from "./flow-style";
 import {
@@ -147,6 +161,8 @@ const MOON_ICON = '<path d="M20.2 14.2A7.5 7.5 0 0 1 9.8 3.8 8.5 8.5 0 1 0 20.2 
 const MOBILE = "(max-width: 960px)";
 const HISTORY_TTL = 5 * 60e3;
 const HISTORY_RETRY = 60e3;
+/** How often the cockpit re-fetches Maestro News RSS via HA. */
+const NEWS_REFRESH_MS = 6 * 60 * 60 * 1000;
 const IST_HOURS = 6;
 const RESOLVE_RETRY = 30e3;
 const MISSING_SHOWN = 6;
@@ -180,6 +196,18 @@ class MaestroPanel extends LitElement {
   private _batteryStyle: BatteryStyleId = loadBatteryStyle();
   private _bannerHidden = loadBannerHidden();
   private _alertDismissed: Set<AlertKey> = loadDismissed();
+  private _newsHintsEnabled = loadNewsHintsEnabled();
+  private _newsSeen = loadSeenGuid();
+  private _newsCampaignAck = loadNewsCampaignAck();
+  private _newsItems: NewsItem[] = [];
+  private _newsItem?: NewsItem;
+  private _newsUnread = false;
+  private _newsTipOpen = false;
+  private _newsTipExpanded = false;
+  private _newsTipPos?: { top: number; left: number };
+  private _newsFetchedAt = 0;
+  private _newsBusy = false;
+  private _newsTimer?: number;
   private _consumerPlacesByStyle = loadConsumerPlacesByStyle();
   private _arrangeConsumers = false;
   private _sheet = false;
@@ -325,6 +353,8 @@ class MaestroPanel extends LitElement {
     this._mq.addEventListener("change", this._onMq);
     this._mobile = this._mq.matches;
     this._timer = window.setInterval(() => void this._ensureHistory(), HISTORY_RETRY);
+    this._newsTimer = window.setInterval(() => void this._loadNews(true), NEWS_REFRESH_MS);
+    document.addEventListener("visibilitychange", this._onNewsVisibility);
     this.addEventListener("chart-error", this._onChartError as EventListener);
     window.addEventListener("keydown", this._onKey);
     window.addEventListener("popstate", this._onPop);
@@ -339,16 +369,23 @@ class MaestroPanel extends LitElement {
     super.disconnectedCallback();
     this._mq.removeEventListener("change", this._onMq);
     window.clearInterval(this._timer);
+    window.clearInterval(this._newsTimer);
+    this._newsTimer = undefined;
     window.clearInterval(this._pauseClock);
     window.clearTimeout(this._overflowTimer);
     window.clearTimeout(this._optionsRetry);
     this._optionsRetry = undefined;
     cancelAnimationFrame(this._flowRaf);
+    document.removeEventListener("visibilitychange", this._onNewsVisibility);
     this.removeEventListener("chart-error", this._onChartError as EventListener);
     window.removeEventListener("keydown", this._onKey);
     this._unbindHelpScroll();
     window.removeEventListener("popstate", this._onPop);
   }
+
+  private _onNewsVisibility = () => {
+    if (!document.hidden) void this._loadNews(false);
+  };
 
   private _onPop = () => {
     const next = readLocation();
@@ -614,6 +651,193 @@ class MaestroPanel extends LitElement {
     this._bannerHidden = hidden;
     saveBannerHidden(hidden);
     this.requestUpdate();
+  }
+
+  private _setNewsHintsEnabled(enabled: boolean): void {
+    this._newsHintsEnabled = enabled;
+    saveNewsHintsEnabled(enabled);
+    this._syncNewsUnread();
+    this.requestUpdate();
+  }
+
+  private _syncNewsUnread(): void {
+    const next = applyNewsFetch(
+      this._newsItem,
+      this._newsSeen,
+      this._newsHintsEnabled,
+      this._newsCampaignAck,
+    );
+    if (next.seeded && next.seen) {
+      this._newsSeen = next.seen;
+      saveSeenGuid(next.seen);
+    }
+    this._newsUnread = next.unread;
+  }
+
+  private async _loadNews(force = false): Promise<void> {
+    const hass = this._hass;
+    if (!hass || this._newsBusy || document.hidden) return;
+    const now = Date.now();
+    if (!force && this._newsFetchedAt && now - this._newsFetchedAt < NEWS_REFRESH_MS) return;
+    this._newsBusy = true;
+    try {
+      const res = await hass.callWS<{ ok?: boolean; items?: unknown; item?: unknown }>({
+        type: "e3dc_maestro/news_feed",
+      });
+      const items = res?.ok ? parseNewsItems(res.items ?? res.item) : [];
+      this._newsItems = items;
+      this._newsItem = items[0] ?? parseNewsItem(res?.item);
+      this._newsFetchedAt = Date.now();
+      this._syncNewsUnread();
+      this.requestUpdate();
+    } catch {
+      // Keep prior items; try again on the next interval or when the tab becomes visible.
+      this._newsFetchedAt = Date.now();
+    } finally {
+      this._newsBusy = false;
+    }
+  }
+
+  private _toggleNewsTip(): void {
+    if (!this._newsItems.length) return;
+    if (this._newsTipOpen) this._closeNewsTip();
+    else {
+      this._newsTipOpen = true;
+      this._newsTipExpanded = false;
+      this._newsTipPos = undefined;
+      this.requestUpdate();
+    }
+  }
+
+  /** Close tip without marking the article as read. */
+  private _closeNewsTip(): void {
+    this._newsTipOpen = false;
+    this._newsTipExpanded = false;
+    this._newsTipPos = undefined;
+    this.requestUpdate();
+  }
+
+  private _expandNewsTip(): void {
+    this._newsTipExpanded = true;
+    this._newsTipPos = undefined;
+    this.requestUpdate();
+  }
+
+  private _dismissNewsTip(): void {
+    if (this._newsItem) {
+      this._newsSeen = this._newsItem.guid;
+      saveSeenGuid(this._newsItem.guid);
+    }
+    if (NEWS_TIP_CAMPAIGN) {
+      this._newsCampaignAck = NEWS_TIP_CAMPAIGN;
+      saveNewsCampaignAck(NEWS_TIP_CAMPAIGN);
+    }
+    this._newsUnread = false;
+    this._newsTipOpen = false;
+    this._newsTipExpanded = false;
+    this._newsTipPos = undefined;
+    this.requestUpdate();
+  }
+
+  private _newsIsUnread(): boolean {
+    return this._newsUnread && !!this._newsItem && this._newsHintsEnabled;
+  }
+
+  private _placeNewsTip(): void {
+    if (!this._newsTipOpen || this._newsTipPos) return;
+    const mobileBtn = this.renderRoot.querySelector(".news-menu");
+    const deskBtn = this.renderRoot.querySelector(".logo-btn");
+    const btn =
+      mobileBtn instanceof HTMLElement && getComputedStyle(mobileBtn).display !== "none"
+        ? mobileBtn
+        : deskBtn instanceof HTMLElement
+          ? deskBtn
+          : null;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const tipW = Math.min(this._newsTipExpanded ? 380 : 320, window.innerWidth - 24);
+    const tipH = this._newsTipExpanded ? 420 : 280;
+    let left: number;
+    let top: number;
+    if (btn.classList.contains("news-menu")) {
+      left = Math.max(12, Math.min(r.right - tipW, window.innerWidth - tipW - 12));
+      top = Math.min(r.bottom + 10, window.innerHeight - tipH);
+    } else {
+      left = Math.min(r.right + 12, window.innerWidth - tipW - 12);
+      top = Math.max(12, Math.min(r.top, window.innerHeight - tipH));
+    }
+    this._newsTipPos = { top, left };
+    this.requestUpdate();
+  }
+
+  private _logoBlock(t: ReturnType<typeof makeI18n>["t"]): TemplateResult {
+    const unread = this._newsIsUnread();
+    const mark = unread ? html`<span class="logo-badge" aria-hidden="true"></span>` : nothing;
+    const img = html`<img src=${maestroLogo} alt="Maestro" />`;
+    return html`<div class="logo-wrap">
+      <button
+        type="button"
+        class="logo logo-btn ${this._newsTipOpen ? "on" : ""}"
+        aria-label=${t("newsTipAria")}
+        aria-expanded=${this._newsTipOpen ? "true" : "false"}
+        @click=${() => this._toggleNewsTip()}
+      >${img}${mark}</button>
+    </div>`;
+  }
+
+  /** Topbar entry for phones: rail logo is hidden under 960px. */
+  private _newsMenuButton(t: ReturnType<typeof makeI18n>["t"]): TemplateResult {
+    const unread = this._newsIsUnread();
+    return html`<button
+      type="button"
+      class="menu news-menu ${this._newsTipOpen ? "on" : ""}"
+      aria-label=${t("newsTipAria")}
+      aria-expanded=${this._newsTipOpen ? "true" : "false"}
+      @click=${() => this._toggleNewsTip()}
+    >
+      <img src=${maestroLogo} alt="" />
+      ${unread ? html`<span class="logo-badge" aria-hidden="true"></span>` : nothing}
+    </button>`;
+  }
+
+  private _newsTip(t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
+    if (!this._newsTipOpen || !this._newsItems.length || !this._newsTipPos) return nothing;
+    const { top, left } = this._newsTipPos;
+    const unread = this._newsIsUnread();
+    const expanded = this._newsTipExpanded && !unread;
+    const visible = unread || !expanded ? this._newsItems.slice(0, 1) : this._newsItems;
+    const heading = unread ? t("newsTipNew") : expanded ? t("newsTipHistory") : t("newsTipLatest");
+    const canExpand = !unread && !expanded && this._newsItems.length > 1;
+    return html`<div
+        class="scrim open news-scrim"
+        @click=${() => this._closeNewsTip()}
+        @pointerdown=${(e: Event) => e.stopPropagation()}
+      ></div>
+      <div
+        class="news-tip ${expanded ? "expanded" : ""}"
+        role="dialog"
+        aria-label=${t("newsTipAria")}
+        style=${`top:${top}px;left:${left}px`}
+        @click=${(e: Event) => e.stopPropagation()}
+      >
+        <p class="news-tip-heading">${heading}</p>
+        <ul class="news-tip-list">
+          ${visible.map(
+            (item, i) => html`<li class=${i === 0 && unread ? "fresh" : ""}>
+              <a href=${item.link} target="_blank" rel="noopener noreferrer">${item.title}</a>
+              ${item.description ? html`<span class="news-tip-teaser">${item.description}</span>` : nothing}
+            </li>`,
+          )}
+        </ul>
+        <div class="news-tip-actions">
+          ${canExpand
+            ? html`<button type="button" class="btn" @click=${() => this._expandNewsTip()}>${t("newsTipMore")}</button>`
+            : html`<a class="btn" href=${NEWS_SITE_URL} target="_blank" rel="noopener noreferrer">${t("newsTipAll")}</a>`}
+          ${unread
+            ? html`<button type="button" class="btn primary" @click=${() => this._dismissNewsTip()}>${t("newsTipDismiss")}</button>`
+            : html`<button type="button" class="btn" @click=${() => this._closeNewsTip()}>${t("close")}</button>`}
+        </div>
+      </div>`;
   }
 
   private _alerts(hass: Hass, t: ReturnType<typeof makeI18n>["t"]): TemplateResult | typeof nothing {
@@ -1588,6 +1812,8 @@ class MaestroPanel extends LitElement {
       onCorners: (corners) => this._setCorners(corners),
       alertBannerHidden: this._bannerHidden,
       onAlertBannerHidden: (hidden) => this._setBannerHidden(hidden),
+      newsHintsEnabled: this._newsHintsEnabled,
+      onNewsHintsEnabled: (enabled) => this._setNewsHintsEnabled(enabled),
       batteryStyle: this._batteryStyle,
       onBatteryStyle: (style) => this._setBatteryStyle(style),
       phasePoints: this._phasePoints,
@@ -1641,9 +1867,7 @@ class MaestroPanel extends LitElement {
     return html`
       <div class="app">
         <nav class="rail" aria-label="Maestro">
-          <div class="logo">
-            <img src=${maestroLogo} alt="Maestro" />
-          </div>
+          ${this._logoBlock(t)}
           ${SCREENS.map(navButton)}
           <div class="spacer"></div>
           <button class="nav-btn" @click=${() => this._setSheet(true)}>${icon(SLIDERS_ICON)}${t("navControls")}</button>
@@ -1667,14 +1891,17 @@ class MaestroPanel extends LitElement {
               ${pauseText ? html`<p class="sub">${pauseText}</p>` : nothing}
               ${area ? nothing : this._liveFacts(hass, fmt, t)}
             </div>
-            <button
-              type="button"
-              class="menu theme-toggle"
-              aria-label=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
-              title=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
-              @click=${() => this._toggleLightDark()}
-            >${icon(isDarkTheme(this._theme) ? SUN_ICON : MOON_ICON)}</button>
-            <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
+            <div class="topbar-corner has-news">
+              ${this._newsMenuButton(t)}
+              <button
+                type="button"
+                class="menu theme-toggle"
+                aria-label=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
+                title=${isDarkTheme(this._theme) ? t("themeToggleToLight") : t("themeToggleToDark")}
+                @click=${() => this._toggleLightDark()}
+              >${icon(isDarkTheme(this._theme) ? SUN_ICON : MOON_ICON)}</button>
+              <button class="menu help-menu" aria-label=${t("navHelp")} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}</button>
+            </div>
             <button type="button" class="pill hide-sm" @click=${() => this._openPause()}>
               <span class="dot ${regulation ? "" : "off"}"></span>${regulation ? t("regulationOn") : pauseText ?? t("regulationOff")}${phase ? ` · ${i18n.phase(phase)}` : ""}
             </button>
@@ -1689,6 +1916,7 @@ class MaestroPanel extends LitElement {
             : nothing}
         </main>
       </div>
+      ${this._newsTip(t)}
       ${controlsSheet({
         hass,
         i18n,
@@ -1808,6 +2036,7 @@ class MaestroPanel extends LitElement {
 
   protected firstUpdated(): void {
     void this._ensureHistory();
+    void this._loadNews();
   }
 
   private _scrollKey = "";
@@ -1826,6 +2055,7 @@ class MaestroPanel extends LitElement {
   }
 
   protected updated(): void {
+    this._placeNewsTip();
     const scrollKey = `${this._screen}/${this._settingsGroup ?? ""}/${this._plantGroup ?? ""}`;
     if (scrollKey !== this._scrollKey) {
       this._scrollKey = scrollKey;
@@ -1844,6 +2074,7 @@ class MaestroPanel extends LitElement {
       }
     }
     void this._loadOptions();
+    if (this._hass && !this._newsFetchedAt) void this._loadNews(false);
     if (this._screen === "settings" && this._settingsGroup === CLASSIC_DASHBOARD.id && !this._classic) {
       void this._checkClassic();
     }

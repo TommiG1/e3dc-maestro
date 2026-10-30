@@ -370,20 +370,115 @@ export const styles = css`
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
+  .logo-wrap {
+    position: relative;
+    margin-bottom: 18px;
+    flex: none;
+  }
   .logo {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    margin-bottom: 18px;
     overflow: hidden;
     background: none;
     box-shadow: none;
+  }
+  .logo-btn {
+    display: block;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
   }
   .logo img {
     width: 100%;
     height: 100%;
     display: block;
     object-fit: cover;
+    border-radius: 50%;
+  }
+  .logo-badge {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-2, var(--accent));
+    border: 2px solid var(--rail-bg, var(--float));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-2, var(--accent)) 35%, transparent);
+  }
+  .news-scrim {
+    z-index: 55;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .news-tip {
+    position: fixed;
+    z-index: 60;
+    width: min(320px, calc(100vw - 24px));
+    max-height: min(70vh, 420px);
+    overflow: auto;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--float);
+    border: 1px solid var(--stroke-strong);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    transition: width 0.15s ease, max-height 0.15s ease;
+  }
+  .news-tip.expanded {
+    width: min(380px, calc(100vw - 24px));
+    max-height: min(78vh, 520px);
+  }
+  .news-tip-heading {
+    margin: 0 0 10px;
+    font: 650 13px inherit;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .news-tip-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .news-tip-list li {
+    margin: 0;
+    padding: 0;
+  }
+  .news-tip-list a {
+    display: block;
+    color: var(--accent-2, var(--accent));
+    font: 650 14px inherit;
+    text-decoration: none;
+    line-height: 1.35;
+  }
+  .news-tip-list a:hover,
+  .news-tip-list a:focus-visible {
+    text-decoration: underline;
+  }
+  .news-tip-list .fresh a {
+    color: var(--text);
+  }
+  .news-tip-teaser {
+    display: block;
+    margin-top: 4px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--muted);
+  }
+  .news-tip-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .news-tip-actions .btn {
+    text-decoration: none;
   }
   .nav-btn {
     width: 68px;
@@ -4357,6 +4452,7 @@ export const styles = css`
       border-top: 1px solid var(--stroke);
       background: var(--rail-solid);
     }
+    .rail .logo-wrap,
     .rail .logo,
     .rail .spacer {
       display: none;
@@ -4622,8 +4718,27 @@ export const styles = css`
     clip: rect(0, 0, 0, 0);
     border: 0;
   }
-  .help-menu {
+  .topbar-corner {
+    display: contents;
+  }
+  .help-menu,
+  .news-menu {
     display: none;
+  }
+  .news-menu {
+    position: relative;
+    overflow: visible;
+  }
+  .news-menu img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: block;
+    object-fit: cover;
+  }
+  .news-menu .logo-badge {
+    top: 2px;
+    right: 2px;
   }
   .help-scrim {
     z-index: 40;
@@ -4746,6 +4861,26 @@ export const styles = css`
     color: var(--text);
     font-weight: 650;
   }
+  .help-news {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--accent-2, var(--accent)) 45%, var(--stroke));
+    background: color-mix(in srgb, var(--accent-2, var(--accent)) 14%, var(--field));
+    color: var(--text);
+    font: 650 14px inherit;
+    text-decoration: none;
+  }
+  .help-news:hover,
+  .help-news:focus-visible {
+    border-color: var(--accent-2, var(--accent));
+    background: color-mix(in srgb, var(--accent-2, var(--accent)) 22%, var(--field));
+  }
   .help-top {
     margin-top: 16px;
   }
@@ -4760,7 +4895,37 @@ export const styles = css`
     .help-body > .help-toc {
       display: none;
     }
-    .help-menu {
+    .topbar-corner {
+      display: grid;
+      grid-template-columns: 40px 40px;
+      grid-template-rows: 40px;
+      gap: 6px;
+      align-items: center;
+      justify-items: center;
+      flex: none;
+      align-self: start;
+    }
+    .topbar-corner .theme-toggle {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .topbar-corner .help-menu {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .topbar-corner.has-news {
+      grid-template-rows: 40px 40px;
+    }
+    .topbar-corner.has-news .theme-toggle,
+    .topbar-corner.has-news .help-menu {
+      grid-row: 2;
+    }
+    .topbar-corner.has-news .news-menu {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .help-menu,
+    .news-menu {
       display: grid;
     }
     .help-fold {

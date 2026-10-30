@@ -202,6 +202,8 @@ export interface Ctx {
   onCorners: (corners: CornersId) => void;
   alertBannerHidden: boolean;
   onAlertBannerHidden: (hidden: boolean) => void;
+  newsHintsEnabled: boolean;
+  onNewsHintsEnabled: (enabled: boolean) => void;
   batteryStyle: BatteryStyleId;
   onBatteryStyle: (style: BatteryStyleId) => void;
   phasePoints?: Readonly<Record<string, Point[]>>;

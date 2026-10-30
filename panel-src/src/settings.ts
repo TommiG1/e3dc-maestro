@@ -449,6 +449,9 @@ export interface SettingsCtx {
   /** When true the live alert banner stays hidden; chips still show the same info. */
   alertBannerHidden: boolean;
   onAlertBannerHidden: (hidden: boolean) => void;
+  /** When true, logo badge for new Maestro News stays off. */
+  newsHintsEnabled: boolean;
+  onNewsHintsEnabled: (enabled: boolean) => void;
   options: OptionCtx;
   expert: boolean;
   onExpert: (on: boolean) => void;
@@ -1335,6 +1338,16 @@ function lookView(c: SettingsCtx): TemplateResult {
       aria-checked=${showBanner}
       aria-label=${t("alertBannerShow")}
       @click=${() => c.onAlertBannerHidden(showBanner)}
+    ></button>
+  </div>
+  <div class="ctrl setting-row look-banner">
+    <div class="txt"><span class="name"><b>${t("newsHintsShow")}</b></span><span>${t("newsHintsShowHint")}</span></div>
+    <button
+      class="switch ${c.newsHintsEnabled ? "on" : ""}"
+      role="switch"
+      aria-checked=${c.newsHintsEnabled}
+      aria-label=${t("newsHintsShow")}
+      @click=${() => c.onNewsHintsEnabled(!c.newsHintsEnabled)}
     ></button>
   </div>`;
 }

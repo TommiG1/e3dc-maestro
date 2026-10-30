@@ -51,6 +51,7 @@ _WS_FLAG = f"{DOMAIN}_panel_ws_registered"
 WS_PANEL_PAUSE = f"{DOMAIN}/pause"
 WS_PANEL_ENTITIES = f"{DOMAIN}/panel_entities"
 WS_DEBUG_DUMP = f"{DOMAIN}/debug_dump"
+WS_NEWS_FEED = f"{DOMAIN}/news_feed"
 WS_ENERGY_PREVIEW = f"{DOMAIN}/energy_dashboard/preview"
 WS_ENERGY_APPLY = f"{DOMAIN}/energy_dashboard/apply"
 
@@ -602,6 +603,15 @@ def _ws_debug_dump(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) ->
     connection.send_result(msg["id"], build_support_dump(hass, entry, coordinator))
 
 
+@websocket_api.websocket_command({vol.Required("type"): WS_NEWS_FEED})
+@websocket_api.async_response
+async def _ws_news_feed(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    """Latest Maestro News item for the cockpit tip (public RSS via HA)."""
+    from .news_feed import async_fetch_latest
+
+    connection.send_result(msg["id"], await async_fetch_latest(hass))
+
+
 @websocket_api.websocket_command({vol.Required("type"): WS_ENERGY_PREVIEW})
 @websocket_api.async_response
 async def _ws_energy_preview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
@@ -657,6 +667,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_options_set)
         websocket_api.async_register_command(hass, _ws_panel_pause)
         websocket_api.async_register_command(hass, _ws_debug_dump)
+        websocket_api.async_register_command(hass, _ws_news_feed)
         websocket_api.async_register_command(hass, _ws_energy_preview)
         websocket_api.async_register_command(hass, _ws_energy_apply)
         hass.data[_WS_FLAG] = True
