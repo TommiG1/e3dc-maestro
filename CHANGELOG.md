@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.4-beta.4] – Schwacher PV / Solcast-Abwertung (2026-10-30)
+
+Beta nach 0.5.4-beta.3. Ausführlich: [docs/release-notes/v0.5.4-beta.4.md](docs/release-notes/v0.5.4-beta.4.md).
+
 ### Korrekturen
 - **Schwacher PV / Restprognose:** Solcast-Abwertungen am Vormittag/Mittag werden
   erkannt. Die Tagesprognose für den Schwacher-PV-Tag darf innerhalb des Tages
