@@ -72,9 +72,6 @@ scripts/test_rscp_grid_tags.py
 # Internal docs (nicht ins Repo)
 ROADMAP.md
 
-# Website-/News-Drafts liegen im GlowDash-Repo (e3dc_blackout): website/maestro/news/drafts/
-docs/news-drafts/
-
 # Local HA deploy notes / personal snippets
 .ha-deploy/
 
