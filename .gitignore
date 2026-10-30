@@ -72,6 +72,9 @@ scripts/test_rscp_grid_tags.py
 # Internal docs (nicht ins Repo)
 ROADMAP.md
 
+# Lokale News-Drafts / Medien (Publish-Quelle ist GlowDash)
+docs/news-drafts/
+
 # Local HA deploy notes / personal snippets
 .ha-deploy/
 
