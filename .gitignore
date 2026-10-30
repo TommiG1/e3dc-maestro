@@ -72,6 +72,9 @@ scripts/test_rscp_grid_tags.py
 # Internal docs (nicht ins Repo)
 ROADMAP.md
 
+# Keine Website-/News-Drafts im öffentlichen Maestro-Repo (Pflege: e3dc_blackout)
+docs/news-drafts/
+
 # Local HA deploy notes / personal snippets
 .ha-deploy/
 
