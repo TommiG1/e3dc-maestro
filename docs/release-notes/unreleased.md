@@ -10,10 +10,12 @@ Die Daten landen in eigenen Langzeitstatistiken (`e3dc_maestro:history_…`). De
 
 ## CSV im my.e3dc-Portal exportieren
 
-1. Im Portal den Export der **Leistungswerte** öffnen.
+1. Im Portal unter **Leistungswerte** den gewünschten Zeitraum öffnen.
 2. **Genau ein Kalenderjahr** wählen. Exporte über mehrere Jahre scheitern im Portal oft und liefern dann keine CSV.
-3. Intervall **15 Minuten** einstellen.
-4. Datei herunterladen und den Schritt für jedes weitere Jahr wiederholen.
+3. Unter **Datenauflösung wählen** **15 Minuten** einstellen.
+4. Über das Download-Symbol die CSV speichern und den Schritt für jedes weitere Jahr wiederholen.
+
+![my.e3dc Leistungswerte: ein Jahr, Datenauflösung 15 Minuten, Download](https://raw.githubusercontent.com/TommiG1/e3dc-maestro/main/Screenshots/portal_csv_leistungswerte_15min.png)
 
 ## In Maestro importieren
 
