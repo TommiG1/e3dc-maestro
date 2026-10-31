@@ -9,8 +9,14 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.5-beta.1] – CSV-Historie aus dem my.e3dc-Portal (2026-10-31)
+
+> **Beta.** Enthält 0.5.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.1.md](docs/release-notes/v0.5.5-beta.1.md).
+
 ### Neu
-- **Portal-CSV-Historie:** Leistungswerte aus my.e3dc (15‑Minuten, ein Jahr pro Export) landen in eigenen Langzeitstatistiken `e3dc_maestro:history_*`. Mehrere Jahresdateien auf einmal oder später ergänzen (Erweitern). Live-Sensoren bleiben unberührt. Sizing Advisor und Verbrauchsprofil nutzen die Historie automatisch. Optional zusätzliche Quellen im Energy Dashboard (Solar, Netz, Batterie), Netzformat je nach Home-Assistant-Version. Ausführlich: [docs/release-notes/unreleased.md](docs/release-notes/unreleased.md).
+- **Portal-CSV-Historie:** Leistungswerte aus my.e3dc (15‑Minuten, ein Jahr pro Export) landen in eigenen Langzeitstatistiken `e3dc_maestro:history_*`. Mehrere Jahresdateien auf einmal oder später ergänzen (Erweitern). Live-Sensoren bleiben unberührt. Sizing Advisor und Verbrauchsprofil nutzen die Historie automatisch. Optional zusätzliche Quellen im Energy Dashboard (Solar, Netz, Batterie), Netzformat je nach Home-Assistant-Version.
 
 ---
 
