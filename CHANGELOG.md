@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.3] – CI-Nachzug Verbrauchsprognose ohne Wallbox (2026-10-31)
+
+> **Beta.** Enthält 0.5.5-beta.2. Ausführlich: [docs/release-notes/v0.5.5-beta.3.md](docs/release-notes/v0.5.5-beta.3.md).
+
+### Korrekturen
+- Dashboard-YAML-Quoting und stabile `evcc_*` Entity-IDs nach Sofortladen-Umbenennung.
+
+---
+
 ## [0.5.5-beta.2] – Verbrauchsprognose ohne Wallbox (2026-10-31)
 
 > **Beta.** Enthält 0.5.5-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.2.md](docs/release-notes/v0.5.5-beta.2.md).
