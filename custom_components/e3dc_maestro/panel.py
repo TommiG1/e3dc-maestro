@@ -54,6 +54,14 @@ WS_DEBUG_DUMP = f"{DOMAIN}/debug_dump"
 WS_NEWS_FEED = f"{DOMAIN}/news_feed"
 WS_ENERGY_PREVIEW = f"{DOMAIN}/energy_dashboard/preview"
 WS_ENERGY_APPLY = f"{DOMAIN}/energy_dashboard/apply"
+WS_HISTORY_IMPORT_PREVIEW = f"{DOMAIN}/history_import/preview"
+WS_HISTORY_IMPORT_APPLY = f"{DOMAIN}/history_import/apply"
+WS_HISTORY_IMPORT_REMOVE = f"{DOMAIN}/history_import/remove"
+WS_HISTORY_IMPORT_DASHBOARD_PREVIEW = f"{DOMAIN}/history_import/dashboard_preview"
+WS_HISTORY_IMPORT_DASHBOARD_APPLY = f"{DOMAIN}/history_import/dashboard_apply"
+WS_HISTORY_IMPORT_DASHBOARD_REMOVE = f"{DOMAIN}/history_import/dashboard_remove"
+_CSV_MAX = 20 * 1024 * 1024
+_CSV_TOTAL_MAX = 60 * 1024 * 1024
 
 # Panel key -> (platform, entity description key). unique_id is "<entry_id>_<key>", so
 # the panel finds its entities even after the user renamed them. Keys must match
@@ -634,6 +642,111 @@ async def _ws_energy_apply(hass: HomeAssistant, connection: Any, msg: dict[str, 
     connection.send_result(msg["id"], await async_energy_dashboard_apply(hass, msg["mode"]))
 
 
+_CSV_FIELDS = {
+    vol.Optional("csv_texts"): [vol.All(str, vol.Length(max=_CSV_MAX))],
+    vol.Optional("csv_text"): vol.All(str, vol.Length(max=_CSV_MAX)),
+    vol.Optional("csv"): vol.All(str, vol.Length(max=_CSV_MAX)),  # legacy alias of csv_text
+    vol.Optional("mode"): vol.In(["extend", "replace"]),
+    vol.Optional("replace"): bool,  # legacy: True -> mode "replace"
+}
+
+
+def _history_import_args(msg: dict[str, Any]) -> tuple[list[str], str] | str:
+    """(csv_texts, mode) from a WS message; error code when payload is missing or too large."""
+    texts = list(msg.get("csv_texts") or [])
+    single = msg.get("csv_text", msg.get("csv"))
+    if single is not None:
+        texts.append(single)
+    if not texts:
+        return "csv_missing"
+    if sum(len(t) for t in texts) > _CSV_TOTAL_MAX:
+        return "csv_too_large"
+    mode = msg.get("mode") or ("replace" if msg.get("replace") else "extend")
+    return texts, mode
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): WS_HISTORY_IMPORT_PREVIEW, **_CSV_FIELDS})
+@websocket_api.async_response
+async def _ws_history_import_preview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    from .csv_history_import import preview
+
+    args = _history_import_args(msg)
+    if isinstance(args, str):
+        connection.send_error(msg["id"], args, args)
+        return
+    connection.send_result(msg["id"], await preview(hass, *args))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_HISTORY_IMPORT_APPLY, vol.Optional("expected_hash"): str, **_CSV_FIELDS}
+)
+@websocket_api.async_response
+async def _ws_history_import_apply(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    from .csv_history_import import apply
+
+    args = _history_import_args(msg)
+    if isinstance(args, str):
+        connection.send_error(msg["id"], args, args)
+        return
+    connection.send_result(msg["id"], await apply(hass, args[0], msg.get("expected_hash"), args[1]))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_HISTORY_IMPORT_REMOVE,
+        vol.Optional("remove_dashboard"): bool,
+    }
+)
+@websocket_api.async_response
+async def _ws_history_import_remove(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    from .csv_history_import import remove_history
+    from .energy_dashboard import async_history_import_dashboard_remove
+
+    result = await remove_history(hass)
+    if msg.get("remove_dashboard") and result.get("ok"):
+        dash = await async_history_import_dashboard_remove(hass)
+        result["dashboard_removed"] = dash.get("removed") or []
+        if dash.get("error"):
+            result["errors"] = [*result.get("errors", []), str(dash["error"])]
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): WS_HISTORY_IMPORT_DASHBOARD_PREVIEW})
+@websocket_api.async_response
+async def _ws_history_import_dashboard_preview(
+    hass: HomeAssistant, connection: Any, msg: dict[str, Any]
+) -> None:
+    from .energy_dashboard import async_history_import_dashboard_preview
+
+    connection.send_result(msg["id"], await async_history_import_dashboard_preview(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): WS_HISTORY_IMPORT_DASHBOARD_APPLY})
+@websocket_api.async_response
+async def _ws_history_import_dashboard_apply(
+    hass: HomeAssistant, connection: Any, msg: dict[str, Any]
+) -> None:
+    from .energy_dashboard import async_history_import_dashboard_apply
+
+    connection.send_result(msg["id"], await async_history_import_dashboard_apply(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): WS_HISTORY_IMPORT_DASHBOARD_REMOVE})
+@websocket_api.async_response
+async def _ws_history_import_dashboard_remove(
+    hass: HomeAssistant, connection: Any, msg: dict[str, Any]
+) -> None:
+    from .energy_dashboard import async_history_import_dashboard_remove
+
+    connection.send_result(msg["id"], await async_history_import_dashboard_remove(hass))
+
+
 def effective_sidebar_title(hass: HomeAssistant) -> str:
     """Sidebar label: entry option ``sidebar_title``, else the default."""
     config_entries = getattr(hass, "config_entries", None)
@@ -670,6 +783,12 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_news_feed)
         websocket_api.async_register_command(hass, _ws_energy_preview)
         websocket_api.async_register_command(hass, _ws_energy_apply)
+        websocket_api.async_register_command(hass, _ws_history_import_preview)
+        websocket_api.async_register_command(hass, _ws_history_import_apply)
+        websocket_api.async_register_command(hass, _ws_history_import_remove)
+        websocket_api.async_register_command(hass, _ws_history_import_dashboard_preview)
+        websocket_api.async_register_command(hass, _ws_history_import_dashboard_apply)
+        websocket_api.async_register_command(hass, _ws_history_import_dashboard_remove)
         hass.data[_WS_FLAG] = True
     module_url = panel_module_url()
     title = effective_sidebar_title(hass)

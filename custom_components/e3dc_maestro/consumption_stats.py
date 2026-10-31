@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .control_engine import TariffSlot
+from .statistic_ids import HISTORY_HOUSE_POWER
 
 _LOGGER = logging.getLogger(__name__)
 _REFRESH_INTERVAL = timedelta(hours=1)
@@ -102,7 +103,7 @@ class ConsumptionStats:
                 self._hass,
                 start,
                 now,
-                {self._entity_id},
+                {self._entity_id, HISTORY_HOUSE_POWER},
                 "hour",
                 None,
                 {"mean"},
@@ -114,8 +115,9 @@ class ConsumptionStats:
             self._last_refresh = now
             return
 
-        rows = (stats or {}).get(self._entity_id) or []
-        if not rows:
+        rows = list((stats or {}).get(self._entity_id) or [])
+        history_rows = list((stats or {}).get(HISTORY_HOUSE_POWER) or [])
+        if not rows and not history_rows:
             self.avg_w_24h = None
             self.avg_w_ht_window = None
             self.data_days = 0
@@ -133,6 +135,15 @@ class ConsumptionStats:
             for row in rows:
                 if row.get("mean") is not None:
                     row["mean"] = float(row["mean"]) * scale
+
+        # Imported CSV history (always W, no scaling) only fills hours without live data.
+        rows = _merge_history(rows, history_rows, start)
+        if not rows:
+            self.avg_w_24h = None
+            self.avg_w_ht_window = None
+            self.data_days = 0
+            self._last_refresh = now
+            return
 
         self._update_from_rows(rows, ht_slot)
         self._last_refresh = now
@@ -233,6 +244,28 @@ class ConsumptionStats:
         if not totals:
             return None
         return max(totals) / 1000.0
+
+
+def _merge_history(
+    live: list[dict[str, Any]], history: list[dict[str, Any]], start: datetime
+) -> list[dict[str, Any]]:
+    """Add imported rows for hours where no live mean exists (within the lookback window)."""
+    if not history:
+        return live
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt_util.UTC)
+    have = {
+        utc
+        for row in live
+        if row.get("mean") is not None and (utc := _row_to_utc(row.get("start"))) is not None
+    }
+    extra = []
+    for row in history:
+        utc = _row_to_utc(row.get("start"))
+        if row.get("mean") is None or utc is None or utc < start or utc in have:
+            continue
+        extra.append(row)
+    return sorted([*live, *extra], key=lambda r: _row_to_utc(r.get("start")) or start)
 
 
 def _row_to_local(start_ts: Any) -> datetime | None:

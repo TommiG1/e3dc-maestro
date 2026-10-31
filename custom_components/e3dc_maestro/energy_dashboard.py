@@ -178,16 +178,23 @@ def _battery_source(discharge: str, charge: str) -> dict[str, Any]:
     }
 
 
-def build_proposed_sources(sensors: dict[Role, dict[str, str]]) -> list[dict[str, Any]]:
-    """Build solar / grid / battery source objects from resolved sensors."""
+def build_proposed_sources(
+    sensors: dict[Role, dict[str, str]], grid_format: str | None = "legacy"
+) -> list[dict[str, Any]]:
+    """Build solar / grid / battery source objects from resolved sensors.
+
+    ``grid_format``: ``"unified"`` (flat import/export pair), ``"legacy"``
+    (``flow_from``/``flow_to``) or ``None`` (unknown: no grid entry).
+    """
     sources: list[dict[str, Any]] = []
     solar = sensors.get("solar")
     if solar:
         sources.append(_solar_source(solar["entity_id"]))
     grid_from = sensors.get("grid_from")
     grid_to = sensors.get("grid_to")
-    if grid_from and grid_to:
-        sources.append(_grid_source(grid_from["entity_id"], grid_to["entity_id"]))
+    if grid_from and grid_to and grid_format:
+        make_grid = _grid_source_unified if grid_format == "unified" else _grid_source
+        sources.append(make_grid(grid_from["entity_id"], grid_to["entity_id"]))
     bat_from = sensors.get("battery_from")
     bat_to = sensors.get("battery_to")
     if bat_from and bat_to:
@@ -371,7 +378,9 @@ def _preview_payload(
     energy_ready: bool,
 ) -> dict[str, Any]:
     sensors = resolve_energy_sensors(hass)
-    proposed_sources = build_proposed_sources(sensors)
+    proposed_sources = build_proposed_sources(
+        sensors, detect_grid_format(current_sources, _core_supports_unified_grid())
+    )
     proposed_devices = build_proposed_devices(sensors)
     comparison = classify_energy_prefs(current_sources, proposed_sources)
     wallbox_power = _rscp_wallbox_power(hass)
@@ -418,12 +427,6 @@ async def async_energy_dashboard_apply(
     from homeassistant.components.energy.data import async_get_manager  # noqa: PLC0415
 
     sensors = resolve_energy_sensors(hass)
-    proposed_sources = build_proposed_sources(sensors)
-    proposed_devices = build_proposed_devices(sensors)
-    if not proposed_sources:
-        preview = await async_energy_dashboard_preview(hass)
-        return {"ok": False, "error": "no_sensors", **preview}
-
     manager = await async_get_manager(hass)
     if manager.data is None:
         current_sources: list[dict[str, Any]] = []
@@ -431,6 +434,13 @@ async def async_energy_dashboard_apply(
     else:
         current_sources = list(manager.data.get("energy_sources") or [])
         current_devices = list(manager.data.get("device_consumption") or [])
+    proposed_sources = build_proposed_sources(
+        sensors, detect_grid_format(current_sources, _core_supports_unified_grid())
+    )
+    proposed_devices = build_proposed_devices(sensors)
+    if not proposed_sources:
+        preview = await async_energy_dashboard_preview(hass)
+        return {"ok": False, "error": "no_sensors", **preview}
 
     merged_sources = merge_energy_sources(current_sources, proposed_sources, mode)
     merged_devices = merge_devices(current_devices, proposed_devices, mode)
@@ -442,3 +452,212 @@ async def async_energy_dashboard_apply(
     await manager.async_update(update)
     after = await async_energy_dashboard_preview(hass)
     return {"ok": True, "mode": mode, **after}
+
+
+# --- CSV history import: optional extra Energy Dashboard sources (external statistics) ---
+
+from .statistic_ids import (  # noqa: E402
+    HISTORY_BATTERY_CHARGE,
+    HISTORY_BATTERY_DISCHARGE,
+    HISTORY_EXTERNAL,
+    HISTORY_GRID_EXPORT,
+    HISTORY_GRID_IMPORT,
+    HISTORY_PREFIX,
+    HISTORY_SOLAR,
+    STAT_SOURCE,
+)
+
+_HISTORY_DASHBOARD_STAT_IDS: frozenset[str] = frozenset(
+    {
+        HISTORY_SOLAR,
+        HISTORY_EXTERNAL,
+        HISTORY_GRID_IMPORT,
+        HISTORY_GRID_EXPORT,
+        HISTORY_BATTERY_CHARGE,
+        HISTORY_BATTERY_DISCHARGE,
+    }
+)
+
+
+async def _imported_history_statistic_ids(hass: HomeAssistant) -> set[str]:
+    from functools import partial  # noqa: PLC0415
+
+    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
+    from homeassistant.components.recorder.statistics import get_metadata  # noqa: PLC0415
+
+    found = await get_instance(hass).async_add_executor_job(
+        partial(get_metadata, hass, statistic_source=STAT_SOURCE)
+    )
+    return {sid for sid in found if sid.startswith(HISTORY_PREFIX)}
+
+
+def _grid_source_unified(grid_from: str, grid_to: str) -> dict[str, Any]:
+    """Flat grid connection (HA with unified grid format): one import/export pair per entry."""
+    return {
+        "type": "grid",
+        "stat_energy_from": grid_from,
+        "stat_energy_to": grid_to,
+        "stat_cost": None,
+        "entity_energy_price": None,
+        "number_energy_price": None,
+        "stat_compensation": None,
+        "entity_energy_price_export": None,
+        "number_energy_price_export": None,
+        "cost_adjustment_day": 0.0,
+    }
+
+
+def detect_grid_format(current_sources: list[dict[str, Any]], core_supports_unified: bool) -> str | None:
+    """Return ``"unified"`` or ``"legacy"`` for new grid entries, ``None`` if unknown.
+
+    Existing grid entries win (HA only migrates legacy entries when the store
+    is loaded, so a legacy entry written into a unified HA is silently ignored).
+    Mixed existing formats are ambiguous, so we return ``None`` and add no grid.
+    """
+    grids = [s for s in current_sources if s.get("type") == "grid"]
+    legacy = any("flow_from" in s or "flow_to" in s for s in grids)
+    unified = any("flow_from" not in s and "flow_to" not in s for s in grids)
+    if legacy and unified:
+        return None
+    if legacy:
+        return "legacy"
+    if unified:
+        return "unified"
+    return "unified" if core_supports_unified else "legacy"
+
+
+def _core_supports_unified_grid() -> bool:
+    try:
+        from homeassistant.components.energy import data as energy_data  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return False
+    return hasattr(energy_data, "_migrate_legacy_grid_to_unified")
+
+
+def build_history_import_sources(imported: set[str], grid_format: str | None = "unified") -> list[dict[str, Any]]:
+    """Solar / grid / battery source entries for imported ``e3dc_maestro:history_*`` stats.
+
+    ``grid_format`` is ``"unified"``, ``"legacy"`` or ``None`` (unknown: no grid entry).
+    """
+    sources: list[dict[str, Any]] = []
+    if HISTORY_SOLAR in imported:
+        sources.append(_solar_source(HISTORY_SOLAR))
+    if HISTORY_EXTERNAL in imported:
+        sources.append(_solar_source(HISTORY_EXTERNAL))
+    if HISTORY_GRID_IMPORT in imported and HISTORY_GRID_EXPORT in imported and grid_format:
+        if grid_format == "unified":
+            sources.append(_grid_source_unified(HISTORY_GRID_IMPORT, HISTORY_GRID_EXPORT))
+        else:
+            sources.append(_grid_source(HISTORY_GRID_IMPORT, HISTORY_GRID_EXPORT))
+    if HISTORY_BATTERY_DISCHARGE in imported and HISTORY_BATTERY_CHARGE in imported:
+        sources.append(_battery_source(HISTORY_BATTERY_DISCHARGE, HISTORY_BATTERY_CHARGE))
+    return sources
+
+
+def _proposed_history_sources(current: list[dict[str, Any]], imported: set[str]) -> list[dict[str, Any]]:
+    fmt = detect_grid_format(current, _core_supports_unified_grid())
+    return build_history_import_sources(imported, fmt)
+
+
+def _history_source_summary(source: dict[str, Any]) -> dict[str, Any]:
+    return {"type": source.get("type"), "statistic_ids": sorted(_source_entity_ids(source))}
+
+
+def _history_sources_fully_present(
+    current_sources: list[dict[str, Any]], proposed: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split proposed history sources into already configured vs would-be-added."""
+    current_ids = {eid for src in current_sources for eid in _source_entity_ids(src)}
+    already: list[dict[str, Any]] = []
+    to_add: list[dict[str, Any]] = []
+    for src in proposed:
+        src_ids = _source_entity_ids(src)
+        summary = _history_source_summary(src)
+        if src_ids <= current_ids:
+            already.append(summary)
+        else:
+            to_add.append(summary)
+    return to_add, already
+
+
+def merge_history_import_sources(
+    current: list[dict[str, Any]], proposed: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Append history import sources without altering or removing existing entries."""
+    current_ids = {eid for src in current for eid in _source_entity_ids(src)}
+    extra = [src for src in proposed if _source_entity_ids(src) - current_ids]
+    return [*current, *extra]
+
+
+def remove_history_import_sources(current: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Drop only Energy sources that reference exclusively imported history statistics."""
+    kept: list[dict[str, Any]] = []
+    removed: list[str] = []
+    for src in current:
+        ids = _source_entity_ids(src)
+        if ids and ids <= _HISTORY_DASHBOARD_STAT_IDS:
+            removed.extend(sorted(ids))
+            continue
+        kept.append(src)
+    return kept, removed
+
+
+async def _history_dashboard_context(hass: HomeAssistant) -> tuple[bool, list[dict[str, Any]], set[str]]:
+    energy_ready = "energy" in hass.config.components
+    current: list[dict[str, Any]] = []
+    if energy_ready:
+        try:
+            from homeassistant.components.energy.data import async_get_manager  # noqa: PLC0415
+
+            manager = await async_get_manager(hass)
+            if manager.data is not None:
+                current = list(manager.data.get("energy_sources") or [])
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("History dashboard preview without manager: %s", err)
+            energy_ready = False
+    imported = await _imported_history_statistic_ids(hass)
+    return energy_ready, current, imported
+
+
+async def async_history_import_dashboard_preview(hass: HomeAssistant) -> dict[str, Any]:
+    energy_ready, current, imported = await _history_dashboard_context(hass)
+    proposed = _proposed_history_sources(current, imported)
+    to_add, already = _history_sources_fully_present(current, proposed)
+    return {
+        "ok": True,
+        "energy_ready": energy_ready,
+        "imported_statistics": sorted(imported),
+        "to_add": to_add,
+        "already_present": already,
+        "ready": bool(to_add) and energy_ready,
+    }
+
+
+async def async_history_import_dashboard_apply(hass: HomeAssistant) -> dict[str, Any]:
+    from homeassistant.components.energy.data import async_get_manager  # noqa: PLC0415
+
+    preview = await async_history_import_dashboard_preview(hass)
+    if not preview["energy_ready"]:
+        return {**preview, "ok": False, "error": "energy_unavailable"}
+    if not preview["to_add"]:
+        return {**preview, "ok": True, "added": []}
+    _, current, imported = await _history_dashboard_context(hass)
+    proposed = _proposed_history_sources(current, imported)
+    merged = merge_history_import_sources(current, proposed)
+    manager = await async_get_manager(hass)
+    await manager.async_update({"energy_sources": merged})
+    after = await async_history_import_dashboard_preview(hass)
+    return {**after, "ok": True, "added": preview["to_add"]}
+
+
+async def async_history_import_dashboard_remove(hass: HomeAssistant) -> dict[str, Any]:
+    from homeassistant.components.energy.data import async_get_manager  # noqa: PLC0415
+
+    energy_ready, current, _imported = await _history_dashboard_context(hass)
+    if not energy_ready:
+        return {"ok": False, "energy_ready": False, "removed": [], "error": "energy_unavailable"}
+    merged, removed = remove_history_import_sources(current)
+    if removed:
+        manager = await async_get_manager(hass)
+        await manager.async_update({"energy_sources": merged})
+    return {"ok": True, "energy_ready": True, "removed": removed}

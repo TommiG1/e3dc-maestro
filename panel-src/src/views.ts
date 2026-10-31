@@ -19,6 +19,7 @@ import {
 } from "./charts";
 import type { ClassicStatus } from "./classic";
 import type { EnergyApplyMode, EnergyDashboardStatus } from "./energy-dashboard";
+import type { HistoryImportDashboardStatus, HistoryImportMode, HistoryImportState } from "./history-import";
 import { separateDayEnergy, visibleInFlow, type FlowConsumer } from "./consumers";
 import type { ConsumerPlace, StoredConsumerPlace } from "./consumer-layout";
 import { batteryFlowFromWatts, batteryGlyph } from "./battery-glyph";
@@ -158,6 +159,13 @@ export interface Ctx {
   onCheckEnergy: () => void;
   onApplyEnergy: (mode: EnergyApplyMode) => void;
   onOpenEnergy: () => void;
+  historyImport?: HistoryImportState;
+  historyDashboard?: HistoryImportDashboardStatus;
+  onPreviewHistoryImport: (payload: { texts: string[]; names: string[]; mode?: HistoryImportMode }) => void;
+  onApplyHistoryImport: (opts?: { mode?: HistoryImportMode }) => void;
+  onRemoveHistoryImport: (opts?: { removeDashboard?: boolean }) => void;
+  onPreviewHistoryDashboard: () => void;
+  onApplyHistoryDashboard: () => void;
   balanceRange: BalanceRange;
   rangeSums?: Partial<Record<PeriodKey, number>>;
   onBalanceSelect: (grain: BalanceGrain, anchor: string) => void;

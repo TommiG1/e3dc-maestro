@@ -55,6 +55,17 @@ from .const import (
     SIZING_INVERTER_UPGRADE_THRESHOLD,
     SIZING_MAX_PAYBACK_YEARS,
 )
+from .statistic_ids import (
+    HISTORY_BATTERY_CHARGE,
+    HISTORY_BATTERY_DISCHARGE,
+    HISTORY_EXTERNAL,
+    HISTORY_GRID_EXPORT,
+    HISTORY_GRID_IMPORT,
+    HISTORY_HEAT_PUMP,
+    HISTORY_HOUSE,
+    HISTORY_SOLAR,
+    HISTORY_WALLBOX,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,6 +142,12 @@ class SizingAnalysisResult:
 
 # ── Data loader ───────────────────────────────────────────────────────────────
 
+_HISTORY_IDS: frozenset[str] = frozenset({
+    HISTORY_SOLAR, HISTORY_EXTERNAL, HISTORY_GRID_IMPORT, HISTORY_GRID_EXPORT,
+    HISTORY_BATTERY_CHARGE, HISTORY_BATTERY_DISCHARGE, HISTORY_HOUSE,
+    HISTORY_WALLBOX, HISTORY_HEAT_PUMP,
+})
+
 
 class SizingDataLoader:
     """Load hourly energy data from HA recorder long-term statistics."""
@@ -204,7 +221,7 @@ class SizingDataLoader:
                 self._hass,
                 start,
                 now,
-                entity_ids,
+                entity_ids | _HISTORY_IDS,
                 "hour",
                 None,
                 {"sum"},
@@ -238,10 +255,16 @@ class SizingDataLoader:
                 )
             return 1.0
 
-        def _to_delta_map(rows: list[dict[str, Any]], factor: float = 1.0) -> dict[datetime, float]:
-            """Convert cumulative sum rows to hourly delta map keyed by start time."""
+        def _to_delta_map(
+            rows: list[dict[str, Any]], factor: float = 1.0, from_zero: bool = False
+        ) -> dict[datetime, float]:
+            """Convert cumulative sum rows to hourly delta map keyed by start time.
+
+            ``from_zero``: imported history series start their running sum at 0, so the
+            first row is itself a valid delta.
+            """
             result: dict[datetime, float] = {}
-            prev_sum: float | None = None
+            prev_sum: float | None = 0.0 if from_zero else None
             for row in rows:
                 s = row.get("sum")
                 if s is None:
@@ -290,7 +313,18 @@ class SizingDataLoader:
                     merged[ts] = merged.get(ts, 0.0) + val
             return merged
 
-        pv_map = _merged_pv_map()
+        def _imported(statistic_id: str) -> dict[datetime, float]:
+            return _to_delta_map((raw or {}).get(statistic_id, []), 1.0, from_zero=True)
+
+        def _fill(live: dict[datetime, float], *imported: dict[datetime, float]) -> dict[datetime, float]:
+            """Live delta per hour where live data exist, else the imported delta."""
+            extra: dict[datetime, float] = {}
+            for series in imported:
+                for ts, val in series.items():
+                    extra[ts] = extra.get(ts, 0.0) + val
+            return {**extra, **live}
+
+        pv_map = _fill(_merged_pv_map(), _imported(HISTORY_SOLAR), _imported(HISTORY_EXTERNAL))
         house_rows = _key(CONF_SIZING_HOUSE_ENERGY_SENSOR)
         grid_in_rows = _key(CONF_SIZING_GRID_IMPORT_ENERGY_SENSOR)
         grid_out_rows = _key(CONF_SIZING_GRID_EXPORT_ENERGY_SENSOR)
@@ -299,13 +333,15 @@ class SizingDataLoader:
         wb_rows = _key(CONF_SIZING_WALLBOX_ENERGY_SENSOR)
         hp_rows = _key(CONF_SIZING_HEAT_PUMP_ENERGY_SENSOR)
 
-        house_map = _to_delta_map(house_rows, _unit_factor(self._opts.get(CONF_SIZING_HOUSE_ENERGY_SENSOR)))
-        grid_in_map = _to_delta_map(grid_in_rows, _unit_factor(self._opts.get(CONF_SIZING_GRID_IMPORT_ENERGY_SENSOR)))
-        grid_out_map = _to_delta_map(grid_out_rows, _unit_factor(self._opts.get(CONF_SIZING_GRID_EXPORT_ENERGY_SENSOR)))
-        batt_c_map = _to_delta_map(batt_c_rows, _unit_factor(self._opts.get(CONF_SIZING_BATTERY_CHARGE_ENERGY_SENSOR)))
-        batt_d_map = _to_delta_map(batt_d_rows, _unit_factor(self._opts.get(CONF_SIZING_BATTERY_DISCHARGE_ENERGY_SENSOR)))
-        wb_map = _to_delta_map(wb_rows, _unit_factor(self._opts.get(CONF_SIZING_WALLBOX_ENERGY_SENSOR)))
-        hp_map = _to_delta_map(hp_rows, _unit_factor(self._opts.get(CONF_SIZING_HEAT_PUMP_ENERGY_SENSOR)))
+        live_house_map = _to_delta_map(house_rows, _unit_factor(self._opts.get(CONF_SIZING_HOUSE_ENERGY_SENSOR)))
+        imported_house_map = _imported(HISTORY_HOUSE)
+        house_map = _fill(live_house_map, imported_house_map)
+        grid_in_map = _fill(_to_delta_map(grid_in_rows, _unit_factor(self._opts.get(CONF_SIZING_GRID_IMPORT_ENERGY_SENSOR))), _imported(HISTORY_GRID_IMPORT))
+        grid_out_map = _fill(_to_delta_map(grid_out_rows, _unit_factor(self._opts.get(CONF_SIZING_GRID_EXPORT_ENERGY_SENSOR))), _imported(HISTORY_GRID_EXPORT))
+        batt_c_map = _fill(_to_delta_map(batt_c_rows, _unit_factor(self._opts.get(CONF_SIZING_BATTERY_CHARGE_ENERGY_SENSOR))), _imported(HISTORY_BATTERY_CHARGE))
+        batt_d_map = _fill(_to_delta_map(batt_d_rows, _unit_factor(self._opts.get(CONF_SIZING_BATTERY_DISCHARGE_ENERGY_SENSOR))), _imported(HISTORY_BATTERY_DISCHARGE))
+        wb_map = _fill(_to_delta_map(wb_rows, _unit_factor(self._opts.get(CONF_SIZING_WALLBOX_ENERGY_SENSOR))), _imported(HISTORY_WALLBOX))
+        hp_map = _fill(_to_delta_map(hp_rows, _unit_factor(self._opts.get(CONF_SIZING_HEAT_PUMP_ENERGY_SENSOR))), _imported(HISTORY_HEAT_PUMP))
 
         # If no house-sensor data is available, derive consumption from the
         # energy balance: house = pv + grid_in + batt_d - grid_out - batt_c
@@ -367,7 +403,9 @@ class SizingDataLoader:
             wb = wb_map.get(ts, 0.0)
             hp = hp_map.get(ts, 0.0)
 
-            if derive_house:
+            # Without a live house sensor, hours missing in the imported house series
+            # (i.e. the live period) still fall back to the energy balance.
+            if derive_house or (not live_house_map and ts not in house_map):
                 # Derive house from balance; anomaly flag not meaningful here
                 house = max(0.0, pv + g_in + b_d - g_out - b_c)
                 anomaly = False

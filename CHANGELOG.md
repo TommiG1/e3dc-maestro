@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Portal-CSV-Historie:** Leistungswerte aus my.e3dc (15‑Minuten, ein Jahr pro Export) landen in eigenen Langzeitstatistiken `e3dc_maestro:history_*`. Mehrere Jahresdateien auf einmal oder später ergänzen (Erweitern). Live-Sensoren bleiben unberührt. Sizing Advisor und Verbrauchsprofil nutzen die Historie automatisch. Optional zusätzliche Quellen im Energy Dashboard (Solar, Netz, Batterie), Netzformat je nach Home-Assistant-Version. Ausführlich: [docs/release-notes/unreleased.md](docs/release-notes/unreleased.md).
+
 ---
 
 ## [0.5.4] – Farm, Octopus Energy, Schwacher PV und Maestro News (2026-10-30)

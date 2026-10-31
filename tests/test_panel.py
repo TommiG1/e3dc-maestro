@@ -451,6 +451,12 @@ async def test_websocket_command_registered_once(ha_frontend, monkeypatch):
         panel._ws_news_feed,
         panel._ws_energy_preview,
         panel._ws_energy_apply,
+        panel._ws_history_import_preview,
+        panel._ws_history_import_apply,
+        panel._ws_history_import_remove,
+        panel._ws_history_import_dashboard_preview,
+        panel._ws_history_import_dashboard_apply,
+        panel._ws_history_import_dashboard_remove,
     ]
 
 

@@ -130,6 +130,19 @@ import {
   type EnergyApplyMode,
   type EnergyDashboardStatus,
 } from "./energy-dashboard";
+import {
+  applyHistoryImport,
+  applyHistoryImportDashboard,
+  previewHistoryImport,
+  previewHistoryImportDashboard,
+  removeHistoryImport,
+  historyImportErrorText,
+  historyImportWsErrorKey,
+  wsErrorCode,
+  type HistoryImportDashboardStatus,
+  type HistoryImportMode,
+  type HistoryImportState,
+} from "./history-import";
 import { loadSetupAck, saveSetupAck } from "./onboarding";
 import { modul3ZonesFrom, slotsFrom, slotsFromModul3Zones, type Modul3Zones, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
@@ -282,6 +295,8 @@ class MaestroPanel extends LitElement {
   private _consumersSheet = false;
   private _classic?: ClassicStatus;
   private _energy?: EnergyDashboardStatus;
+  private _historyImport: HistoryImportState = { phase: "idle" };
+  private _historyDashboard?: HistoryImportDashboardStatus;
   private _storedOptions: Record<string, unknown> = {};
   private _optionsReady = false;
   private _optionsLoading = false;
@@ -1454,6 +1469,127 @@ class MaestroPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private async _previewHistoryImport(payload: {
+    texts: string[];
+    names: string[];
+    mode?: HistoryImportMode;
+  }): Promise<void> {
+    const hass = this._hass;
+    if (!hass || !payload.texts.length) return;
+    const mode = payload.mode ?? "extend";
+    this._historyImport = {
+      phase: "loading",
+      csvTexts: payload.texts,
+      fileNames: payload.names,
+      mode,
+      error: undefined,
+      errorKey: undefined,
+    };
+    this.requestUpdate();
+    try {
+      const result = await previewHistoryImport(hass, payload.texts, mode);
+      this._historyImport = {
+        phase: "preview",
+        csvTexts: payload.texts,
+        fileNames: payload.names,
+        mode: result.mode,
+        result,
+      };
+      if (result.existingHistory.length || (result.written && Object.keys(result.written).length)) {
+        void this._previewHistoryDashboard();
+      }
+    } catch (err) {
+      const code = wsErrorCode(err);
+      const errorKey = historyImportWsErrorKey(code);
+      this._historyImport = {
+        phase: "error",
+        csvTexts: payload.texts,
+        fileNames: payload.names,
+        mode,
+        ...(errorKey ? { errorKey } : { error: historyImportErrorText(err) }),
+      };
+    }
+    this.requestUpdate();
+  }
+
+  private async _applyHistoryImport(opts?: { mode?: HistoryImportMode }): Promise<void> {
+    const hass = this._hass;
+    const { csvTexts, result, mode: stateMode } = this._historyImport;
+    if (!hass || !csvTexts?.length || !result?.planHash) return;
+    const mode = opts?.mode ?? stateMode ?? result.mode ?? "extend";
+    this._historyImport = { ...this._historyImport, phase: "applying", error: undefined, errorKey: undefined };
+    this.requestUpdate();
+    try {
+      const applied = await applyHistoryImport(hass, csvTexts, result.planHash, mode);
+      this._historyImport = {
+        phase: applied.ok ? "applied" : "preview",
+        csvTexts,
+        fileNames: this._historyImport.fileNames,
+        mode: applied.mode,
+        result: applied,
+      };
+      if (applied.ok) void this._previewHistoryDashboard();
+    } catch (err) {
+      const code = wsErrorCode(err);
+      const errorKey = historyImportWsErrorKey(code);
+      this._historyImport = {
+        phase: "error",
+        csvTexts,
+        fileNames: this._historyImport.fileNames,
+        mode,
+        result,
+        ...(errorKey ? { errorKey } : { error: historyImportErrorText(err) }),
+      };
+    }
+    this.requestUpdate();
+  }
+
+  private async _removeHistoryImport(opts?: { removeDashboard?: boolean }): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    this._historyImport = { phase: "loading" };
+    this.requestUpdate();
+    try {
+      await removeHistoryImport(hass, opts?.removeDashboard === true);
+      this._historyImport = { phase: "idle" };
+      this._historyDashboard = undefined;
+    } catch (err) {
+      this._historyImport = { phase: "error", error: historyImportErrorText(err) };
+    }
+    this.requestUpdate();
+  }
+
+  private async _previewHistoryDashboard(): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    try {
+      this._historyDashboard = await previewHistoryImportDashboard(hass);
+    } catch (err) {
+      this._historyDashboard = { ok: false, energyReady: false, importedStatistics: [], toAdd: [], alreadyPresent: [], error: historyImportErrorText(err) };
+    }
+    this.requestUpdate();
+  }
+
+  private async _applyHistoryDashboard(): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    try {
+      this._historyDashboard = await applyHistoryImportDashboard(hass);
+    } catch (err) {
+      this._historyDashboard = {
+        ...(this._historyDashboard ?? {
+          ok: false,
+          energyReady: false,
+          importedStatistics: [],
+          toAdd: [],
+          alreadyPresent: [],
+        }),
+        error: historyImportErrorText(err),
+      };
+    }
+    this.requestUpdate();
+  }
+
   private _openEnergy(): void {
     history.pushState(null, "", "/config/energy");
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
@@ -1775,6 +1911,13 @@ class MaestroPanel extends LitElement {
       onCheckEnergy: () => void this._checkEnergy(),
       onApplyEnergy: (mode) => void this._applyEnergy(mode),
       onOpenEnergy: () => this._openEnergy(),
+      historyImport: this._historyImport,
+      historyDashboard: this._historyDashboard,
+      onPreviewHistoryImport: (payload) => void this._previewHistoryImport(payload),
+      onApplyHistoryImport: (opts) => void this._applyHistoryImport(opts),
+      onRemoveHistoryImport: (opts) => void this._removeHistoryImport(opts),
+      onPreviewHistoryDashboard: () => void this._previewHistoryDashboard(),
+      onApplyHistoryDashboard: () => void this._applyHistoryDashboard(),
       onToggle: (id) => this._toggle(id),
       onPress: (id) => this._press(id),
       onSelect: (id, option) => this._select(id, option),

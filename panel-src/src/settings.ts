@@ -3,6 +3,15 @@ import { ref } from "lit/directives/ref.js";
 import { E, S, isOn, isSettingDisabled, num, type Hass, type HassEntity } from "./entities";
 import type { ClassicStatus } from "./classic";
 import type { EnergyDashboardStatus, EnergyApplyMode, EnergyOrigin, EnergyRole } from "./energy-dashboard";
+import {
+  historyErrorMessage,
+  historyWarningMessage,
+  parseHistoryFileError,
+  type HistoryImportDashboardStatus,
+  type HistoryImportMode,
+  type HistoryImportRole,
+  type HistoryImportState,
+} from "./history-import";
 import type { I18n, Key, Translate } from "./i18n";
 import { ladderView } from "./ladder";
 import { setupPage } from "./onboarding-view";
@@ -428,6 +437,13 @@ export interface SettingsCtx {
   onCheckEnergy: () => void;
   onApplyEnergy: (mode: EnergyApplyMode) => void;
   onOpenEnergy: () => void;
+  historyImport?: HistoryImportState;
+  historyDashboard?: HistoryImportDashboardStatus;
+  onPreviewHistoryImport: (payload: { texts: string[]; names: string[]; mode?: HistoryImportMode }) => void;
+  onApplyHistoryImport: (opts?: { mode?: HistoryImportMode }) => void;
+  onRemoveHistoryImport: (opts?: { removeDashboard?: boolean }) => void;
+  onPreviewHistoryDashboard: () => void;
+  onApplyHistoryDashboard: () => void;
   onToggle: (entityId: string) => void;
   onSelect: (entityId: string, option: string) => void;
   onNumber: (entityId: string, value: number) => void;
@@ -678,6 +694,351 @@ const ENERGY_ORIGIN: Record<EnergyOrigin, Key> = {
   maestro: "energyOriginMaestro",
 };
 
+const HISTORY_ROLE_LABEL: Record<string, Key> = {
+  solar: "historyRoleSolar",
+  external: "historyRoleExternal",
+  grid_import: "historyRoleGridImport",
+  grid_export: "historyRoleGridExport",
+  battery_charge: "historyRoleBatteryCharge",
+  battery_discharge: "historyRoleBatteryDischarge",
+  house: "historyRoleHouse",
+  wallbox: "historyRoleWallbox",
+  heat_pump: "historyRoleHeatPump",
+  house_power: "historyRoleHousePower",
+};
+
+const HISTORY_SERIES_ORDER: HistoryImportRole[] = [
+  "solar",
+  "external",
+  "grid_import",
+  "grid_export",
+  "battery_charge",
+  "battery_discharge",
+  "house",
+  "house_power",
+  "wallbox",
+  "heat_pump",
+];
+
+function formatHistoryIso(iso: string, lang: string): string {
+  try {
+    return new Date(iso).toLocaleString(lang.startsWith("de") ? "de-DE" : "en-GB", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function historyCodeLine(
+  t: (key: Key, vars?: Record<string, string | number>) => string,
+  code: string,
+  kind: "warn" | "err",
+  fileNames?: string[],
+): string {
+  if (kind === "err") {
+    const fileErr = parseHistoryFileError(code);
+    if (fileErr) {
+      const name = fileNames?.[fileErr.index - 1] ?? `#${fileErr.index}`;
+      const inner = historyErrorMessage(fileErr.inner);
+      return t("historyErrFile", { name, detail: formatHistoryErrLine(t, inner) });
+    }
+  }
+  return formatHistoryErrLine(t, kind === "warn" ? historyWarningMessage(code) : historyErrorMessage(code));
+}
+
+function formatHistoryErrLine(
+  t: (key: Key, vars?: Record<string, string | number>) => string,
+  msg: { key: Key; detail?: string },
+): string {
+  const vars: Record<string, string> = {};
+  if (msg.detail) {
+    if (msg.key === "historyWarnUnitMismatch" || msg.key === "historyErrVerifyFailed" || msg.key === "historyErrEntityUnavailable") {
+      vars.id = msg.detail;
+    } else if (msg.key === "historyWarnRowsSkipped" || msg.key === "historyWarnIncompleteHours") {
+      vars.n = msg.detail;
+    } else if (msg.key === "historyWarnOverlapMismatch") {
+      vars.role = msg.detail;
+    } else if (msg.key === "historyWarnExistingHoursKept") {
+      const sep = msg.detail.indexOf(":");
+      if (sep >= 0) {
+        vars.role = msg.detail.slice(0, sep);
+        vars.n = msg.detail.slice(sep + 1);
+      } else {
+        vars.role = msg.detail;
+      }
+    } else if (msg.key === "historyWarnNoLiveEntity" || msg.key === "historyWarnUnknown" || msg.key === "historyErrUnknown") {
+      vars.detail = msg.detail;
+    }
+  }
+  return t(msg.key, vars);
+}
+
+function onHistoryImportFile(c: SettingsCtx, e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (!files?.length) return;
+  const names: string[] = [];
+  const readers: Promise<string>[] = [];
+  for (let i = 0; i < files.length; i++) {
+    names.push(files[i].name);
+    readers.push(
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          let text = String(reader.result ?? "");
+          if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+          resolve(text);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(files[i], "UTF-8");
+      }),
+    );
+  }
+  void Promise.all(readers).then((texts) => {
+    c.onPreviewHistoryImport({ texts, names, mode: "extend" });
+  });
+  input.value = "";
+}
+
+function historyDashboardLine(
+  t: (key: Key, vars?: Record<string, string | number>) => string,
+  item: { type: string; statisticIds: string[] },
+): TemplateResult {
+  return html`<div class="dep">
+    <b>${item.type}</b><span class="ok">${item.statisticIds.join(", ")}</span>
+  </div>`;
+}
+
+function historyDashboardBlock(c: SettingsCtx): TemplateResult {
+  const { t } = c.i18n;
+  const dash = c.historyDashboard;
+  if (!dash) {
+    return html`<h4>${t("historyDashboardTitle")}</h4>
+      <p class="hint">${t("historyDashboardHint")}</p>
+      ${c.isAdmin
+        ? html`<button type="button" class="btn" @click=${() => c.onPreviewHistoryDashboard()}>${t("historyDashboardRefresh")}</button>`
+        : nothing}`;
+  }
+  const canApply =
+    c.isAdmin && dash?.energyReady === true && (dash?.toAdd.length ?? 0) > 0 && dash?.ready === true;
+  return html`<h4>${t("historyDashboardTitle")}</h4>
+    <p class="hint">${t("historyDashboardHint")}</p>
+    ${dash?.energyReady === false ? html`<p class="bad">${t("historyDashboardNoEnergy")}</p>` : nothing}
+    ${(dash?.toAdd.length ?? 0) > 0
+      ? html`<p>${t("historyDashboardToAdd")}</p>
+          ${dash!.toAdd.map((item) => historyDashboardLine(t, item))}`
+      : nothing}
+    ${(dash?.alreadyPresent.length ?? 0) > 0
+      ? html`<p>${t("historyDashboardAlready")}</p>
+          ${dash!.alreadyPresent.map((item) => historyDashboardLine(t, item))}`
+      : nothing}
+    ${(dash?.added?.length ?? 0) > 0
+      ? html`<p class="ok">${t("historyDashboardAdded")}</p>
+          ${dash!.added!.map((item) => historyDashboardLine(t, item))}`
+      : nothing}
+    ${c.isAdmin
+      ? html`<div class="classic-action">
+          <button type="button" class="btn" @click=${() => c.onPreviewHistoryDashboard()}>${t("historyDashboardRefresh")}</button>
+          ${canApply
+            ? html`<button type="button" class="btn primary" @click=${() => c.onApplyHistoryDashboard()}>${t("historyDashboardApply")}</button>`
+            : nothing}
+        </div>`
+      : html`<p>${t("historyImportAdminOnly")}</p>`}`;
+}
+
+function historyImportBlock(c: SettingsCtx): TemplateResult {
+  const { t } = c.i18n;
+  const lang = c.hass.language ?? "de";
+  const hi = c.historyImport;
+  const result = hi?.result;
+  const phase = hi?.phase ?? "idle";
+  const fileNames = hi?.fileNames;
+  const importMode = hi?.mode ?? result?.mode ?? "extend";
+  const previewErrors = result?.errors.filter((e) => e !== "nothing_to_import") ?? [];
+  const nothingToImport = result?.errors.includes("nothing_to_import") === true;
+  const canApply =
+    c.isAdmin &&
+    result?.ok === true &&
+    previewErrors.length === 0 &&
+    result.hoursToImport > 0 &&
+    phase !== "loading" &&
+    phase !== "applying";
+  const showDashboard =
+    (result?.existingHistory.length ?? 0) > 0 ||
+    (result?.written && Object.keys(result.written).length > 0) ||
+    phase === "applied";
+  const hasExisting = (result?.existingHistory.length ?? 0) > 0;
+  return html`<h3>${t("historyImportTitle")}</h3>
+    <p class="hint">${t("historyImportLead")}</p>
+    <p class="hint">${t("historyImportApprox")}</p>
+    <p class="hint">${t("historyImportSeparateStats")}</p>
+    <p class="hint">${t("historyImportMultiHint")}</p>
+    <p class="hint">${t("historyImportModeExtendHint")}</p>
+    <label class="btn">
+      ${t("historyImportChoose")}
+      <input type="file" accept=".csv,text/csv" multiple hidden @change=${(e: Event) => onHistoryImportFile(c, e)} />
+    </label>
+    ${phase === "loading" ? html`<p>${t("historyImportLoading")}</p>` : nothing}
+    ${phase === "applying" ? html`<p>${t("historyImportApplying")}</p>` : nothing}
+    ${hi?.errorKey ? html`<p class="bad">${t(hi.errorKey)}</p>` : nothing}
+    ${hi?.error && !hi.errorKey ? html`<p class="bad">${t("historyImportFailed", { err: hi.error })}</p>` : nothing}
+    ${result?.files.length
+      ? html`<h4>${t("historyImportFilesTitle")}</h4>
+          <table class="history-series">
+            <thead>
+              <tr>
+                <th>${t("historyImportFileName")}</th>
+                <th>${t("historySeriesPeriod")}</th>
+                <th>${t("historySeriesHours")}</th>
+                <th>${t("historyImportFileOverlap")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${result.files.map((file) => {
+                const name = fileNames?.[file.index - 1] ?? `#${file.index}`;
+                const period =
+                  file.period.first && file.period.last
+                    ? `${formatHistoryIso(file.period.first, lang)} – ${formatHistoryIso(file.period.last, lang)}`
+                    : "";
+                return html`<tr>
+                  <td>${name}</td>
+                  <td>${period}</td>
+                  <td>${file.hours}</td>
+                  <td>${file.overlapHours}</td>
+                </tr>`;
+              })}
+            </tbody>
+          </table>`
+      : nothing}
+    ${result?.period
+      ? html`<p>
+          ${t("historyImportPeriod", {
+            start: formatHistoryIso(result.period.start, lang),
+            end: formatHistoryIso(result.period.end, lang),
+          })}
+        </p>`
+      : nothing}
+    ${hasExisting
+      ? html`<p class="hint">${t("historyImportExistingInfo", { n: result!.existingHistory.length })}</p>`
+      : nothing}
+    ${importMode === "replace" ? html`<p class="bad">${t("historyImportModeReplaceWarn")}</p>` : nothing}
+    ${result
+      ? html`<p>
+          ${t("historyImportHoursWrite", { n: result.hoursToImport })}
+          · ${t("historyImportHoursSkipCutoff", { n: result.hoursSkippedCutoff })}
+        </p>`
+      : nothing}
+    ${nothingToImport ? html`<p class="hint">${t("historyNoteNothingToImport")}</p>` : nothing}
+    ${hasExisting && c.isAdmin
+      ? html`<div class="classic-action">
+          <button
+            type="button"
+            class="btn"
+            @click=${() => {
+              if (window.confirm(t("historyImportReplaceConfirm"))) {
+                c.onPreviewHistoryImport({
+                  texts: hi!.csvTexts ?? [],
+                  names: hi!.fileNames ?? [],
+                  mode: "replace",
+                });
+              }
+            }}
+          >
+            ${t("historyImportReplacePreview")}
+          </button>
+          <button type="button" class="btn" @click=${() => {
+            if (window.confirm(t("historyImportRemoveConfirm"))) {
+              const alsoDash = window.confirm(t("historyImportRemoveDashboardConfirm"));
+              c.onRemoveHistoryImport({ removeDashboard: alsoDash });
+            }
+          }}>${t("historyImportRemove")}</button>
+        </div>`
+      : nothing}
+    ${result?.warnings.length
+      ? html`<ul class="hint">
+          ${result.warnings.map((code) => html`<li>${historyCodeLine(t, code, "warn", fileNames)}</li>`)}
+        </ul>`
+      : nothing}
+    ${previewErrors.length
+      ? html`<ul class="bad">
+          ${previewErrors.map((code) => html`<li>${historyCodeLine(t, code, "err", fileNames)}</li>`)}
+        </ul>`
+      : nothing}
+    ${result && Object.keys(result.series).length
+      ? html`<h4>${t("historySeriesTitle")}</h4>
+          <table class="history-series">
+            <thead>
+              <tr>
+                <th>${t("historySeriesRole")}</th>
+                <th>${t("historySeriesHoursNew")}</th>
+                <th>${t("historySeriesHoursExisting")}</th>
+                <th>${t("historySeriesHoursTotal")}</th>
+                <th>${t("historySeriesPeriod")}</th>
+                <th>${t("historySeriesAmount")}</th>
+                <th>${t("historySeriesCutoff")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${HISTORY_SERIES_ORDER.map((role) => {
+                const entry = result.series[role];
+                if (!entry) return nothing;
+                const amount =
+                  entry.meanW !== undefined
+                    ? t("historySeriesMeanW", { w: entry.meanW })
+                    : entry.totalKwh !== undefined
+                      ? t("historyImportKwh", { kwh: entry.totalKwh })
+                      : "";
+                const period =
+                  entry.first && entry.last
+                    ? `${formatHistoryIso(entry.first, lang)} – ${formatHistoryIso(entry.last, lang)}`
+                    : "";
+                const cutoff = entry.cutoff ? formatHistoryIso(entry.cutoff, lang) : "";
+                return html`<tr>
+                  <td>${t(HISTORY_ROLE_LABEL[role] ?? "historyRoleSolar")}</td>
+                  <td>${entry.hoursNew}</td>
+                  <td>${entry.hoursExisting}</td>
+                  <td>${entry.hoursTotal}</td>
+                  <td>${period}</td>
+                  <td>${amount}</td>
+                  <td>${cutoff}</td>
+                </tr>`;
+              })}
+            </tbody>
+          </table>
+          ${HISTORY_SERIES_ORDER.flatMap((role) => {
+            const entry = result.series[role];
+            if (!entry?.warnings.length) return [];
+            return entry.warnings.map(
+              (code) =>
+                html`<p class="hint">${t(HISTORY_ROLE_LABEL[role] ?? "historyRoleSolar")}: ${historyCodeLine(t, code, "warn", fileNames)}</p>`,
+            );
+          })}`
+      : nothing}
+    ${result && Object.keys(result.consumersKwh).length
+      ? html`<h4>${t("historyImportConsumersTitle")}</h4>
+          ${Object.entries(result.consumersKwh).map(
+            ([name, kwh]) => html`<div class="dep"><b>${name}</b><span>${t("historyImportKwh", { kwh })}</span></div>`,
+          )}`
+      : nothing}
+    ${!c.isAdmin && result ? html`<p>${t("historyImportAdminOnly")}</p>` : nothing}
+    ${canApply
+      ? html`<div class="classic-action">
+          <button type="button" class="btn primary" @click=${() => c.onApplyHistoryImport({ mode: importMode })}>
+            ${importMode === "replace" ? t("historyImportReplaceApply") : t("historyImportFill")}
+          </button>
+        </div>`
+      : nothing}
+    ${result?.written && Object.keys(result.written).length
+      ? html`<p class="ok">${t("historyImportDone")}
+          ${Object.entries(result.written).map(
+            ([id, n]) => html`<span> ${t("historyImportWritten", { id, n })}</span>`,
+          )}</p>`
+      : nothing}
+    ${showDashboard ? historyDashboardBlock(c) : nothing}`;
+}
+
 function energyStatusCopy(state: EnergyDashboardStatus["state"]): Key | undefined {
   if (state === "ours") return "energyReady";
   if (state === "empty") return "energyEmpty";
@@ -763,6 +1124,7 @@ function energyGuide(c: SettingsCtx): TemplateResult {
     <h3>${t("energyActionTitle")}</h3>
     <div class="classic-action">${energyAction(c)}</div>
     <p>${t("energyAfter")}</p>
+    ${historyImportBlock(c)}
   </div>`;
 }
 
