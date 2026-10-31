@@ -22,6 +22,10 @@ def set_stable_entity_id(entity, domain: str) -> None:
     if getattr(entity, "entity_id", None):
         return
     description = getattr(entity, "entity_description", None)
+    stable = getattr(description, "stable_object_id", None) if description else None
+    if stable:
+        entity.entity_id = f"{domain}.{stable}"
+        return
     name = getattr(description, "name", None) or entity._attr_name
     entity.entity_id = f"{domain}.e3dc_maestro_{slugify(str(name))}"
 

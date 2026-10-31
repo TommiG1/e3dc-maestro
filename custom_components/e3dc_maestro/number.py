@@ -105,6 +105,8 @@ class MaestroNumberDescription(NumberEntityDescription):
     # statischen ``max_value``. Gewinnt, falls gesetzt; ``max_value`` bleibt
     # dabei die Mindest-Obergrenze (siehe CONF_MAX_GRID_CHARGE_KWH unten).
     dynamic_max_fn: Callable[[Any], float] | None = None
+    # Keep entity_id when the display name changes (dashboards / automations).
+    stable_object_id: str | None = None
 
 
 NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
@@ -666,6 +668,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         device_class=NumberDeviceClass.POWER,
         param_key=CONF_EVCC_DISCHARGE_LIMIT_W,
         min_value=0, max_value=15000, step_value=50,
+        stable_object_id="e3dc_maestro_evcc_now_modus_entladungslimit",
     ),
     # ── Schwacher-PV-Tag: Akku-Priorität ───────────────────────────────────
     MaestroNumberDescription(

@@ -55,6 +55,8 @@ class MaestroSwitchDescription(SwitchEntityDescription):
     param_key: str | None = None      # coordinator param to read/write
     on_fn: Any = None                 # called on turn_on
     off_fn: Any = None                # called on turn_off
+    # Keep entity_id when the display name changes (dashboards / automations).
+    stable_object_id: str | None = None
 
 
 SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
@@ -162,6 +164,7 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         param_key=CONF_EVCC_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_EVCC_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_EVCC_ENABLED, False),
+        stable_object_id="e3dc_maestro_evcc_integration",
     ),
     # E3/Phase 1: Curtailment Guard
     MaestroSwitchDescription(
