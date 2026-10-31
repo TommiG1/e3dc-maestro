@@ -2977,13 +2977,13 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Sofortladen: Akku-Schutz
+            heading: "Sofortladen: Akku-Schutz"
             icon: mdi:ev-plug-type2
 
           - type: entities
             entities:
               - entity: switch.e3dc_maestro_evcc_integration
-                name: Sofortladen: Akku-Schutz aktiv
+                name: "Sofortladen: Akku-Schutz aktiv"
               - entity: number.e3dc_maestro_evcc_now_modus_entladungslimit
                 name: Akku-Entladungslimit im Now-Modus (W)
               - type: button
