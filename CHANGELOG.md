@@ -11,25 +11,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
-## [0.5.5-beta.3] – CI-Nachzug Verbrauchsprognose ohne Wallbox (2026-10-31)
+## [0.5.5-beta.3] – Verbrauchsprognose ohne Wallbox (2026-10-31)
 
-> **Beta.** Enthält 0.5.5-beta.2. Ausführlich: [docs/release-notes/v0.5.5-beta.3.md](docs/release-notes/v0.5.5-beta.3.md).
-
-### Korrekturen
-- Dashboard-YAML-Quoting und stabile `evcc_*` Entity-IDs nach Sofortladen-Umbenennung.
-
----
-
-## [0.5.5-beta.2] – Verbrauchsprognose ohne Wallbox (2026-10-31)
-
-> **Beta.** Enthält 0.5.5-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.2.md](docs/release-notes/v0.5.5-beta.2.md).
+> **Beta.** Enthält 0.5.5-beta.1. Ersetzt die zurückgezogene 0.5.5-beta.2. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.3.md](docs/release-notes/v0.5.5-beta.3.md).
 
 ### Neu
 - **go-eCharger Auto-Detect** für Leistungssensoren, wenn keine E3DC-/openWB-Wallbox erkannt wird.
-- **Sofortladen: Akku-Schutz:** UI-Umbenennung der früheren „EVCC“-Bezeichnung (Keys `evcc_*` unverändert).
+- **Sofortladen: Akku-Schutz:** UI-Umbenennung der früheren „EVCC“-Bezeichnung (Keys/`evcc_*` Entity-IDs unverändert).
 
 ### Korrekturen
 - **Verbrauchsprognose ohne Wallbox:** Bei gesetztem Wallbox-Leistungssensor und „im Hausverbrauch enthalten“ zieht Maestro die Wallbox auch aus dem gelernten Profil (Prognose, Preisplan, adaptive Reserve), rückwirkend im Lookback.
+- Dashboard-YAML-Quoting für Anzeigenamen mit Doppelpunkt.
 
 ---
 
