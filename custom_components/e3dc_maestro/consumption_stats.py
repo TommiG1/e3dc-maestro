@@ -7,6 +7,10 @@ Loads hourly statistics for the configured house-power sensor and exposes:
 - ``data_days``: how many distinct calendar days are represented in the data
 
 Refreshed at most once per hour to keep recorder load low.
+
+When ``subtract_entity_id`` is set (wallbox power included in the house meter),
+matching hourly means are subtracted from the house series before the profile
+is built, so forecast / price plan see pure household load.
 """
 from __future__ import annotations
 
@@ -41,9 +45,15 @@ def _hour_in_slot(hour_local: float, weekday: int, slot: TariffSlot) -> bool:
 class ConsumptionStats:
     """Async helper that pulls hourly mean values for a power sensor."""
 
-    def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entity_id: str,
+        subtract_entity_id: str | None = None,
+    ) -> None:
         self._hass = hass
         self._entity_id = entity_id
+        self._subtract_entity_id = subtract_entity_id or None
         self.avg_w_24h: float | None = None
         self.avg_w_ht_window: float | None = None
         self.data_days: int = 0
@@ -53,6 +63,16 @@ class ConsumptionStats:
             [0.0] * 24 for _ in range(7)
         ]
         self._last_refresh: datetime | None = None
+
+    def _unit_scale(self, entity_id: str) -> float:
+        """Return 1000.0 when the entity reports kW, else 1.0 (W)."""
+        state_obj = self._hass.states.get(entity_id)
+        if state_obj is None:
+            return 1.0
+        unit = (state_obj.attributes.get("unit_of_measurement") or "").strip()
+        if unit.lower() in ("kw", "kilowatt"):
+            return 1000.0
+        return 1.0
 
     async def async_refresh(
         self,
@@ -95,6 +115,9 @@ class ConsumptionStats:
             return
 
         start = now - timedelta(days=max(1, effective_days))
+        query_ids = {self._entity_id, HISTORY_HOUSE_POWER}
+        if self._subtract_entity_id:
+            query_ids.add(self._subtract_entity_id)
         try:
             stats: dict[str, list[dict[str, Any]]] = await get_instance(
                 self._hass
@@ -103,7 +126,7 @@ class ConsumptionStats:
                 self._hass,
                 start,
                 now,
-                {self._entity_id, HISTORY_HOUSE_POWER},
+                query_ids,
                 "hour",
                 None,
                 {"mean"},
@@ -125,16 +148,18 @@ class ConsumptionStats:
             return
 
         # Detect sensor unit (W vs. kW) from the entity state and normalize to W
-        scale = 1.0
-        state_obj = self._hass.states.get(self._entity_id)
-        if state_obj is not None:
-            unit = (state_obj.attributes.get("unit_of_measurement") or "").strip()
-            if unit.lower() in ("kw", "kilowatt"):
-                scale = 1000.0
+        scale = self._unit_scale(self._entity_id)
         if scale != 1.0:
             for row in rows:
                 if row.get("mean") is not None:
                     row["mean"] = float(row["mean"]) * scale
+
+        # Wallbox (or similar) already counted in the house meter: subtract
+        # matching hourly means from live rows before CSV history merge.
+        if self._subtract_entity_id:
+            sub_rows = list((stats or {}).get(self._subtract_entity_id) or [])
+            sub_scale = self._unit_scale(self._subtract_entity_id)
+            rows = _subtract_hourly_means(rows, sub_rows, sub_scale)
 
         # Imported CSV history (always W, no scaling) only fills hours without live data.
         rows = _merge_history(rows, history_rows, start)
@@ -244,6 +269,38 @@ class ConsumptionStats:
         if not totals:
             return None
         return max(totals) / 1000.0
+
+
+def _subtract_hourly_means(
+    rows: list[dict[str, Any]],
+    sub_rows: list[dict[str, Any]],
+    sub_scale: float = 1.0,
+) -> list[dict[str, Any]]:
+    """Subtract matching hourly means from ``rows`` (floor at 0).
+
+    ``sub_scale`` converts subtract-sensor units to Watts (1000 for kW).
+    Hours without a subtract row stay unchanged. Mutates and returns ``rows``.
+    """
+    if not rows or not sub_rows:
+        return rows
+    sub_by_hour: dict[datetime, float] = {}
+    for row in sub_rows:
+        mean = row.get("mean")
+        if mean is None:
+            continue
+        utc = _row_to_utc(row.get("start"))
+        if utc is None:
+            continue
+        sub_by_hour[utc] = max(0.0, float(mean) * sub_scale)
+    for row in rows:
+        mean = row.get("mean")
+        if mean is None:
+            continue
+        utc = _row_to_utc(row.get("start"))
+        if utc is None or utc not in sub_by_hour:
+            continue
+        row["mean"] = max(0.0, float(mean) - sub_by_hour[utc])
+    return rows
 
 
 def _merge_history(

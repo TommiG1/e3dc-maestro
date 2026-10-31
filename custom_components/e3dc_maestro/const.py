@@ -199,7 +199,7 @@ CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = "wallbox_discharge_guard_threshold_w"
 # Wallbox power source (separater Verbrauchszähler)
 # Trennt EV-Ladeverbrauch vom Hausverbrauch, damit Optimizer/EWMA/Forecast
 # nicht durch Ladespitzen verfälscht werden.
-CONF_WALLBOX_PROVIDER = "wallbox_provider"                  # none|e3dc|openwb|custom (UI-Hinweis)
+CONF_WALLBOX_PROVIDER = "wallbox_provider"                  # none|e3dc|openwb|goe|custom (UI-Hinweis)
 CONF_WALLBOX_POWER_SENSOR = "wallbox_power_sensor"          # entity_id, W
 CONF_WALLBOX_SOC_SENSOR = "wallbox_soc_sensor"              # entity_id, % Fahrzeug-SoC (Anzeige im Flow)
 CONF_WALLBOX_PLUG_ENTITY = "wallbox_plug_entity"            # binary_sensor: Stecker angesteckt (Flow-Icon)
@@ -324,16 +324,18 @@ WALLBOX_TYPE_GENERIC = "generic"
 WALLBOX_PROVIDER_NONE = "none"
 WALLBOX_PROVIDER_E3DC = "e3dc"
 WALLBOX_PROVIDER_OPENWB = "openwb"
+WALLBOX_PROVIDER_GOE = "goe"
 WALLBOX_PROVIDER_CUSTOM = "custom"
 WALLBOX_PROVIDERS = [
     WALLBOX_PROVIDER_NONE,
     WALLBOX_PROVIDER_E3DC,
     WALLBOX_PROVIDER_OPENWB,
+    WALLBOX_PROVIDER_GOE,
     WALLBOX_PROVIDER_CUSTOM,
 ]
 DEFAULT_WALLBOX_PROVIDER = WALLBOX_PROVIDER_NONE
 # E3DC: eigener Powermeter → NICHT im Hausverbrauch enthalten (Default False)
-# openWB: hängt am EVU-Hauptzähler → Default True
+# openWB / go-e: typisch hinter dem Haus-/EVU-Zähler → Default True
 DEFAULT_WALLBOX_INCLUDED_IN_HOUSE = False
 
 # Control phases (states of the phase sensor)

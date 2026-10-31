@@ -30,6 +30,8 @@ from .const import (
     CONF_HOUSE_POWER_SENSOR,
     CONF_PRICE_SENSOR,
     CONF_PV_POWER_SENSOR,
+    CONF_WALLBOX_INCLUDED_IN_HOUSE,
+    CONF_WALLBOX_POWER_SENSOR,
     CONF_REGELUNG_AKTIV,
     CONF_REGELUNG_PAUSE_UNTIL,
     CONF_UPDATE_INTERVAL,
@@ -290,10 +292,18 @@ class E3DCMaestroCoordinator(
         # F1+: Forward-Looking – zuletzt errechnetes dynamisches Ziel (für Sensor)
         self._fwd_looking_target: float | None = None
 
-        # Phase D: Verbrauchsadaptive Reserven
+        # Phase D: Verbrauchsadaptive Reserven. Wallbox vom Profil abziehen,
+        # wenn der Hauszähler sie schon enthält (gleiche Semantik wie live).
         house_sensor = opts.get(CONF_HOUSE_POWER_SENSOR)
+        wallbox_subtract = (
+            opts.get(CONF_WALLBOX_POWER_SENSOR)
+            if opts.get(CONF_WALLBOX_INCLUDED_IN_HOUSE)
+            else None
+        )
         self._consumption_stats: ConsumptionStats | None = (
-            ConsumptionStats(hass, house_sensor) if house_sensor else None
+            ConsumptionStats(hass, house_sensor, wallbox_subtract)
+            if house_sensor
+            else None
         )
 
         # F1: PV-Profil für Forecast-Simulator

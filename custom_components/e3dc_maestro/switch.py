@@ -154,10 +154,10 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         on_fn=lambda coord: coord.update_param(CONF_ADAPTIVE_RESERVE_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_ADAPTIVE_RESERVE_ENABLED, False),
     ),
-    # D1: EVCC-Integration
+    # D1: Sofortladen → Akku-Schutz (EVCC/openWB/go-e/…)
     MaestroSwitchDescription(
         key=CONF_EVCC_ENABLED,
-        name="EVCC-Integration",
+        name="Sofortladen: Akku-Schutz",
         icon="mdi:car-electric",
         param_key=CONF_EVCC_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_EVCC_ENABLED, True),

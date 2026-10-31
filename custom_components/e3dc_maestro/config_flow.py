@@ -257,6 +257,7 @@ from .const import (
     WALLBOX_PROVIDERS,
     WALLBOX_PROVIDER_E3DC,
     WALLBOX_PROVIDER_OPENWB,
+    WALLBOX_PROVIDER_GOE,
     DEFAULT_WALLBOX_PROVIDER,
     DEFAULT_WALLBOX_INCLUDED_IN_HOUSE,
 )
@@ -439,8 +440,55 @@ def seed_missing_rscp_source_options(hass, options: dict[str, Any]) -> dict[str,
 
 _OPENWB_CP_RE = re.compile(r"openwb_chargepoint_?(\d+)_")
 
+# syssi MQTT / marq24 API2 / generic go-e entity prefixes
+_GOE_PLATFORMS = frozenset({"goecharger_mqtt", "goecharger_api2", "goecharger"})
+_GOE_ID_PREFIXES = ("go_echarger_", "goe_", "go_e_")
+# Not charger load: grid/PV/battery inputs and per-phase power fragments.
+_GOE_POWER_SKIP_SUFFIXES = (
+    "_pgrid",
+    "_ppv",
+    "_pakku",
+    "_power_l1",
+    "_power_l2",
+    "_power_l3",
+    "_nrg_7",
+    "_nrg_8",
+    "_nrg_9",
+    "_nrg_10",
+)
+
 # Domain der inoffiziellen evcc-HA-Integration (marq24/ha-evcc).
 _EVCC_INTG_DOMAIN = "evcc_intg"
+
+
+def _goe_power_priority(
+    entity_id: str, *, platform: str = "", unique_id: str = ""
+) -> int | None:
+    """Return sort priority for a go-e charger power sensor (lower = better).
+
+    Recognises ``syssi/homeassistant-goecharger-mqtt`` (``*_nrg_11``, ``*_tpa``)
+    and ``marq24/ha-goecharger-api2`` (``goe_*_tpa`` / platform domain).
+    """
+    if not entity_id.startswith("sensor."):
+        return None
+    body = entity_id[len("sensor.") :]
+    platform_l = (platform or "").lower()
+    uid = (unique_id or "").lower()
+    is_goe = (
+        platform_l in _GOE_PLATFORMS
+        or "goecharger" in platform_l
+        or body.startswith(_GOE_ID_PREFIXES)
+    )
+    if not is_goe:
+        return None
+    if any(body.endswith(suf) for suf in _GOE_POWER_SKIP_SUFFIXES):
+        return None
+    # Current power (nrg index 11) beats total-power-average.
+    if body.endswith("_nrg_11") or uid.endswith("-nrg-11") or "-nrg-11" in uid:
+        return 0
+    if body.endswith("_tpa") or uid.endswith("-tpa") or uid.endswith("_tpa"):
+        return 1
+    return None
 
 
 def _autodetect_evcc(hass) -> dict[str, Any]:
@@ -524,6 +572,47 @@ def _openwb_plug_for_power(hass, power_eid: str | None) -> str | None:
     return plug_id
 
 
+def _autodetect_goe_wallbox(hass) -> str | None:
+    """Find a go-eCharger power sensor (MQTT or API2 integration).
+
+    Prefers ``*_nrg_11`` (current power) over ``*_tpa``. Falls back to any
+    go-e platform sensor with ``device_class=power`` in Watts/kW when the
+    entity_id suffix is ambiguous. Multiple chargers: alphabetically first.
+    """
+    registry = er.async_get(hass)
+    candidates: list[tuple[int, str]] = []
+    for ent in registry.entities.values():
+        if getattr(ent, "disabled_by", None) is not None:
+            continue
+        eid = ent.entity_id
+        platform = getattr(ent, "platform", "") or ""
+        unique_id = getattr(ent, "unique_id", "") or ""
+        prio = _goe_power_priority(eid, platform=platform, unique_id=unique_id)
+        if prio is None:
+            platform_l = platform.lower()
+            body = eid[len("sensor.") :] if eid.startswith("sensor.") else ""
+            is_goe = (
+                platform_l in _GOE_PLATFORMS
+                or "goecharger" in platform_l
+                or body.startswith(_GOE_ID_PREFIXES)
+            )
+            if not is_goe or any(body.endswith(s) for s in _GOE_POWER_SKIP_SUFFIXES):
+                continue
+            state = hass.states.get(eid)
+            if state is None:
+                continue
+            attrs = state.attributes or {}
+            unit = (attrs.get("unit_of_measurement") or "").strip().lower()
+            if attrs.get("device_class") != "power" or unit not in ("w", "kw", "watt", "kilowatt"):
+                continue
+            prio = 5
+        candidates.append((prio, eid))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0][1]
+
+
 def _autodetect_wallbox_translation(
     hass, translation_key: str, domains: tuple[str, ...], entry_ids: set[str] | None = None
 ) -> str | None:
@@ -576,8 +665,8 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
     When a farm controller entry exists, its sensors win over master/slave copies
     of the same suffix. Wallbox sensors stay on the child (farm has none).
 
-    Also detects openWB chargepoint sensors as a fallback wallbox source when no
-    E3DC wallbox sensor is present.
+    Also detects openWB / go-e chargepoint sensors as a fallback wallbox source
+    when no E3DC wallbox sensor is present.
     """
     out: dict[str, Any] = {}
     rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
@@ -611,7 +700,7 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
         out.setdefault(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC)
         out.setdefault(CONF_WALLBOX_INCLUDED_IN_HOUSE, False)
     else:
-        # Fallback: openWB-Chargepoint suchen. Pattern: sensor.openwb_chargepoint*ladeleistung
+        # Fallback 1: openWB-Chargepoint. Pattern: sensor.openwb_chargepoint*ladeleistung
         openwb = _autodetect_openwb_wallbox(hass)
         if openwb:
             out[CONF_WALLBOX_POWER_SENSOR] = openwb
@@ -621,6 +710,14 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
             # openWB misst typischerweise nur den Chargepoint; der Hauszähler steht
             # am EVU und enthält die Wallbox-Leistung bereits → True als Default.
             out[CONF_WALLBOX_INCLUDED_IN_HOUSE] = True
+        else:
+            # Fallback 2: go-eCharger (MQTT / API2). Typisch hinter dem Hauszähler.
+            goe = _autodetect_goe_wallbox(hass)
+            if goe:
+                out[CONF_WALLBOX_POWER_SENSOR] = goe
+                out[CONF_WALLBOX_PROVIDER] = WALLBOX_PROVIDER_GOE
+                out[CONF_WALLBOX_TYPE] = WALLBOX_TYPE_GENERIC
+                out[CONF_WALLBOX_INCLUDED_IN_HOUSE] = True
     if rscp_entries:
         rscp_ids = {e.entry_id for e in rscp_entries}
         wallbox_soc = _autodetect_wallbox_soc(hass, rscp_ids)
@@ -755,7 +852,8 @@ def _format_sources_detection(detected: dict[str, Any]) -> str:
         )
     if detected.get(CONF_EVCC_ENABLED):
         sensor_lines.append(
-            f"- _EVCC-Integration erkannt (Sofortlade-Wert: `{detected.get(CONF_EVCC_NOW_VALUE, '')}`)_"
+            "- _Sofortladen: Akku-Schutz – Sensoren erkannt "
+            f"(Wert: `{detected.get(CONF_EVCC_NOW_VALUE, '')}`)_"
         )
     return "\n".join(sensor_lines)
 
@@ -895,8 +993,9 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
         ),
         # Separater Wallbox-Verbrauchszähler (entkoppelt EV-Last vom Hausverbrauch).
         # Funktioniert unabhängig von WALLBOX_ENABLED – auch wer keine Steuerung
-        # über Maestro macht, kann hier seinen openWB/E3DC-Powermeter einbinden,
-        # damit Optimizer/Forecast/EWMA nicht durch Ladespitzen verfälscht werden.
+        # über Maestro macht, kann hier seinen openWB/go-e/E3DC-Powermeter
+        # einbinden, damit Optimizer/Forecast/EWMA nicht durch Ladespitzen
+        # verfälscht werden.
         vol.Optional(CONF_WALLBOX_POWER_SENSOR): _entity_selector(),
         vol.Optional(CONF_WALLBOX_SOC_SENSOR): _entity_selector(),
         vol.Optional(CONF_WALLBOX_PLUG_ENTITY): selector.EntitySelector(

@@ -173,13 +173,13 @@
         }
       },
       "evcc": {
-        "title": "EVCC integration",
-        "description": "Connects Maestro to EVCC, openWB or any other wallbox controller. Maestro steps back as soon as the configured charge mode sensor reports the 'instant charging' value – the wallbox can then use the grid.\n\nWorks with any wallbox that provides a sensor or select entity which reports a defined value in 'instant charging' (or similar) mode:\n• EVCC: sensor with value \"now\"\n• openWB: sensor with value \"Instant Charging\"\n• Other wallboxes: any sensor/select, as long as the instant charging value is known.",
+        "title": "Instant charge: battery guard",
+        "description": "Limits battery discharge when the wallbox reports instant charging, so the car does not empty the home battery. PV charging stays possible.\n\nWorks with EVCC, openWB, go-e, or any controller that exposes a charge-mode sensor:\n• EVCC: value \"now\"\n• openWB: value \"Instant Charging\"\n• Others: the value your mode sensor reports for instant charging.",
         "data": {
-          "evcc_enabled": "Enable EVCC/openWB/wallbox integration",
-          "evcc_charging_entity": "Charging active entity (optional, boolean/binary_sensor – e.g. openWB autoladestatus)",
-          "evcc_mode_entity": "Charge mode entity (sensor/select with instant charging value – e.g. EVCC, openWB, others)",
-          "evcc_now_value": "Value for 'instant charging' (EVCC: \"now\", openWB: \"Instant Charging\")"
+          "evcc_enabled": "Enable instant charge: battery guard",
+          "evcc_charging_entity": "Charging active (optional, boolean/binary_sensor)",
+          "evcc_mode_entity": "Charge mode (sensor/select with instant-charging value)",
+          "evcc_now_value": "Value for instant charging (EVCC: \"now\", openWB: \"Instant Charging\")"
         }
       },
       "heatpump": {
@@ -271,7 +271,7 @@
           "tariff_slots": "Tariff time windows",
           "tariff": "Dynamic tariff",
           "wallbox": "Wallbox",
-          "evcc": "EVCC",
+          "evcc": "Instant charge: battery guard",
           "heatpump": "Heat pump",
           "failsafe": "Failsafe",
           "flat_curve": "F0 / Gentle charging",
@@ -509,21 +509,21 @@
         "data_description": {
           "wallbox_min_surplus": "Maestro only starts the wallbox once this PV surplus is consistently available (hysteresis prevents cycling).",
           "wallbox_min_current": "Minimum charging current per IEC 61851 (normally 6 A). Below this, Maestro prefers to switch the wallbox off.",
-          "wallbox_included_in_house": "Enable for openWB on the utility meter or if the house consumption sensor already counts the wallbox. Prevents double counting."
+          "wallbox_included_in_house": "Enable for openWB on the utility meter or if the house consumption sensor already counts the wallbox. Maestro then subtracts the wallbox live and from the learned consumption profile (forecast/price plan)."
         }
       },
       "evcc": {
-        "title": "EVCC integration",
-        "description": "Connects Maestro to EVCC, openWB or any other wallbox controller. Maestro steps back as soon as the configured charge mode sensor reports the 'instant charging' value.\n\nSupported systems:\n• EVCC: sensor with value \"now\"\n• openWB: sensor with value \"Instant Charging\"\n• Other wallboxes: any sensor/select that reports a known value during instant charging.",
+        "title": "Instant charge: battery guard",
+        "description": "Limits battery discharge when the wallbox reports instant charging, so the car does not empty the home battery. PV charging stays possible.\n\nWorks with EVCC, openWB, go-e, or any controller with a charge-mode sensor:\n• EVCC: value \"now\"\n• openWB: value \"Instant Charging\"\n• Others: the value your mode sensor reports for instant charging.",
         "data": {
-          "evcc_enabled": "Enable EVCC/openWB/wallbox integration",
-          "evcc_charging_entity": "Charging active entity (optional, boolean/binary_sensor)",
-          "evcc_mode_entity": "Charge mode entity (sensor/select with instant charging value)",
-          "evcc_now_value": "Value for 'instant charging' (EVCC: \"now\", openWB: \"Instant Charging\")",
-          "evcc_discharge_limit_w": "Discharge limit in Now mode (W)"
+          "evcc_enabled": "Enable instant charge: battery guard",
+          "evcc_charging_entity": "Charging active (optional, boolean/binary_sensor)",
+          "evcc_mode_entity": "Charge mode (sensor/select with instant-charging value)",
+          "evcc_now_value": "Value for instant charging (EVCC: \"now\", openWB: \"Instant Charging\")",
+          "evcc_discharge_limit_w": "Discharge limit during instant charging (W)"
         },
         "data_description": {
-          "evcc_discharge_limit_w": "Maximum battery discharge power while EVCC is in instant charging mode. 0 = discharging completely blocked."
+          "evcc_discharge_limit_w": "Maximum battery discharge power during instant charging. 0 = discharging completely blocked."
         }
       },
       "heatpump": {
@@ -622,7 +622,7 @@
           "emergency": "Emergency charge",
           "feed_in_limit": "Feed-in throttling",
           "reserve_protection": "Backup reserve active",
-          "evcc_pause": "EVCC Now mode",
+          "evcc_pause": "Instant charge: battery guard",
           "ht_protection": "HT protection",
           "corridor": "Charge corridor",
           "pv_delay": "PV forecast delay",
@@ -784,7 +784,7 @@
         "name": "Adaptive reserve (consumption average)"
       },
       "evcc_enabled": {
-        "name": "EVCC integration"
+        "name": "Instant charge: battery guard"
       },
       "curtailment_guard_enabled": {
         "name": "Curtailment guard"

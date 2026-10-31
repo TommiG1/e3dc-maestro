@@ -657,10 +657,10 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         param_key=CONF_FORWARD_LOOKING_MAX_SOC,
         min_value=60, max_value=100, step_value=1,
     ),
-    # ── D1: EVCC Now-Modus Entladungslimit ─────────────────────────────────
+    # ── D1: Entlade-Limit bei Sofortladen (EVCC/openWB/go-e/…) ──────────────
     MaestroNumberDescription(
         key=CONF_EVCC_DISCHARGE_LIMIT_W,
-        name="EVCC Now-Modus Entladungslimit",
+        name="Entlade-Limit bei Sofortladen",
         icon="mdi:car-electric",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=NumberDeviceClass.POWER,

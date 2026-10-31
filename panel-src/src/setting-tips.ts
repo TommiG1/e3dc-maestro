@@ -309,12 +309,12 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Raises the reserve from the consumption of recent days.",
   },
   evcc_enabled: {
-    de: "Begrenzt die Entladung, während EVCC das Auto im Now-Modus lädt.",
-    en: "Limits discharge while EVCC charges the car in now mode.",
+    de: "Begrenzt die Entladung, während die Wallbox Sofortladen meldet (EVCC, openWB, go-e, …).",
+    en: "Limits discharge while the wallbox reports instant charging (EVCC, openWB, go-e, …).",
   },
   evcc_discharge_limit_w: {
-    de: "Höchste Entladung in Watt, solange EVCC im Now-Modus lädt.",
-    en: "Highest discharge in watts while EVCC charges in now mode.",
+    de: "Höchste Entladung in Watt während Sofortladen.",
+    en: "Highest discharge in watts during instant charging.",
   },
   wallbox_enabled: {
     de: "Maestro steuert den Ladestrom der Wallbox nach Überschuss.",

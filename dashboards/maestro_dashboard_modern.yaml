@@ -2977,13 +2977,13 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: EVCC – Akku-Entladesperre
+            heading: Sofortladen: Akku-Schutz
             icon: mdi:ev-plug-type2
 
           - type: entities
             entities:
               - entity: switch.e3dc_maestro_evcc_integration
-                name: EVCC-Integration aktiv
+                name: Sofortladen: Akku-Schutz aktiv
               - entity: number.e3dc_maestro_evcc_now_modus_entladungslimit
                 name: Akku-Entladungslimit im Now-Modus (W)
               - type: button
@@ -3977,7 +3977,7 @@ views:
               | Dynamischer Tarif | [→ Tarif](/e3dc-maestro-modern/help-tarif) |
               | Preisplan (Beta) | [→ Preisplan](/e3dc-maestro-modern/help-preisplan) |
               | Tarif-Slots | [→ Tarif-Slots](/e3dc-maestro-modern/help-tariff-slots) |
-              | EVCC – Akku-Entladesperre | [→ EVCC](/e3dc-maestro-modern/help-evcc) |
+              | Sofortladen: Akku-Schutz | [→ EVCC](/e3dc-maestro-modern/help-evcc) |
               | Wallbox-Überschussregelung | [→ Wallbox](/e3dc-maestro-modern/help-wallbox) |
               | Wärmepumpe | [→ Wärmepumpe](/e3dc-maestro-modern/help-wp) |
               | Morgen-Vorentladung | [→ Vorentladung](/e3dc-maestro-modern/help-vorentladung) |
@@ -4010,7 +4010,7 @@ views:
               | 3 | **emergency** | SoC unter Ladeschwelle → Notfallladung mit voller Leistung |
               | 4 | **feed_in_limit** | Netzeinspeisung über Limit → Ladeleistung anheben |
               | 5 | **reserve_protection** | Notstromreserve → Entladung gesperrt |
-              | 6 | **evcc_pause** | EVCC Sofortladen → Akku-Entladegrenze |
+              | 6 | **evcc_pause** | Sofortladen: Akku-Schutz → Akku-Entladegrenze |
               | 7 | **ht_protection** | Hochtarif-Fenster → kein Entladen über Reserve |
               | 8 | **morning_discharge** | Morgen-Vorentladung (Kapazität für Tages-PV schaffen) |
               | 9 | **morning_cap** | SoC-Deckel morgens bis konfigurierte Uhrzeit |
@@ -4120,15 +4120,15 @@ views:
             content: |
               Diese beiden Features sind **vollständig unabhängig** voneinander:
 
-              | | EVCC-Entladesperre | Wallbox-Überschussregelung |
+              | | Sofortladen: Akku-Schutz | Wallbox-Überschussregelung |
               |---|---|---|
               | **Was sie tut** | Sperrt Akku-Entladung wenn Auto im Sofortladen-Modus | Regelt Ladestrom der Wallbox nach PV-Überschuss |
               | **Einfluss auf** | E3DC-Akku (discharge limit) | Wallbox-Ladestrom (A) |
-              | **Gesteuert über** | EVCC Lädt-Sensor + Modus-Sensor | PV-Überschuss-Berechnung |
+              | **Gesteuert über** | Laden-aktiv + Lade-Modus-Sensor | PV-Überschuss-Berechnung |
               | **Schalter** | `switch.e3dc_maestro_evcc_integration` | `switch.e3dc_maestro_wallbox_regelung` |
 
               Beide Schalter können unabhängig aktiviert/deaktiviert werden.
-              Die EVCC-Entladesperre funktioniert auch ohne Wallbox-Regelung
+              Der Sofortladen-Schutz funktioniert auch ohne Wallbox-Regelung
               und umgekehrt.
 
   # ========================================================================
@@ -4791,7 +4791,7 @@ views:
           Maestro steuert den Ladestrom der Wallbox in Abstimmung mit dem PV-Überschuss.
           Die Parameter begrenzen den Betriebsbereich und schützen vor ungültigen Befehlen.
           
-          > Diese Funktion ist **unabhängig von der EVCC-Akku-Entladesperre**. Beide
+          > Diese Funktion ist **unabhängig vom Sofortladen: Akku-Schutz**. Beide
           > Schalter können separat aktiviert werden.
           
           > **Verbrauchstrennung (seit v0.3.1):** Wird im Konfigurations-Wizard ein
@@ -4837,13 +4837,13 @@ views:
           
           **Standard:** 1380 W
 
-  - title: "Hilfe: EVCC – Akku-Entladesperre"
+  - title: "Hilfe: Sofortladen: Akku-Schutz"
     path: help-evcc
     subview: true
     cards:
       - type: markdown
         content: |
-          ## EVCC – Akku-Entladesperre bei Sofortladen
+          ## Sofortladen: Akku-Schutz
           
           Diese Funktion ist **unabhängig von der Wallbox-Überschussregelung**. Sie schützt
           ausschließlich den Hausakku, wenn das Auto über EVCC/OpenWB im Sofortlade-Modus
@@ -4851,27 +4851,27 @@ views:
           
           Maestro greift nur ein, wenn **beide** Bedingungen gleichzeitig erfüllt sind:
           
-          1. Der konfigurierte EVCC-Lädt-Sensor meldet `on/true` (das Auto zieht tatsächlich Strom)
-          2. Der EVCC-Modus-Sensor steht auf dem konfigurierten Now-Wert (z. B. `now` bzw. `Instant Charging`)
+          1. Der Sensor „Laden aktiv“ meldet `on/true` (das Auto zieht tatsächlich Strom)
+          2. Der Lade-Modus-Sensor steht auf dem konfigurierten Sofortlade-Wert (z. B. `now` bzw. `Instant Charging`)
           
           Sobald **eine** der Bedingungen wegfällt, wird das Limit automatisch aufgehoben
           und Maestro fährt seinen normalen Regelbetrieb weiter.
           
           ---
           
-          ### EVCC-Integration aktiv
+          ### Sofortladen: Akku-Schutz aktiv
           
           **Master-Schalter** der Funktion. Aus → keine Sperre, Maestro ignoriert EVCC
           vollständig.
           
-          Die zugehörigen Sensoren (Lädt-Sensor, Modus-Sensor, Now-Wert) werden im
+          Die zugehörigen Sensoren (Laden aktiv, Lade-Modus, Sofortlade-Wert) werden im
           Konfigurations-Wizard der Integration gesetzt.
           
           ---
           
-          ### Akku-Entladungslimit im Now-Modus (W)
+          ### Entlade-Limit bei Sofortladen (W)
           
-          **Wirkung:** Maximale Akku-Entladeleistung, solange EVCC im Sofortlade-Modus lädt.
+          **Wirkung:** Maximale Akku-Entladeleistung, solange Sofortladen aktiv ist.
           
           - **`0` W (Standard):** Akku-Entladung wird komplett gesperrt — das Auto zieht
             nur aus PV und Netz, der Akku bleibt auf seinem aktuellen SoC.

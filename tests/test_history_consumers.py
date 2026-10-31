@@ -126,10 +126,19 @@ def _mean_rows(start: datetime, values: list[float | None]) -> list[dict]:
     return [{"start": start + timedelta(hours=i), "mean": v} for i, v in enumerate(values)]
 
 
-def _stats(unit: str = "W"):
-    state = SimpleNamespace(attributes={"unit_of_measurement": unit})
-    hass = SimpleNamespace(states=SimpleNamespace(get=lambda _eid: state))
-    return consumption_stats.ConsumptionStats(hass, "sensor.house")
+def _stats(unit: str = "W", subtract: str | None = None, units: dict[str, str] | None = None):
+    unit_map = dict(units or {})
+    unit_map.setdefault("sensor.house", unit)
+    if subtract:
+        unit_map.setdefault(subtract, "W")
+
+    def _get(eid: str):
+        return SimpleNamespace(
+            attributes={"unit_of_measurement": unit_map.get(eid, "W")}
+        )
+
+    hass = SimpleNamespace(states=SimpleNamespace(get=_get))
+    return consumption_stats.ConsumptionStats(hass, "sensor.house", subtract)
 
 
 async def test_consumption_unchanged_without_history(recorder):
@@ -168,3 +177,41 @@ async def test_consumption_history_only(recorder):
     await stats.async_refresh(7, None)
     assert stats.avg_w_24h == pytest.approx(500.0)
     assert stats.data_days == 1
+
+
+async def test_consumption_subtracts_wallbox_hourly_means(recorder):
+    recorder.stats["sensor.house"] = _mean_rows(_h(9, 10), [1000.0, 800.0, 500.0])
+    recorder.stats["sensor.wallbox"] = _mean_rows(_h(9, 10), [700.0, None, 200.0])
+    stats = _stats(subtract="sensor.wallbox")
+    await stats.async_refresh(7, None)
+    assert "sensor.wallbox" in recorder.calls[0][0]
+    assert stats.hourly_profile_w[10] == pytest.approx(300.0)
+    assert stats.hourly_profile_w[11] == pytest.approx(800.0)  # no wallbox row
+    assert stats.hourly_profile_w[12] == pytest.approx(300.0)
+    assert stats.avg_w_24h == pytest.approx((300 + 800 + 300) / 3)
+
+
+async def test_consumption_subtract_floors_at_zero(recorder):
+    recorder.stats["sensor.house"] = _mean_rows(_h(9, 10), [500.0])
+    recorder.stats["sensor.wallbox"] = _mean_rows(_h(9, 10), [900.0])
+    stats = _stats(subtract="sensor.wallbox")
+    await stats.async_refresh(7, None)
+    assert stats.hourly_profile_w[10] == pytest.approx(0.0)
+
+
+async def test_consumption_subtract_scales_kw_wallbox(recorder):
+    recorder.stats["sensor.house"] = _mean_rows(_h(9, 10), [2000.0])
+    recorder.stats["sensor.wallbox"] = _mean_rows(_h(9, 10), [1.2])  # 1.2 kW
+    stats = _stats(
+        subtract="sensor.wallbox",
+        units={"sensor.house": "W", "sensor.wallbox": "kW"},
+    )
+    await stats.async_refresh(7, None)
+    assert stats.hourly_profile_w[10] == pytest.approx(800.0)
+
+
+def test_subtract_hourly_means_pure():
+    rows = _mean_rows(_h(9, 10), [1000.0, 500.0])
+    sub = _mean_rows(_h(9, 10), [200.0, 100.0])
+    out = consumption_stats._subtract_hourly_means(rows, sub)
+    assert [r["mean"] for r in out] == [800.0, 400.0]

@@ -173,13 +173,13 @@
         }
       },
       "evcc": {
-        "title": "EVCC-Integration",
-        "description": "Verbindet Maestro mit EVCC, openWB oder jeder anderen Wallbox-Steuerung. Maestro tritt zurück, sobald der konfigurierte Lade-Modus-Sensor den 'Sofortladen'-Wert meldet – die Wallbox kann dann das Netz nutzen.\n\nFunktioniert mit jeder Wallbox, die einen Sensor oder eine Select-Entität bereitstellt, der/die beim Modus 'Sofortladen' (o.ä.) einen definierten Wert liefert:\n• EVCC: Sensor mit Wert \"now\"\n• openWB: Sensor mit Wert \"Instant Charging\"\n• Andere Wallboxen: beliebiger Sensor/Select, solange der Sofortlade-Wert bekannt ist.",
+        "title": "Sofortladen: Akku-Schutz",
+        "description": "Drosselt die Akku-Entladung, sobald die Wallbox Sofortladen meldet – damit das Auto den Hausakku nicht leert. PV-Laden bleibt möglich.\n\nFunktioniert mit EVCC, openWB, go-e oder jeder anderen Steuerung, die einen Modus-Sensor liefert:\n• EVCC: Wert \"now\"\n• openWB: Wert \"Instant Charging\"\n• Andere: der Wert, den euer Modus-Sensor beim Sofortladen meldet.",
         "data": {
-          "evcc_enabled": "EVCC/openWB/Wallbox-Integration aktivieren",
-          "evcc_charging_entity": "Laden-aktiv Entity (optional, boolean/binary_sensor – z. B. openWB autoladestatus)",
-          "evcc_mode_entity": "Lade-Modus Entity (Sensor/Select mit Sofortlade-Wert – z. B. EVCC, openWB, andere)",
-          "evcc_now_value": "Wert für 'Sofortladen' (EVCC: \"now\", openWB: \"Instant Charging\")"
+          "evcc_enabled": "Sofortladen: Akku-Schutz aktivieren",
+          "evcc_charging_entity": "Laden aktiv (optional, boolean/binary_sensor)",
+          "evcc_mode_entity": "Lade-Modus (Sensor/Select mit Sofortlade-Wert)",
+          "evcc_now_value": "Wert für Sofortladen (EVCC: \"now\", openWB: \"Instant Charging\")"
         }
       },
       "heatpump": {
@@ -271,7 +271,7 @@
           "tariff_slots": "Tarif-Zeitfenster",
           "tariff": "Dynamischer Tarif",
           "wallbox": "Wallbox",
-          "evcc": "EVCC",
+          "evcc": "Sofortladen: Akku-Schutz",
           "heatpump": "Wärmepumpe",
           "failsafe": "Failsafe",
           "flat_curve": "F0 / Gentle-Charge",
@@ -509,21 +509,21 @@
         "data_description": {
           "wallbox_min_surplus": "Maestro startet die Wallbox erst, wenn dieser PV-Überschuss dauerhaft verfügbar ist (Hysterese verhindert Takten).",
           "wallbox_min_current": "Mindestladestrom nach IEC 61851 (normalerweise 6 A). Darunter schaltet Maestro die Wallbox lieber ab.",
-          "wallbox_included_in_house": "Aktivieren bei openWB am EVU-Zähler oder wenn der Hausverbrauchssensor die Wallbox mitzählt. Verhindert Doppelzählung."
+          "wallbox_included_in_house": "Aktivieren bei openWB am EVU-Zähler oder wenn der Hausverbrauchssensor die Wallbox mitzählt. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan)."
         }
       },
       "evcc": {
-        "title": "EVCC-Integration",
-        "description": "Verbindet Maestro mit EVCC, openWB oder jeder anderen Wallbox-Steuerung. Maestro tritt zurück, sobald der konfigurierte Lade-Modus-Sensor den 'Sofortladen'-Wert meldet.\n\nUnterstützte Systeme:\n• EVCC: Sensor mit Wert \"now\"\n• openWB: Sensor mit Wert \"Instant Charging\"\n• Andere Wallboxen: beliebiger Sensor/Select, der beim Sofortladen einen bekannten Wert liefert.",
+        "title": "Sofortladen: Akku-Schutz",
+        "description": "Drosselt die Akku-Entladung, sobald die Wallbox Sofortladen meldet – damit das Auto den Hausakku nicht leert. PV-Laden bleibt möglich.\n\nFunktioniert mit EVCC, openWB, go-e oder jeder anderen Steuerung mit Modus-Sensor:\n• EVCC: Wert \"now\"\n• openWB: Wert \"Instant Charging\"\n• Andere: der Wert, den euer Modus-Sensor beim Sofortladen meldet.",
         "data": {
-          "evcc_enabled": "EVCC/openWB/Wallbox-Integration aktivieren",
-          "evcc_charging_entity": "Laden-aktiv Entity (optional, boolean/binary_sensor)",
-          "evcc_mode_entity": "Lade-Modus Entity (Sensor/Select mit Sofortlade-Wert)",
-          "evcc_now_value": "Wert für 'Sofortladen' (EVCC: \"now\", openWB: \"Instant Charging\")",
-          "evcc_discharge_limit_w": "Entlade-Limit im Now-Modus (W)"
+          "evcc_enabled": "Sofortladen: Akku-Schutz aktivieren",
+          "evcc_charging_entity": "Laden aktiv (optional, boolean/binary_sensor)",
+          "evcc_mode_entity": "Lade-Modus (Sensor/Select mit Sofortlade-Wert)",
+          "evcc_now_value": "Wert für Sofortladen (EVCC: \"now\", openWB: \"Instant Charging\")",
+          "evcc_discharge_limit_w": "Entlade-Limit bei Sofortladen (W)"
         },
         "data_description": {
-          "evcc_discharge_limit_w": "Maximale Entladeleistung des Akkus, während EVCC im Sofortlade-Modus ist. 0 = Entladen komplett gesperrt."
+          "evcc_discharge_limit_w": "Maximale Entladeleistung des Akkus während Sofortladen. 0 = Entladen komplett gesperrt."
         }
       },
       "heatpump": {
@@ -622,7 +622,7 @@
           "emergency": "Notfallladung",
           "feed_in_limit": "Einspeisedrosselung",
           "reserve_protection": "Notstromreserve aktiv",
-          "evcc_pause": "EVCC Now-Modus",
+          "evcc_pause": "Sofortladen: Akku-Schutz",
           "ht_protection": "HT-Schutz",
           "corridor": "Ladekorridor",
           "pv_delay": "PV-Prognose Verzögerung",
@@ -784,7 +784,7 @@
         "name": "Adaptive Reserve (Verbrauchsmittel)"
       },
       "evcc_enabled": {
-        "name": "EVCC-Integration"
+        "name": "Sofortladen: Akku-Schutz"
       },
       "curtailment_guard_enabled": {
         "name": "Abregelschutz"

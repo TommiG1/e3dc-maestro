@@ -11,6 +11,19 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.2] – Verbrauchsprognose ohne Wallbox (2026-10-31)
+
+> **Beta.** Enthält 0.5.5-beta.1. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.2.md](docs/release-notes/v0.5.5-beta.2.md).
+
+### Neu
+- **go-eCharger Auto-Detect** für Leistungssensoren, wenn keine E3DC-/openWB-Wallbox erkannt wird.
+- **Sofortladen: Akku-Schutz:** UI-Umbenennung der früheren „EVCC“-Bezeichnung (Keys `evcc_*` unverändert).
+
+### Korrekturen
+- **Verbrauchsprognose ohne Wallbox:** Bei gesetztem Wallbox-Leistungssensor und „im Hausverbrauch enthalten“ zieht Maestro die Wallbox auch aus dem gelernten Profil (Prognose, Preisplan, adaptive Reserve), rückwirkend im Lookback.
+
+---
+
 ## [0.5.5-beta.1] – CSV-Historie aus dem my.e3dc-Portal (2026-10-31)
 
 > **Beta.** Enthält 0.5.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.1.md](docs/release-notes/v0.5.5-beta.1.md).
