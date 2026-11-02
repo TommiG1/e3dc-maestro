@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.4] – Manuelle Entladesperre (2026-11-02)
+
+> **Beta.** Enthält 0.5.5-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.4.md](docs/release-notes/v0.5.5-beta.4.md).
+
+### Neu
+- **Entladesperre:** manueller Schalter in Schnellsteuerung und Akku-Steuerung, analog zur erzwungenen Entladung. Begrenzt die Entladeleistung (0 W = voll sperren), PV darf weiter laden. Leistung einstellbar.
+
+---
+
 ## [0.5.5-beta.3] – Verbrauchsprognose ohne Wallbox (2026-10-31)
 
 > **Beta.** Enthält 0.5.5-beta.1. Ersetzt die zurückgezogene 0.5.5-beta.2. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.3.md](docs/release-notes/v0.5.5-beta.3.md).

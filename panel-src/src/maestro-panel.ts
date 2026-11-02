@@ -252,6 +252,7 @@ class MaestroPanel extends LitElement {
   private _error?: string;
   private _chartError?: string;
   private _powerDraft?: number;
+  private _lockPowerDraft?: number;
   private _reserveDraft?: number;
   private _zoomKey?: string;
   private _timer?: number;
@@ -1406,6 +1407,13 @@ class MaestroPanel extends LitElement {
     });
   }
 
+  private _commitLockPower(watts: number): void {
+    void this._commitNumber(E.dischargeLockPower, watts).then(() => {
+      this._lockPowerDraft = undefined;
+      this.requestUpdate();
+    });
+  }
+
   private _commitReserve(percent: number): void {
     void this._commitNumber(E.fixedReserveSoc, percent).then(() => {
       this._reserveDraft = undefined;
@@ -1928,6 +1936,12 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       onPowerCommit: (w) => this._commitPower(w),
+      lockPowerDraft: this._lockPowerDraft,
+      onLockPowerDraft: (w) => {
+        this._lockPowerDraft = w;
+        this.requestUpdate();
+      },
+      onLockPowerCommit: (w) => this._commitLockPower(w),
       reserveDraft: this._reserveDraft,
       onReserveDraft: (percent) => {
         this._reserveDraft = percent;
@@ -2075,6 +2089,12 @@ class MaestroPanel extends LitElement {
           this.requestUpdate();
         },
         onPowerCommit: (w) => this._commitPower(w),
+        lockPowerDraft: this._lockPowerDraft,
+        onLockPowerDraft: (w) => {
+          this._lockPowerDraft = w;
+          this.requestUpdate();
+        },
+        onLockPowerCommit: (w) => this._commitLockPower(w),
         reserveDraft: this._reserveDraft,
         onReserveDraft: (percent) => {
           this._reserveDraft = percent;

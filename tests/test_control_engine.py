@@ -3073,6 +3073,59 @@ class TestForceDischarge:
         assert d2.discharge_power_limit is None
 
 
+class TestDischargeLock:
+    """Manual discharge-lock dashboard switch (NORMAL + discharge cap)."""
+
+    def _params(self, **kwargs):
+        base = {
+            **DEFAULT_PARAMS.__dict__,
+            "discharge_lock_power_w": 0.0,
+            "ht_enabled": False,
+            "seasonal_reserve_enabled": False,
+        }
+        base.update(kwargs)
+        return MaestroParams(**base)
+
+    def _state(self, soc=70.0, pv_power=2000.0):
+        return MaestroState(
+            soc=soc, pv_power=pv_power, house_power=500, grid_power=-1500, battery_power=0,
+        )
+
+    def test_full_lock_blocks_discharge_allows_pv(self):
+        from custom_components.e3dc_maestro.const import PHASE_DISCHARGE_LOCK
+        d = decide(self._state(), self._params(), _now(6, 15, 12), discharge_lock=True)
+        assert d.phase == PHASE_DISCHARGE_LOCK
+        assert d.power_mode == POWER_MODE_NORMAL
+        assert d.discharge_power_limit == 0.0
+        assert d.charge_power_limit is None
+
+    def test_partial_lock_caps_discharge(self):
+        from custom_components.e3dc_maestro.const import PHASE_DISCHARGE_LOCK
+        p = self._params(discharge_lock_power_w=500.0)
+        d = decide(self._state(), p, _now(6, 15, 12), discharge_lock=True)
+        assert d.phase == PHASE_DISCHARGE_LOCK
+        assert d.power_mode == POWER_MODE_NORMAL
+        assert d.discharge_power_limit == 500.0
+        assert d.charge_power_limit is None
+
+    def test_force_discharge_beats_lock(self):
+        from custom_components.e3dc_maestro.const import PHASE_FORCE_DISCHARGE
+        p = self._params(force_discharge_power_w=2000.0)
+        d = decide(
+            self._state(), p, _now(6, 15, 12),
+            force_discharge=True, discharge_lock=True,
+        )
+        assert d.phase == PHASE_FORCE_DISCHARGE
+        assert d.power_mode == POWER_MODE_DISCHARGE
+
+    def test_yields_to_master_off(self):
+        d = decide(
+            self._state(), self._params(), _now(6, 15, 12),
+            regelung_aktiv=False, discharge_lock=True,
+        )
+        assert d.phase == PHASE_OFF
+
+
 class TestFixedReserve:
     """Cockpit switch: a fixed reserve replaces the seasonal one while it is on."""
 

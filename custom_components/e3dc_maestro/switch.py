@@ -75,6 +75,13 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         off_fn=lambda coord: coord.set_force_discharge(False),
     ),
     MaestroSwitchDescription(
+        key="discharge_lock",
+        name="Entladesperre",
+        icon="mdi:battery-off",
+        on_fn=lambda coord: coord.set_discharge_lock(True),
+        off_fn=lambda coord: coord.set_discharge_lock(False),
+    ),
+    MaestroSwitchDescription(
         key=CONF_FIXED_RESERVE_ENABLED,
         name="Notstromreserve",
         icon="mdi:battery-lock",
@@ -395,6 +402,8 @@ class MaestroSwitch(CoordinatorEntity[E3DCMaestroCoordinator], SwitchEntity):
             return self.coordinator.regelung_aktiv
         if key == "force_discharge":
             return self.coordinator.force_discharge
+        if key == "discharge_lock":
+            return self.coordinator.discharge_lock
         if key == "debug":
             return self.coordinator.debug_enabled
         if self.entity_description.param_key:

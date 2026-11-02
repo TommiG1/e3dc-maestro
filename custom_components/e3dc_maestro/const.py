@@ -300,6 +300,10 @@ CONF_MORNING_GRID_EXPORT_THRESHOLD = "morning_grid_export_threshold"  # €/kWh 
 CONF_FORCE_DISCHARGE_POWER_W = "force_discharge_power_w"          # W Entladeleistung bei manueller Erzwingung (default 3000)
 DEFAULT_FORCE_DISCHARGE_POWER_W = 3000
 
+# Manual discharge lock (dashboard switch): NORMAL + max discharge cap
+CONF_DISCHARGE_LOCK_POWER_W = "discharge_lock_power_w"            # W max. Entladeleistung bei manueller Sperre (default 0 = voll sperren)
+DEFAULT_DISCHARGE_LOCK_POWER_W = 0
+
 # Morning discharge mode choices
 MORNING_DISCHARGE_OFF = "off"
 MORNING_DISCHARGE_PASSIVE = "passive"
@@ -358,6 +362,7 @@ PHASE_FAST_FLOOR = "fast_floor"                  # Schnelllade-Boden: voller PV-
 PHASE_GRID_CHARGE = "grid_charge"                # aktive Netzladung im low-Slot (NT-Fenster)
 PHASE_GRID_HOLD = "grid_hold"                    # Ziel erreicht: Akku halten, Haus aus günstigem Netz
 PHASE_FORCE_DISCHARGE = "force_discharge"        # manueller Schalter im Dashboard
+PHASE_DISCHARGE_LOCK = "discharge_lock"          # manuelle Entladesperre im Dashboard
 PHASE_IDLE = "idle"                              # kein Bedarf
 
 # ── Anti-flapping: feed-in-limit hysteresis ───────────────────────────────────
@@ -393,6 +398,7 @@ ALL_PHASES = [
     PHASE_EVCC_PAUSE,
     PHASE_HT_PROTECTION,
     PHASE_FORCE_DISCHARGE,
+    PHASE_DISCHARGE_LOCK,
     PHASE_MORNING_DISCHARGE,
     PHASE_ASTRO_WAIT,
     PHASE_MORNING_CAP,

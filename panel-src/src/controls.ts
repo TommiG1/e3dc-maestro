@@ -19,6 +19,9 @@ export interface ControlsInput {
   onToggle: (entityId: string) => void;
   onPowerDraft: (watts: number) => void;
   onPowerCommit: (watts: number) => void;
+  lockPowerDraft?: number;
+  onLockPowerDraft: (watts: number) => void;
+  onLockPowerCommit: (watts: number) => void;
   reserveDraft?: number;
   onReserveDraft: (percent: number) => void;
   onReserveCommit: (percent: number) => void;
@@ -72,6 +75,12 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
   const max = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
   const step = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
   const powerValue = c.forcePowerDraft ?? num(power) ?? min;
+  const lockPower = c.hass.states[E.dischargeLockPower];
+  const lockAttrs = lockPower?.attributes ?? {};
+  const lockMin = typeof lockAttrs.min === "number" ? lockAttrs.min : 0;
+  const lockMax = typeof lockAttrs.max === "number" ? lockAttrs.max : 10000;
+  const lockStep = typeof lockAttrs.step === "number" ? lockAttrs.step : 100;
+  const lockValue = c.lockPowerDraft ?? num(lockPower) ?? lockMin;
   const reserve = c.hass.states[E.fixedReserveSoc];
   const reserveAttrs = reserve?.attributes ?? {};
   const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
@@ -131,6 +140,20 @@ export function controlsSheet(c: ControlsInput): TemplateResult {
           disabled: !power || power.state === "unavailable",
           onPreview: c.onPowerDraft,
           onCommit: c.onPowerCommit,
+        })}
+      </div>
+      <div class="ctrl wrap">
+        <div class="txt"><b>${t("ctrlLock")}</b><span>${t("ctrlLockPower", { v: c.fmt.w(lockValue) })}</span></div>
+        ${toggle(E.manualDischargeLock, t("ctrlLock"))}
+        ${sliderField({
+          label: t("ctrlLockPower", { v: "" }),
+          min: lockMin,
+          max: lockMax,
+          step: lockStep,
+          value: lockValue,
+          disabled: !lockPower || lockPower.state === "unavailable",
+          onPreview: c.onLockPowerDraft,
+          onCommit: c.onLockPowerCommit,
         })}
       </div>
       <div class="ctrl wrap">

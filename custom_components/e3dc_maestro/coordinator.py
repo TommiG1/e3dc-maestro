@@ -181,6 +181,7 @@ class E3DCMaestroCoordinator(
             None if self.regelung_aktiv else pause_until_from_options(opts)
         )
         self.force_discharge: bool = False
+        self.discharge_lock: bool = False
         self.last_decision: MaestroDecision | None = None
         self.last_phase: str = PHASE_OFF
         self.last_action_info: dict[str, Any] = {}
@@ -475,12 +476,35 @@ class E3DCMaestroCoordinator(
         """
         was_active = self.force_discharge
         self.force_discharge = active
+        if active and self.discharge_lock:
+            self.discharge_lock = False
         if was_active and not active:
             self._create_background_task(
                 self._async_release_limits("Manuelle Entladung deaktiviert"),
                 "e3dc_maestro_release_limits",
             )
         # Trigger a refresh so the new state is reflected without delay.
+        self._create_background_task(
+            self.async_request_refresh(),
+            "e3dc_maestro_refresh",
+        )
+
+
+    def set_discharge_lock(self, active: bool) -> None:
+        """Called by the manual discharge-lock switch entity.
+
+        Keeps NORMAL mode and caps max discharge (0 W = full lock). Mutually
+        exclusive with forced discharge. Turning OFF releases the cap.
+        """
+        was_active = self.discharge_lock
+        self.discharge_lock = active
+        if active and self.force_discharge:
+            self.force_discharge = False
+        if was_active and not active:
+            self._create_background_task(
+                self._async_release_limits("Manuelle Entladesperre deaktiviert"),
+                "e3dc_maestro_release_limits",
+            )
         self._create_background_task(
             self.async_request_refresh(),
             "e3dc_maestro_refresh",
@@ -764,6 +788,7 @@ class E3DCMaestroCoordinator(
             hp_running=hp_running,
             hp_last_change_minutes=hp_last_change_min,
             force_discharge=self.force_discharge,
+            discharge_lock=self.discharge_lock,
             previous_phase=self.last_phase,
             previous_phase_since=self._last_phase_changed_at,
             previous_battery_priority=(

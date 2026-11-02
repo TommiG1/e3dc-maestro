@@ -759,6 +759,9 @@
       "force_discharge": {
         "name": "Erzwungene Entladung"
       },
+      "discharge_lock": {
+        "name": "Entladesperre"
+      },
       "ht_enabled": {
         "name": "HT/NT-Schutz"
       },
@@ -847,6 +850,9 @@
       },
       "force_discharge_power_w": {
         "name": "Erzwungene Entladungsleistung"
+      },
+      "discharge_lock_power_w": {
+        "name": "Entladesperre Leistung"
       },
       "morning_grid_export_threshold": {
         "name": "Tibber-Schwelle für Netzexport"

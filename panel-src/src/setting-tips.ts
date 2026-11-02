@@ -412,6 +412,14 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Leistung der erzwungenen Entladung in Watt.",
     en: "Power of the forced discharge in watts.",
   },
+  discharge_lock: {
+    de: "Sperrt oder begrenzt die Entladung. PV darf weiter in den Akku. 0 W = voll sperren.",
+    en: "Locks or limits discharge. PV may still charge the battery. 0 W = full lock.",
+  },
+  discharge_lock_power_w: {
+    de: "Maximale Entladeleistung bei aktiver Entladesperre in Watt. 0 = voll sperren.",
+    en: "Maximum discharge power while the discharge lock is on, in watts. 0 = full lock.",
+  },
   soc_hysteresis_percent: {
     de: "SoC-Änderung, die Maestro ignoriert, damit die Regelung nicht pendelt.",
     en: "SoC change Maestro ignores so control does not hunt.",

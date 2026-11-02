@@ -256,6 +256,8 @@ class MaestroParams:
     battery_total_cycles: float = 5000.0   # Vollzyklen Lebensdauer
     # Manuelle Erzwingung der Akku-Entladung (Dashboard-Schalter)
     force_discharge_power_w: float = 3000.0
+    # Manuelle Entladesperre: max. erlaubte Entladeleistung (0 = voll sperren)
+    discharge_lock_power_w: float = 0.0
     # Feste Notstromreserve aus dem Cockpit. Wenn aktiv, ersetzt sie die
     # saisonale und die verbrauchsadaptive Reserve.
     fixed_reserve_enabled: bool = False
@@ -1134,6 +1136,7 @@ def _apply_wallbox_discharge_guard(
         PHASE_EMERGENCY,
         PHASE_EVCC_PAUSE,
         PHASE_FEED_IN_LIMIT,
+        PHASE_DISCHARGE_LOCK,
         PHASE_FORCE_DISCHARGE,
         PHASE_MORNING_DISCHARGE,
         PHASE_OFF,
@@ -1153,6 +1156,7 @@ def _apply_wallbox_discharge_guard(
         PHASE_RESERVE_PROTECTION,
         PHASE_EVCC_PAUSE,
         PHASE_FORCE_DISCHARGE,
+        PHASE_DISCHARGE_LOCK,
         PHASE_MORNING_DISCHARGE,
     }
     if decision.phase in _exempt:
@@ -1209,6 +1213,7 @@ def decide(
     hp_running: bool = False,
     hp_last_change_minutes: float = 999,
     force_discharge: bool = False,
+    discharge_lock: bool = False,
     previous_phase: str | None = None,
     previous_phase_since: datetime | None = None,
     previous_battery_priority: bool = False,
@@ -1232,6 +1237,7 @@ def decide(
         hp_running=hp_running,
         hp_last_change_minutes=hp_last_change_minutes,
         force_discharge=force_discharge,
+        discharge_lock=discharge_lock,
         previous_phase=previous_phase,
         previous_phase_since=previous_phase_since,
         previous_battery_priority=previous_battery_priority,
@@ -1252,6 +1258,7 @@ def _decide_core(
     hp_running: bool = False,
     hp_last_change_minutes: float = 999,
     force_discharge: bool = False,
+    discharge_lock: bool = False,
     previous_phase: str | None = None,
     previous_phase_since: datetime | None = None,
     previous_battery_priority: bool = False,
@@ -1284,6 +1291,7 @@ def _decide_core(
         PHASE_EVCC_PAUSE,
         PHASE_FEED_IN_LIMIT,
         PHASE_FORCE_DISCHARGE,
+        PHASE_DISCHARGE_LOCK,
         PHASE_HT_PROTECTION,
         PHASE_IDLE,
         PHASE_MORNING_DISCHARGE,
@@ -1442,6 +1450,24 @@ def _decide_core(
             target_soc=target,
         )
 
+    # ── 1.6 Manuelle Entladesperre (Dashboard-Schalter) ─────────────────────
+    # NORMAL + Entlade-Cap: PV darf laden, Entladung nur bis zur eingestellten
+    # Leistung (0 W = voll sperren). Gegenstück zur erzwungenen Entladung.
+    if discharge_lock:
+        limit_w = max(0.0, min(float(params.discharge_lock_power_w), params.max_charge_power))
+        return MaestroDecision(
+            phase=PHASE_DISCHARGE_LOCK,
+            reason=(
+                f"Manuelle Entladesperre: max. {limit_w:.0f}\u202fW"
+                if limit_w > 0
+                else "Manuelle Entladesperre: Entladung gesperrt, PV darf laden"
+            ),
+            power_mode=POWER_MODE_NORMAL,
+            charge_power_limit=None,
+            discharge_power_limit=limit_w,
+            target_soc=target,
+        )
+
     feed_in_limit = _feed_in_limit_w(params)
 
     # ── 2. Emergency charge ─────────────────────────────────────────────────
@@ -1485,6 +1511,7 @@ def _decide_core(
             hp_running=hp_running,
             hp_last_change_minutes=hp_last_change_minutes,
             force_discharge=force_discharge,
+            discharge_lock=discharge_lock,
             previous_phase=previous_phase,
             previous_phase_since=previous_phase_since,
             previous_battery_priority=previous_battery_priority,

@@ -133,6 +133,18 @@ def decision_explanation(coord) -> str:
             f"Manuelle Zwangs-Entladung über Dashboard-Schalter aktiv: "
             f"Batterie wird mit {pw} W entladen."
         )
+    elif phase == "discharge_lock":
+        pw = _f(getattr(p, "discharge_lock_power_w", None))
+        if pw and pw > 0:
+            text = (
+                f"Manuelle Entladesperre aktiv: Entladung auf höchstens "
+                f"{pw} W begrenzt. PV-Überschuss darf weiter in den Akku."
+            )
+        else:
+            text = (
+                "Manuelle Entladesperre aktiv: Entladung gesperrt. "
+                "PV-Überschuss darf weiter in den Akku."
+            )
     elif phase == "morning_discharge":
         target = _f(dec.target_soc)
         text = (

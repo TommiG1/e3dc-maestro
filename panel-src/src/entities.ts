@@ -78,6 +78,7 @@ export const DEFAULT_IDS = {
   sentChargeLimit: sensor("gesendetes_lade_limit"),
   sentDischargeLimit: sensor("gesendetes_entlade_limit"),
   forceDischargePower: "number.e3dc_maestro_erzwungene_entladungsleistung",
+  dischargeLockPower: "number.e3dc_maestro_entladesperre_leistung",
   fixedReserveSoc: "number.e3dc_maestro_notstromreserve_prozent",
   /** Total plant AC rating (W), incl. additional producers — Maestro WR-Leistung. */
   inverterPower: "number.e3dc_maestro_wr_leistung",
@@ -88,6 +89,7 @@ export const DEFAULT_IDS = {
   ctrlPlanShadow: sw("preisplan_schattenmodus"),
   ctrlAuto: sw("auto_optimierung"),
   forceDischarge: sw("erzwungene_entladung"),
+  manualDischargeLock: sw("entladesperre"),
   fixedReserve: sw("notstromreserve"),
   debug: sw("debug_logging"),
   debugLog: sensor("debug_log"),

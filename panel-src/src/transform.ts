@@ -309,6 +309,7 @@ export function phaseColor(phase: string): string {
     evcc_pause: "#94a3b8",
     ht_protection: "#a78bfa",
     force_discharge: "#22d3ee",
+    discharge_lock: "#38bdf8",
     morning_discharge: "#67e8f9",
     astro_wait: "#94a3b8",
     morning_cap: "#818cf8",

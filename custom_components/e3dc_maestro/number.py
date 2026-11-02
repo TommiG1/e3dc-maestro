@@ -67,6 +67,7 @@ from .const import (
     CONF_PRE_DISCHARGE_OFFSET_H,
     CONF_PRE_DISCHARGE_MAX_POWER_W,
     CONF_FORCE_DISCHARGE_POWER_W,
+    CONF_DISCHARGE_LOCK_POWER_W,
     CONF_FIXED_RESERVE_SOC,
     CONF_MORNING_GRID_EXPORT_THRESHOLD,
     CONF_CHARGE_END_SUNSET_OFFSET_H,
@@ -544,6 +545,15 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         device_class=NumberDeviceClass.POWER,
         param_key=CONF_FORCE_DISCHARGE_POWER_W,
         min_value=100, max_value=10000, step_value=100,
+    ),
+    MaestroNumberDescription(
+        key=CONF_DISCHARGE_LOCK_POWER_W,
+        name="Entladesperre Leistung",
+        icon="mdi:battery-off",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=NumberDeviceClass.POWER,
+        param_key=CONF_DISCHARGE_LOCK_POWER_W,
+        min_value=0, max_value=10000, step_value=100,
     ),
     MaestroNumberDescription(
         key=CONF_FIXED_RESERVE_SOC,

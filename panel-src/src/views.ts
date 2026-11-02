@@ -185,6 +185,9 @@ export interface Ctx {
   forcePowerDraft?: number;
   onPowerDraft: (watts: number) => void;
   onPowerCommit: (watts: number) => void;
+  lockPowerDraft?: number;
+  onLockPowerDraft: (watts: number) => void;
+  onLockPowerCommit: (watts: number) => void;
   reserveDraft?: number;
   onReserveDraft: (percent: number) => void;
   onReserveCommit: (percent: number) => void;
@@ -602,6 +605,7 @@ export function liveView(c: Ctx): TemplateResult {
         : html`<button type="button" class="day-nav-today" @click=${() => c.onBalanceSelect("day", todayKey)}>${t("periodToday")}</button>`}
     </div>`;
   const powerValue = c.forcePowerDraft ?? num(st(c, E.forceDischargePower)) ?? 100;
+  const lockValue = c.lockPowerDraft ?? num(st(c, E.dischargeLockPower)) ?? 0;
   const reserveValue = c.reserveDraft ?? num(st(c, E.fixedReserveSoc)) ?? 0;
   const reserveOn = on(E.fixedReserve);
   const reserveLabel = reserveOn
@@ -782,7 +786,7 @@ export function liveView(c: Ctx): TemplateResult {
         <button type="button" class="soc-ctrl-btn" @click=${() => c.onOpenBatteryCtrl()}>
           <span class="soc-ctrl-copy">
             <span class="soc-ctrl-label">${t("batteryCtrl")}</span>
-            <span class="soc-ctrl-meta">${batteryCtrlMeta(c, powerValue, reserveValue)}</span>
+            <span class="soc-ctrl-meta">${batteryCtrlMeta(c, powerValue, lockValue, reserveValue)}</span>
           </span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
         </button>
@@ -1306,10 +1310,11 @@ function autoSummary(c: Ctx): { text: string; tone: string } {
   return { text: t("autoOn", { goal, eur }), tone: "on" };
 }
 
-function batteryCtrlMeta(c: Ctx, powerValue: number, reserveValue: number): string {
+function batteryCtrlMeta(c: Ctx, powerValue: number, lockValue: number, reserveValue: number): string {
   const { t } = c.i18n;
   const parts: string[] = [];
   if (isOn(st(c, E.forceDischarge))) parts.push(t("controlsForceOn", { v: c.fmt.w(powerValue) }));
+  if (isOn(st(c, E.manualDischargeLock))) parts.push(t("controlsLockOn", { v: c.fmt.w(lockValue) }));
   if (isOn(st(c, E.fixedReserve))) parts.push(t("controlsReserveOn", { v: Math.round(reserveValue) }));
   if (isOn(st(c, E.ctrlAuto))) parts.push(autoSummary(c).text);
   return parts.length ? parts.join(" · ") : t("batteryCtrlIdle");
@@ -1373,7 +1378,7 @@ function flowOptsMenu(c: Ctx): TemplateResult {
   `;
 }
 
-/** Overlay from the battery card: forced discharge, reserve, and auto strategy. */
+/** Overlay from the battery card: forced discharge, discharge lock, reserve, and auto strategy. */
 export function batteryControlOverlay(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const power = st(c, E.forceDischargePower);
@@ -1382,6 +1387,12 @@ export function batteryControlOverlay(c: Ctx): TemplateResult {
   const powerMax = typeof powerAttrs.max === "number" ? powerAttrs.max : 10000;
   const powerStep = typeof powerAttrs.step === "number" ? powerAttrs.step : 100;
   const powerValue = c.forcePowerDraft ?? num(power) ?? powerMin;
+  const lockPower = st(c, E.dischargeLockPower);
+  const lockAttrs = lockPower?.attributes ?? {};
+  const lockMin = typeof lockAttrs.min === "number" ? lockAttrs.min : 0;
+  const lockMax = typeof lockAttrs.max === "number" ? lockAttrs.max : 10000;
+  const lockStep = typeof lockAttrs.step === "number" ? lockAttrs.step : 100;
+  const lockValue = c.lockPowerDraft ?? num(lockPower) ?? lockMin;
   const reserve = st(c, E.fixedReserveSoc);
   const reserveAttrs = reserve?.attributes ?? {};
   const reserveMin = typeof reserveAttrs.min === "number" ? reserveAttrs.min : 0;
@@ -1436,6 +1447,22 @@ export function batteryControlOverlay(c: Ctx): TemplateResult {
               disabled: !power || power.state === "unavailable",
               onPreview: c.onPowerDraft,
               onCommit: c.onPowerCommit,
+            })}
+          </div>
+        </section>
+        <section class="battery-ctrl-block">
+          <div class="force">
+            <div class="txt"><b>${t("lockTitle")}</b><span>${t("ctrlLockPower", { v: c.fmt.w(lockValue) })}</span></div>
+            ${toggle(E.manualDischargeLock, t("lockTitle"))}
+            ${sliderField({
+              label: t("ctrlLockPower", { v: "" }),
+              min: lockMin,
+              max: lockMax,
+              step: lockStep,
+              value: lockValue,
+              disabled: !lockPower || lockPower.state === "unavailable",
+              onPreview: c.onLockPowerDraft,
+              onCommit: c.onLockPowerCommit,
             })}
           </div>
         </section>

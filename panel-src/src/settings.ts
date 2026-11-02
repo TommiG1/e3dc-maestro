@@ -220,7 +220,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     sec("secAuto", "secAutoHint", ["auto_mode_enabled", "auto_mode_objective"]),
   ]),
   area("system", "setSystem", "setSystemHint", '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>', [
-    sec("secRun", "secRunHint", ["regelung_aktiv", "force_discharge", "force_discharge_power_w"]),
+    sec("secRun", "secRunHint", ["regelung_aktiv", "force_discharge", "force_discharge_power_w", "discharge_lock", "discharge_lock_power_w"]),
     sec("secPace", "secPaceHint", ["soc_hysteresis_percent", "charge_ramp_w_per_cycle", "update_interval"]),
     sec("secDiag", "secDiagHint", ["debug", "reset_stats", "clear_limits"]),
   ]),
@@ -1251,6 +1251,7 @@ export const SWITCH_FIELDS: Record<string, readonly string[]> = {
   hp_enabled: ["hp_min_surplus", "hp_max_price", "hp_min_run_minutes", "hp_min_pause_minutes"],
   auto_mode_enabled: ["auto_mode_objective"],
   force_discharge: ["force_discharge_power_w"],
+  discharge_lock: ["discharge_lock_power_w"],
 };
 
 /** Group a visible row list so a switch's own fields are not separate cards. */

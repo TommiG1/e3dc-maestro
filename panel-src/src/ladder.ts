@@ -25,6 +25,7 @@ export interface LadderBand {
 export const LADDER: readonly LadderStep[] = [
   { id: "off", phases: ["off"], group: "system", label: "ladderOff" },
   { id: "force", phases: ["force_discharge"], group: "system", label: "ladderForce" },
+  { id: "lock", phases: ["discharge_lock"], group: "system", label: "ladderLock" },
   { id: "emergency", phases: ["emergency"], group: "safety", label: "ladderEmergency" },
   { id: "feed", phases: ["feed_in_limit"], group: "plant", label: "ladderFeed" },
   { id: "reserve", phases: ["reserve_protection"], group: "safety", label: "ladderReserve" },
@@ -46,7 +47,7 @@ export const LADDER: readonly LadderStep[] = [
 ];
 
 export const LADDER_BANDS: readonly LadderBand[] = [
-  { id: "safety", label: "ladderBandSafety", steps: ["off", "force", "emergency", "feed", "reserve"] },
+  { id: "safety", label: "ladderBandSafety", steps: ["off", "force", "lock", "emergency", "feed", "reserve"] },
   { id: "tariff", label: "ladderBandTariff", steps: ["evcc", "price", "ht", "hold"] },
   { id: "blocks", label: "ladderBandBlocks", steps: ["morning", "cap", "astro", "hard"] },
   { id: "pv", label: "ladderBandPv", steps: ["floor", "low", "grid", "corridor", "spread"] },

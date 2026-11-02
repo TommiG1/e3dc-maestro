@@ -26,6 +26,7 @@ export interface HelpChapter {
 const RULE_BODY: Record<string, Key> = {
   off: "helpRuleOff",
   force: "helpRuleForce",
+  lock: "helpRuleLock",
   emergency: "helpRuleEmergency",
   feed: "helpRuleFeed",
   reserve: "helpRuleReserve",
