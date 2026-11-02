@@ -11,6 +11,20 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.6] – HACS-Review: Static Path, Repair, Event-Loop (2026-11-02)
+
+> **Beta.** Enthält 0.5.5-beta.5. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.6.md](docs/release-notes/v0.5.5-beta.6.md).
+
+### Geändert
+- **Keine Dateien mehr in `config/www`.** Das Strategy-Modul des Classic-Dashboards wird nur noch über den eigenen Pfad `/e3dc_maestro/frontend/` ausgeliefert. Die Lovelace-Ressource wird beim nächsten Start automatisch von `/local/e3dc_maestro/…` darauf umgestellt. Ein zweiter Neustart ist nicht mehr nötig, auch wenn `config/www` vorher fehlte.
+- **Reparatur statt Eingriff in E3DC RSCP.** Sind Anlagen-Entitäten in E3DC RSCP noch deaktiviert, zeigt Maestro unter Einstellungen → System → Reparaturen eine Liste und die Anleitung zum Aktivieren. Maestro aktiviert oder lädt fremde Entitäten und Integrationen nicht mehr selbst.
+- **Frontend-Hash im Executor.** Strategy- und Panel-JS werden für den Cache-Bust nicht mehr synchron im Event Loop gelesen.
+
+### Hinweise
+- Der Ordner `config/www/e3dc_maestro/` wird nicht mehr gebraucht und kann gelöscht werden. Maestro lässt ihn in dieser Version bewusst unangetastet, damit gecachte alte Adressen (Browser, Companion App) weiter laden. Zeigt die Companion App den alten Stand, Frontend-Cache zurücksetzen.
+
+---
+
 ## [0.5.5-beta.5] – Entladesperre (CI-Nachzug) (2026-11-02)
 
 > **Beta.** Enthält 0.5.5-beta.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.5.md](docs/release-notes/v0.5.5-beta.5.md).

@@ -81,7 +81,22 @@ _HA_STUBS = [
     ),
     ("homeassistant.helpers.entity", {}),
     ("homeassistant.helpers.entity_platform", {}),
-    ("homeassistant.helpers.entity_registry", {}),
+    (
+        "homeassistant.helpers.entity_registry",
+        {"EVENT_ENTITY_REGISTRY_UPDATED": "entity_registry_updated"},
+    ),
+    (
+        "homeassistant.helpers.issue_registry",
+        {
+            "IssueSeverity": type(
+                "IssueSeverity",
+                (),
+                {"WARNING": "warning", "ERROR": "error", "CRITICAL": "critical"},
+            ),
+            "async_create_issue": lambda *a, **k: None,
+            "async_delete_issue": lambda *a, **k: None,
+        },
+    ),
     ("homeassistant.helpers.selector", {}),
     ("homeassistant.helpers.storage", {"Store": object}),
     ("homeassistant.helpers.update_coordinator", {}),
@@ -192,6 +207,9 @@ sys.modules["homeassistant.helpers"].selector = sys.modules[  # type: ignore[att
 ]
 sys.modules["homeassistant.helpers"].entity_registry = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.helpers.entity_registry"
+]
+sys.modules["homeassistant.helpers"].issue_registry = sys.modules[  # type: ignore[attr-defined]
+    "homeassistant.helpers.issue_registry"
 ]
 sys.modules["homeassistant.components"].websocket_api = sys.modules[  # type: ignore[attr-defined]
     "homeassistant.components.websocket_api"

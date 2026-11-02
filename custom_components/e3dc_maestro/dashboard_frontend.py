@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -19,23 +18,21 @@ from homeassistant.const import CONF_ID, CONF_URL
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .frontend_cache import asset_query
+from .frontend_cache import async_asset_query
 
 _LOGGER = logging.getLogger(__name__)
 
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 _STRATEGY_JS = "e3dc-maestro-strategy.js"
-_DASHBOARD_JSON = "maestro_dashboard.json"
 _STATIC_URL_BASE = f"/{DOMAIN}/frontend"
-_LOCAL_URL_BASE = f"/local/{DOMAIN}"
 _SETUP_FLAG = f"{DOMAIN}_frontend_registered"
 _YAML_WARNED = f"{DOMAIN}_strategy_yaml_warned"
 _EXTRA_JS_URL = f"{DOMAIN}_extra_js_url"
 
 
-def _strategy_module_url(published_locally: bool) -> str:
-    base = _LOCAL_URL_BASE if published_locally else _STATIC_URL_BASE
-    return f"{base}/{_STRATEGY_JS}?{asset_query(_FRONTEND_DIR / _STRATEGY_JS)}"
+async def _strategy_module_url(hass: HomeAssistant) -> str:
+    query = await async_asset_query(hass, _FRONTEND_DIR / _STRATEGY_JS)
+    return f"{_STATIC_URL_BASE}/{_STRATEGY_JS}?{query}"
 
 
 def _strategy_module_path(url: str) -> str:
@@ -61,32 +58,14 @@ def _prioritize_item(data: dict, item_id: str) -> bool:
     return True
 
 
-def _publish_www(config_path: str) -> bool:
-    """Copy strategy assets into config/www so /local is served before setup.
-
-    Returns True only if /local already serves them: HA registers /local at
-    frontend setup and only when config/www existed then.
-    """
-    target = Path(config_path)
-    www_existed = target.parent.is_dir()
-    try:
-        target.mkdir(parents=True, exist_ok=True)
-        for name in (_STRATEGY_JS, _DASHBOARD_JSON):
-            shutil.copyfile(_FRONTEND_DIR / name, target / name)
-    except OSError as err:
-        _LOGGER.warning(
-            "Could not publish the Maestro dashboard strategy to %s: %s", target, err
-        )
-        return False
-    return www_existed
-
-
 async def async_setup_frontend(hass: HomeAssistant) -> None:
-    """Serve strategy assets, preload the JS module, and register a Lovelace resource."""
-    published = await hass.async_add_executor_job(
-        _publish_www, hass.config.path("www", DOMAIN)
-    )
-    module_url = _strategy_module_url(published)
+    """Serve strategy assets, preload the JS module, and register a Lovelace resource.
+
+    Assets are served only from the integration's own static path. Nothing is
+    written to the user's config/www. Installs whose Lovelace resource still
+    points at the old www copy are moved to the static path below.
+    """
+    module_url = await _strategy_module_url(hass)
     if not hass.data.get(_SETUP_FLAG):
         await hass.http.async_register_static_paths(
             [
@@ -107,9 +86,9 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         _LOGGER.debug("Registered E3DC Maestro dashboard strategy at %s", module_url)
 
     # Lovelace waits only 5s for ll-strategy-dashboard-* and starts that timer
-    # before resources finish loading. /local is served as soon as HTTP is up
-    # (the custom static path is not). The resource itself is kept first so its
-    # script tag is not queued behind the other Lovelace modules.
+    # before resources finish loading. The resource is kept first so its script
+    # tag is not queued behind the other Lovelace modules; the extra JS URL above
+    # preloads it on every frontend page.
     await _async_register_lovelace_resource(hass, module_url)
 
 
@@ -129,6 +108,29 @@ def _matching_resources(resources) -> list[dict]:
         for item in resources.async_items()
         if _is_strategy_resource(str(item.get(CONF_URL) or ""))
     ]
+
+
+def _warn_yaml_resource(
+    hass: HomeAssistant, module_url: str, stale: str | None = None
+) -> None:
+    """Resources in YAML mode cannot be edited here; tell the user once."""
+    if hass.data.get(_YAML_WARNED):
+        return
+    hass.data[_YAML_WARNED] = True
+    if stale:
+        _LOGGER.warning(
+            "Lovelace resources are in YAML mode and still use the old Maestro "
+            "address %s. Replace that entry so the dashboard strategy keeps "
+            "loading:\n  - url: %s\n    type: module",
+            stale,
+            module_url,
+        )
+        return
+    _LOGGER.warning(
+        "Lovelace resources are in YAML mode; add this module so the Maestro "
+        "dashboard strategy can load:\n  - url: %s\n    type: module",
+        module_url,
+    )
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant, module_url: str) -> None:
@@ -162,14 +164,14 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, module_url: str
         for duplicate in matches[1:]:
             if isinstance(resources, ResourceStorageCollection):
                 await resources.async_delete_item(duplicate[CONF_ID])
+        if isinstance(resources, ResourceYAMLCollection) and (
+            _strategy_module_path(str(existing.get(CONF_URL) or ""))
+            != _strategy_module_path(module_url)
+        ):
+            # Older versions served the module from the user's www folder.
+            _warn_yaml_resource(hass, module_url, stale=str(existing.get(CONF_URL)))
     elif isinstance(resources, ResourceYAMLCollection):
-        if not hass.data.get(_YAML_WARNED):
-            hass.data[_YAML_WARNED] = True
-            _LOGGER.warning(
-                "Lovelace resources are in YAML mode; add this module so the Maestro "
-                "dashboard strategy can load:\n  - url: %s\n    type: module",
-                module_url,
-            )
+        _warn_yaml_resource(hass, module_url)
         return
     elif isinstance(resources, ResourceStorageCollection):
         await resources.async_create_item(

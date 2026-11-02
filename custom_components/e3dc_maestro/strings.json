@@ -889,5 +889,11 @@
         "name": "Reset statistics"
       }
     }
+  },
+  "issues": {
+    "rscp_plant_entities_disabled": {
+      "title": "E3DC plant entities are disabled",
+      "description": "The Maestro plant view needs these E3DC RSCP entities, but the RSCP integration still has them disabled:\n\n{entities}\n\nOpen each entity under **Settings → Devices & services → E3DC RSCP**, enable it, then wait for the next update (or reload E3DC RSCP). Maestro does not change another integration's entity registry."
+    }
   }
 }

@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 import custom_components.e3dc_maestro as maestro_init
 from custom_components.e3dc_maestro import (
-    _async_enable_rscp_plant_entities,
+    _RSCP_PLANT_REPAIR_ID,
+    _async_check_rscp_plant_entities,
     _async_migrate_entity_ids,
+    _async_sync_rscp_plant_repair,
     async_migrate_entry,
 )
 from custom_components.e3dc_maestro.panel import (
@@ -18,7 +20,7 @@ from custom_components.e3dc_maestro.panel import (
     _PLANT_ENABLE_KEYS,
     _PLANT_KEYS,
 )
-from custom_components.e3dc_maestro.const import VERSION
+from custom_components.e3dc_maestro.const import DOMAIN, VERSION
 from custom_components.e3dc_maestro.sensor_device import device_info
 
 
@@ -286,8 +288,26 @@ def _rscp_registry_entry(
     )
 
 
+def _patch_rscp_registry(monkeypatch, entries_by_entry_id: dict[str, list]):
+    fake_registry = MagicMock()
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+
+    def entries_for(_registry, entry_id):
+        return entries_by_entry_id.get(entry_id, [])
+
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(side_effect=entries_for),
+        raising=False,
+    )
+    return fake_registry
+
+
 @pytest.mark.asyncio
-async def test_rscp_plant_entities_disabled_by_integration_are_enabled(monkeypatch):
+async def test_rscp_plant_disabled_by_integration_opens_repair(monkeypatch):
     derate = _rscp_registry_entry(
         "sensor.keller_s10e_pro_derate_power",
         "system-derate-power",
@@ -301,34 +321,42 @@ async def test_rscp_plant_entities_disabled_by_integration_are_enabled(monkeypat
     unrelated = _rscp_registry_entry(
         "sensor.keller_s10e_pro_autarky", "autarky", disabled_by="integration"
     )
-    fake_registry = MagicMock()
+    fake_registry = _patch_rscp_registry(monkeypatch, {"rscp-1": [derate, powersave, unrelated]})
+    create_issue = MagicMock()
+    delete_issue = MagicMock()
+    monkeypatch.setattr(maestro_init.ir, "async_create_issue", create_issue, raising=False)
+    monkeypatch.setattr(maestro_init.ir, "async_delete_issue", delete_issue, raising=False)
     monkeypatch.setattr(
-        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
-    )
-    monkeypatch.setattr(
-        maestro_init.er,
-        "async_entries_for_config_entry",
-        MagicMock(return_value=[derate, powersave, unrelated]),
+        maestro_init.ir,
+        "IssueSeverity",
+        SimpleNamespace(WARNING="warning"),
         raising=False,
     )
+
     hass = MagicMock()
     hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="rscp-1")]
-    hass.config_entries.async_reload = AsyncMock()
+    entry = SimpleNamespace(entry_id="maestro-1", async_on_unload=MagicMock())
 
-    await _async_enable_rscp_plant_entities(hass)
+    await _async_check_rscp_plant_entities(hass, entry)
 
-    fake_registry.async_update_entity.assert_any_call(
-        "sensor.keller_s10e_pro_derate_power", disabled_by=None
-    )
-    fake_registry.async_update_entity.assert_any_call(
-        "switch.keller_s10e_pro_powersave", disabled_by=None
-    )
-    assert fake_registry.async_update_entity.call_count == 2
-    hass.config_entries.async_reload.assert_awaited_once_with("rscp-1")
+    fake_registry.async_update_entity.assert_not_called()
+    delete_issue.assert_not_called()
+    create_issue.assert_called_once()
+    args, kwargs = create_issue.call_args
+    assert args[:3] == (hass, DOMAIN, _RSCP_PLANT_REPAIR_ID)
+    assert kwargs["is_fixable"] is False
+    assert kwargs["translation_key"] == "rscp_plant_entities_disabled"
+    assert kwargs["config_entry_id"] == "maestro-1"
+    entities = kwargs["translation_placeholders"]["entities"]
+    assert "`sensor.keller_s10e_pro_derate_power`" in entities
+    assert "`switch.keller_s10e_pro_powersave`" in entities
+    assert "autarky" not in entities
+    entry.async_on_unload.assert_called_once()
+    hass.bus.async_listen.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_rscp_plant_enable_leaves_user_and_enabled_entities(monkeypatch):
+async def test_rscp_plant_repair_skips_user_and_enabled_entities(monkeypatch):
     user_off = _rscp_registry_entry(
         "sensor.keller_ac_max", "system-ac-maxpower", disabled_by="user"
     )
@@ -336,58 +364,55 @@ async def test_rscp_plant_enable_leaves_user_and_enabled_entities(monkeypatch):
     missing_key = _rscp_registry_entry(
         "sensor.keller_unknown", None, disabled_by="integration"
     )
-    fake_registry = MagicMock()
-    monkeypatch.setattr(
-        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    _patch_rscp_registry(
+        monkeypatch, {"rscp-1": [user_off, already_on, missing_key]}
     )
-    monkeypatch.setattr(
-        maestro_init.er,
-        "async_entries_for_config_entry",
-        MagicMock(return_value=[user_off, already_on, missing_key]),
-        raising=False,
-    )
+    create_issue = MagicMock()
+    delete_issue = MagicMock()
+    monkeypatch.setattr(maestro_init.ir, "async_create_issue", create_issue, raising=False)
+    monkeypatch.setattr(maestro_init.ir, "async_delete_issue", delete_issue, raising=False)
+
     hass = MagicMock()
     hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="rscp-1")]
-    hass.config_entries.async_reload = AsyncMock()
+    entry = SimpleNamespace(entry_id="maestro-1")
 
-    await _async_enable_rscp_plant_entities(hass)
+    _async_sync_rscp_plant_repair(hass, entry)
 
-    fake_registry.async_update_entity.assert_not_called()
-    hass.config_entries.async_reload.assert_not_called()
+    create_issue.assert_not_called()
+    delete_issue.assert_called_once_with(hass, DOMAIN, _RSCP_PLANT_REPAIR_ID)
 
 
 @pytest.mark.asyncio
-async def test_rscp_plant_enable_reloads_only_the_changed_entry(monkeypatch):
+async def test_rscp_plant_repair_lists_only_disabled_across_entries(monkeypatch):
     changed = _rscp_registry_entry(
         "sensor.pack_soh", "battery-module-soh-reported", disabled_by="integration"
     )
     untouched = _rscp_registry_entry("sensor.other_autarky", "autarky")
-
-    def entries_for(_registry, entry_id):
-        if entry_id == "rscp-changed":
-            return [changed]
-        return [untouched]
-
-    fake_registry = MagicMock()
-    monkeypatch.setattr(
-        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    _patch_rscp_registry(
+        monkeypatch,
+        {"rscp-changed": [changed], "rscp-quiet": [untouched]},
     )
+    create_issue = MagicMock()
+    monkeypatch.setattr(maestro_init.ir, "async_create_issue", create_issue, raising=False)
+    monkeypatch.setattr(maestro_init.ir, "async_delete_issue", MagicMock(), raising=False)
     monkeypatch.setattr(
-        maestro_init.er,
-        "async_entries_for_config_entry",
-        MagicMock(side_effect=entries_for),
+        maestro_init.ir,
+        "IssueSeverity",
+        SimpleNamespace(WARNING="warning"),
         raising=False,
     )
+
     hass = MagicMock()
     hass.config_entries.async_entries.return_value = [
         SimpleNamespace(entry_id="rscp-changed"),
         SimpleNamespace(entry_id="rscp-quiet"),
     ]
-    hass.config_entries.async_reload = AsyncMock()
+    entry = SimpleNamespace(entry_id="maestro-1")
 
-    await _async_enable_rscp_plant_entities(hass)
+    _async_sync_rscp_plant_repair(hass, entry)
 
-    hass.config_entries.async_reload.assert_awaited_once_with("rscp-changed")
+    entities = create_issue.call_args.kwargs["translation_placeholders"]["entities"]
+    assert entities == "- `sensor.pack_soh`"
 
 
 def test_plant_enable_keys_are_shown_in_the_plant_view():

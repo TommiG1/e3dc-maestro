@@ -43,15 +43,17 @@ def test_dashboard_frontend_module_and_assets() -> None:
         ROOT / "custom_components" / "e3dc_maestro" / "dashboard_frontend.py"
     ).read_text(encoding="utf-8")
     assert "from .const import DOMAIN" in module
-    assert "from .frontend_cache import asset_query" in module
+    assert "from .frontend_cache import async_asset_query" in module
     assert "async_register_static_paths" in module
     assert "add_extra_js_url" in module
     assert "async_create_item" in module
     assert "ResourceStorageCollection" in module
     assert '/{DOMAIN}/frontend' in module or 'f"/{DOMAIN}/frontend"' in module
-    assert "/local/{DOMAIN}" in module or 'f"/local/{DOMAIN}"' in module
+    # Nothing may be written to the user's config/www (HACS review).
+    assert "/local" not in module
+    assert "_publish_www" not in module
+    assert "shutil" not in module
     assert "_prioritize_item" in module
-    assert "maestro_dashboard.json" in module
     assert STRATEGY_JS.is_file()
     assert STRATEGY_JSON.is_file()
     init_py = (ROOT / "custom_components" / "e3dc_maestro" / "__init__.py").read_text(

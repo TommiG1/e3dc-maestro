@@ -6,15 +6,21 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN, E3DC_RSCP_DOMAIN
 from .coordinator import E3DCMaestroCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Repair shown when plant entities stay disabled_by=integration on RSCP.
+# Maestro must not enable or reload another integration's registry entries
+# (HACS review); tell the user which ones to turn on instead.
+_RSCP_PLANT_REPAIR_ID = "rscp_plant_entities_disabled"
 
 # Entity-ID-Migration: `sensor.py` hat den Anzeigenamen dieser Sensoren mehrfach
 # umbenannt (z. B. "Aktives Lade-Limit" -> "Soll-Lade-Limit"). Home Assistant
@@ -144,38 +150,66 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
         ent_reg.async_update_entity(current_id, new_entity_id=new_entity_id)
 
 
-async def _async_enable_rscp_plant_entities(hass: HomeAssistant) -> None:
-    """Enable plant entities that hacs-e3dc disables by default.
-
-    Only ``disabled_by == integration`` on the RSCP config entries. A user
-    who turned one of these off keeps that choice. The RSCP entry is reloaded
-    once, and only when something actually changed, so the new entities publish
-    state before the first control cycle.
-    """
+def _disabled_rscp_plant_entity_ids(hass: HomeAssistant) -> list[str]:
+    """RSCP plant entities still disabled by the RSCP integration itself."""
     from .panel import _PLANT_ENABLE_KEYS
 
     ent_reg = er.async_get(hass)
-    reload_ids: set[str] = set()
+    disabled: list[str] = []
     for rscp_entry in hass.config_entries.async_entries(E3DC_RSCP_DOMAIN):
-        for entity_entry in er.async_entries_for_config_entry(ent_reg, rscp_entry.entry_id):
+        for entity_entry in er.async_entries_for_config_entry(
+            ent_reg, rscp_entry.entry_id
+        ):
             if getattr(entity_entry, "translation_key", None) not in _PLANT_ENABLE_KEYS:
                 continue
             if not _is_disabled_by_integration(entity_entry):
                 continue
-            _LOGGER.info(
-                "E3DC Maestro: aktiviere %s – die Anlagenansicht braucht diese "
-                "RSCP-Entity, hacs-e3dc liefert sie standardmäßig deaktiviert",
-                entity_entry.entity_id,
-            )
-            ent_reg.async_update_entity(entity_entry.entity_id, disabled_by=None)
-            reload_ids.add(rscp_entry.entry_id)
+            disabled.append(entity_entry.entity_id)
+    return sorted(disabled)
 
-    for entry_id in reload_ids:
-        _LOGGER.info(
-            "E3DC Maestro: lade E3DC RSCP neu, damit die aktivierten "
-            "Anlagen-Entities Zustände liefern"
-        )
-        await hass.config_entries.async_reload(entry_id)
+
+@callback
+def _async_sync_rscp_plant_repair(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Create or clear the repair that lists disabled RSCP plant entities."""
+    disabled = _disabled_rscp_plant_entity_ids(hass)
+    if not disabled:
+        ir.async_delete_issue(hass, DOMAIN, _RSCP_PLANT_REPAIR_ID)
+        return
+
+    entities = "\n".join(f"- `{entity_id}`" for entity_id in disabled)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _RSCP_PLANT_REPAIR_ID,
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="rscp_plant_entities_disabled",
+        translation_placeholders={"entities": entities},
+        config_entry_id=entry.entry_id,
+    )
+    _LOGGER.info(
+        "E3DC Maestro: %s RSCP-Anlagen-Entities sind noch deaktiviert – "
+        "Repair unter Einstellungen → System → Reparaturen",
+        len(disabled),
+    )
+
+
+async def _async_check_rscp_plant_entities(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Warn via repair when plant entities stay disabled; refresh on registry edits."""
+    _async_sync_rscp_plant_repair(hass, entry)
+
+    @callback
+    def _on_registry_updated(event: Event) -> None:
+        # Any entity_registry change can clear or introduce the disabled set.
+        # The scan is cheap (few RSCP entries × plant keys).
+        del event
+        _async_sync_rscp_plant_repair(hass, entry)
+
+    entry.async_on_unload(
+        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _on_registry_updated)
+    )
 
 
 PLATFORMS: list[Platform] = [
@@ -270,7 +304,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await async_setup_frontend(hass)
     await _async_migrate_entity_ids(hass, entry)
-    await _async_enable_rscp_plant_entities(hass)
+    await _async_check_rscp_plant_entities(hass, entry)
 
     # Persist RSCP day/additional sensors when options left them blank (runtime
     # fallback works, but the cockpit then looks unfinished).

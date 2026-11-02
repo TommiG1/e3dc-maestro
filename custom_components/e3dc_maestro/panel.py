@@ -35,7 +35,7 @@ from .const import (
     PAUSE_HOURS,
     farm_controller_entry_ids,
 )
-from .frontend_cache import asset_query
+from .frontend_cache import async_asset_query
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -247,11 +247,12 @@ _WALLBOX_CONTROLS: dict[str, str] = {
     "togglePhases": "wallbox-toggle-wallbox-phases",
     "toggleCharging": "wallbox-toggle-wallbox-charging",
 }
-# hacs-e3dc ships these with entity_registry_enabled_default=False. The plant
-# view reads them, so setup re-enables a copy that the integration itself
-# disabled. User opt-outs stay off. Keys that hacs-e3dc never creates
-# (additional-production without an external source, system-saved-errors)
-# are absent from the registry and are left alone.
+# hacs-e3dc may ship these with entity_registry_enabled_default=False. The
+# plant view reads them. Maestro must not enable another integration's
+# registry entries; setup opens a repair that lists any still disabled by
+# integration. User opt-outs stay off and raise no repair. Keys that
+# hacs-e3dc never creates (additional-production without an external source,
+# system-saved-errors) are absent from the registry and are left alone.
 _PLANT_ENABLE_KEYS = frozenset({
     "system-derate-power",
     "system-ac-maxpower",
@@ -495,7 +496,7 @@ def _rscp_plant(hass: HomeAssistant, registry: Any) -> dict[str, Any]:
     return plant_from_entries(reg_entries, facts, farm_controller_entry_ids(hass))
 
 
-def panel_module_url() -> str:
+async def async_panel_module_url(hass: HomeAssistant) -> str:
     """Panel script URL. The file content is part of it so a new build is a new address.
 
     The iPad app and many browsers keep the previous script when the path stays
@@ -503,7 +504,7 @@ def panel_module_url() -> str:
     without clearing the frontend cache.
     """
     script = Path(__file__).resolve().parent / "frontend" / "panel" / "maestro-panel.js"
-    return f"{_PANEL_MODULE}?{asset_query(script)}"
+    return f"{_PANEL_MODULE}?{await async_asset_query(hass, script)}"
 
 
 def _settings_for(registry: Any, entry_id: str) -> tuple[dict[str, str], list[str]]:
@@ -793,7 +794,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_history_import_dashboard_apply)
         websocket_api.async_register_command(hass, _ws_history_import_dashboard_remove)
         hass.data[_WS_FLAG] = True
-    module_url = panel_module_url()
+    module_url = await async_panel_module_url(hass)
     title = effective_sidebar_title(hass)
     # Include title so a rename re-registers even when the JS hash is unchanged.
     fingerprint = (module_url, title)

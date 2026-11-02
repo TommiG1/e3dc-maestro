@@ -902,5 +902,11 @@
         "name": "Statistik zurücksetzen"
       }
     }
+  },
+  "issues": {
+    "rscp_plant_entities_disabled": {
+      "title": "E3DC-Anlagen-Entities sind deaktiviert",
+      "description": "Die Maestro-Anlagenansicht braucht diese E3DC-RSCP-Entities, die RSCP-Integration hat sie aber noch deaktiviert:\n\n{entities}\n\nÖffne die jeweilige Entity unter **Einstellungen → Geräte & Dienste → E3DC RSCP** und aktiviere sie. Danach kurz warten oder E3DC RSCP neu laden. Maestro ändert die Entity-Registry einer anderen Integration nicht."
+    }
   }
 }
