@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.5] – Entladesperre (CI-Nachzug) (2026-11-02)
+
+> **Beta.** Enthält 0.5.5-beta.4. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.5.md](docs/release-notes/v0.5.5-beta.5.md).
+
+### Korrekturen
+- **Entladesperre-Erklärung:** Typvergleich im Erklärungssensor behoben (CI).
+
+---
+
 ## [0.5.5-beta.4] – Manuelle Entladesperre (2026-11-02)
 
 > **Beta.** Enthält 0.5.5-beta.3. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.4.md](docs/release-notes/v0.5.5-beta.4.md).
