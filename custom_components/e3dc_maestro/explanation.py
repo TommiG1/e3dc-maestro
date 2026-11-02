@@ -134,11 +134,15 @@ def decision_explanation(coord) -> str:
             f"Batterie wird mit {pw} W entladen."
         )
     elif phase == "discharge_lock":
-        pw = _f(getattr(p, "discharge_lock_power_w", None))
-        if pw and pw > 0:
+        raw_pw = getattr(p, "discharge_lock_power_w", None)
+        try:
+            limit_w = float(raw_pw) if raw_pw is not None else 0.0
+        except (TypeError, ValueError):
+            limit_w = 0.0
+        if limit_w > 0:
             text = (
                 f"Manuelle Entladesperre aktiv: Entladung auf höchstens "
-                f"{pw} W begrenzt. PV-Überschuss darf weiter in den Akku."
+                f"{_f(limit_w)} W begrenzt. PV-Überschuss darf weiter in den Akku."
             )
         else:
             text = (
