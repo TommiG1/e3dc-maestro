@@ -352,6 +352,22 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Überschuss, ab dem die Wärmepumpe laufen darf.",
     en: "Surplus from which the heat pump may run.",
   },
+  hp_shadow: {
+    de: "Maestro rechnet und erklärt, schaltet die Wärmepumpe aber nicht.",
+    en: "Maestro calculates and explains but does not switch the heat pump.",
+  },
+  hp_surplus_delay_minutes: {
+    de: "So lange muss der Überschuss am Stück anliegen, bevor die Wärmepumpe startet.",
+    en: "How long the surplus must last before the heat pump starts.",
+  },
+  hp_off_surplus: {
+    de: "Läuft die Wärmepumpe, bleibt sie an, solange der Überschuss mindestens diesen Wert hat.",
+    en: "A running heat pump stays on while the surplus is at least this value.",
+  },
+  hp_subtract_battery: {
+    de: "Zählt nur Überschuss, der nicht in den Akku fließt. Aus: PV minus Hausverbrauch.",
+    en: "Counts only surplus that is not going into the battery. Off: PV minus house load.",
+  },
   hp_max_price: {
     de: "Über diesem Strompreis bleibt die Wärmepumpe aus.",
     en: "Above this electricity price the heat pump stays off.",

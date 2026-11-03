@@ -167,6 +167,10 @@ class MaestroParams:
     # Heat pump
     hp_enabled: bool = False
     hp_min_surplus: float = 2000
+    hp_subtract_battery: bool = False
+    hp_off_surplus: float = 0
+    hp_surplus_delay_minutes: float = 5
+    hp_shadow: bool = False
     hp_max_price: float = 0.15
     hp_min_run_minutes: int = 20
     hp_min_pause_minutes: int = 15
@@ -2359,6 +2363,62 @@ def wallbox_desired_current(
 # Heat pump decision
 # ──────────────────────────────────────────────────────────────────────────────
 
+def hp_surplus_w(state: MaestroState, params: MaestroParams) -> float:
+    """PV-Überschuss für die Wärmepumpe (W); optional ohne Akkuladung."""
+    surplus = state.pv_power - state.house_power
+    if params.hp_subtract_battery:
+        surplus -= max(state.battery_power, 0)
+    return surplus
+
+
+def hp_in_window(params: MaestroParams, now: datetime) -> bool:
+    """True inside the HP time window; windows may cross midnight."""
+    start = time.fromisoformat(params.hp_time_start)
+    end = time.fromisoformat(params.hp_time_end)
+    t = now.time()
+    if start <= end:
+        return start <= t <= end
+    return t >= start or t <= end
+
+
+def hp_action_explanation(
+    turn_on: bool,
+    state: MaestroState,
+    params: MaestroParams,
+    current_price: float | None,
+    now: datetime,
+    surplus_for_minutes: float = 0.0,
+    shadow: bool = False,
+) -> str:
+    """German one-liner explaining why the heat pump was switched."""
+    surplus = hp_surplus_w(state, params)
+    bat = "an" if params.hp_subtract_battery else "aus"
+    price_s = f"{current_price:.3f}" if current_price is not None else "–"
+    cheap = current_price is not None and current_price <= params.hp_max_price
+    stamp = now.strftime("%H:%M") + (" Schattenmodus:" if shadow else "")
+    if turn_on:
+        reasons: list[str] = []
+        if surplus >= params.hp_min_surplus:
+            reasons.append(
+                f"Überschuss {surplus:.0f} W ≥ {params.hp_min_surplus:.0f} W "
+                f"seit {surplus_for_minutes:.0f} min"
+            )
+        if cheap:
+            reasons.append(f"Preis {price_s} €/kWh ≤ {params.hp_max_price:.3f}")
+        why = " und ".join(reasons) or f"Überschuss {surplus:.0f} W"
+        verb = "würde einschalten" if shadow else "eingeschaltet"
+        return f"{stamp} Wärmepumpe {verb}: {why} (Akku-Abzug {bat})."
+    if not hp_in_window(params, now):
+        why = f"außerhalb des Zeitfensters {params.hp_time_start}–{params.hp_time_end}"
+    else:
+        why = (
+            f"Überschuss {surplus:.0f} W unter Aus-Schwelle "
+            f"{params.hp_off_surplus:.0f} W, Preis {price_s} €/kWh"
+        )
+    verb = "würde ausschalten" if shadow else "ausgeschaltet"
+    return f"{stamp} Wärmepumpe {verb}: {why} (Akku-Abzug {bat})."
+
+
 def hp_desired_state(
     state: MaestroState,
     params: MaestroParams,
@@ -2366,17 +2426,42 @@ def hp_desired_state(
     current_price: float | None,
     hp_running: bool,
     hp_last_change_minutes: float,
+    surplus_for_minutes: float = math.inf,
 ) -> bool | None:
-    """Return True/False to switch HP, or None for no change."""
+    """Return True/False to switch HP, or None for no change.
+
+    Switch-on needs the surplus to hold ``hp_surplus_delay_minutes``; a running
+    HP stays on down to ``hp_off_surplus`` because its own load is in the
+    house power.
+    """
     if not params.hp_enabled:
         return None
+
+    in_window = hp_in_window(params, now)
+    surplus = hp_surplus_w(state, params)
+    cheap = current_price is not None and current_price <= params.hp_max_price
+
+    if not hp_running:
+        surplus_on = (
+            surplus >= params.hp_min_surplus
+            and surplus_for_minutes >= params.hp_surplus_delay_minutes
+        )
+        if in_window and (surplus_on or cheap):
+            if hp_last_change_minutes >= params.hp_min_pause_minutes:
+                return True
+        return None
+
+    keep = in_window and (surplus >= params.hp_off_surplus or cheap)
+    if not keep and hp_last_change_minutes >= params.hp_min_run_minutes:
+        return False
+    return None
 
     now_time = now.time()
     start = time.fromisoformat(params.hp_time_start)
     end = time.fromisoformat(params.hp_time_end)
     in_window = start <= now_time <= end
 
-    surplus = state.pv_power - state.house_power
+    surplus = hp_surplus_w(state, params)
     cheap = current_price is not None and current_price <= params.hp_max_price
     want_on = in_window and (surplus >= params.hp_min_surplus or cheap)
 

@@ -191,6 +191,10 @@
           "hp_service_on": "Service: Wärmepumpe ein",
           "hp_service_off": "Service: Wärmepumpe aus",
           "hp_min_surplus": "Mindest-PV-Überschuss (W)",
+          "hp_subtract_battery": "Überschuss ohne Akkuladung zählen",
+          "hp_surplus_delay_minutes": "Überschuss-Dauer vor dem Einschalten (min)",
+          "hp_off_surplus": "Aus-Schwelle bei laufender WP (W)",
+          "hp_shadow": "Schattenmodus (nur rechnen, nicht schalten)",
           "hp_max_price": "Max. Strompreis (€/kWh)",
           "hp_time_start": "Tagesfenster Beginn",
           "hp_time_end": "Tagesfenster Ende",
@@ -535,6 +539,10 @@
           "hp_service_on": "Service: Wärmepumpe ein",
           "hp_service_off": "Service: Wärmepumpe aus",
           "hp_min_surplus": "Mindest-PV-Überschuss (W)",
+          "hp_subtract_battery": "Überschuss ohne Akkuladung zählen",
+          "hp_surplus_delay_minutes": "Überschuss-Dauer vor dem Einschalten (min)",
+          "hp_off_surplus": "Aus-Schwelle bei laufender WP (W)",
+          "hp_shadow": "Schattenmodus (nur rechnen, nicht schalten)",
           "hp_max_price": "Max. Strompreis (€/kWh)",
           "hp_time_start": "Tagesfenster Beginn",
           "hp_time_end": "Tagesfenster Ende",
@@ -543,6 +551,10 @@
         },
         "data_description": {
           "hp_min_surplus": "Maestro schaltet die WP erst ein, wenn dieser PV-Überschuss überschritten ist.",
+          "hp_subtract_battery": "Zählt nur PV-Überschuss, der nicht in den Akku fließt (wie bei der Wallbox). Aus: PV minus Hausverbrauch, auch wenn der Akku ihn gerade aufnimmt.",
+          "hp_surplus_delay_minutes": "So lange muss der Überschuss am Stück anliegen, bevor die WP einschaltet. Kurzes Wegfallen einer Last löst dann nicht aus.",
+          "hp_off_surplus": "Läuft die WP, steckt ihr Verbrauch im Hausverbrauch. Sie bleibt an, solange der Überschuss mindestens diesen Wert hat. 0 W heißt: PV deckt Haus und WP.",
+          "hp_shadow": "Maestro rechnet und erklärt die Entscheidungen, schaltet die WP aber nicht.",
           "hp_max_price": "Auch bei wenig PV kann die WP einschalten, wenn der Spotpreis darunter liegt. 0 = nur PV-Überschuss.",
           "hp_min_run_minutes": "Mindestlaufzeit nach dem Einschalten. Verhindert kurze Taktzyklen, die den Kompressor belasten.",
           "hp_min_pause_minutes": "Mindestpause nach dem Ausschalten. Schützt vor zu schnellem Wiedereinschalten."
@@ -815,6 +827,12 @@
       },
       "fast_charge_floor_enabled": {
         "name": "Schnelllade-Boden"
+      },
+      "hp_subtract_battery": {
+        "name": "WP Überschuss ohne Akkuladung"
+      },
+      "hp_shadow": {
+        "name": "WP Schattenmodus"
       }
     },
     "select": {
@@ -889,6 +907,12 @@
       },
       "fast_charge_floor_soc": {
         "name": "Schnelllade-Boden SoC"
+      },
+      "hp_off_surplus": {
+        "name": "WP Aus-Schwelle"
+      },
+      "hp_surplus_delay_minutes": {
+        "name": "WP Überschuss-Dauer"
       }
     },
     "button": {

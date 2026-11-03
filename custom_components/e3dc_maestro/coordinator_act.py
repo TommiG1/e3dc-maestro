@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import logging
 from typing import Any
 
@@ -36,7 +37,14 @@ from .const import (
     SERVICE_SET_WALLBOX_CURRENT,
     WALLBOX_TYPE_E3DC,
 )
-from .control_engine import MaestroDecision, MaestroState, hp_desired_state, wallbox_desired_current
+from .control_engine import (
+    MaestroDecision,
+    MaestroState,
+    hp_action_explanation,
+    hp_desired_state,
+    hp_surplus_w,
+    wallbox_desired_current,
+)
 from .coordinator_helpers import (
     E3DC_RSCP_POWER_MODE_MAP,
     _action_history_changed,
@@ -292,14 +300,8 @@ class CoordinatorActMixin:
             await self._async_act_wallbox(state, opts)
 
         # Heat pump
-        if opts.get(CONF_HP_ENABLED):
-            hp_last_change_min = (dt_util.utcnow() - self._hp_last_change).total_seconds() / 60
-            hp_action = hp_desired_state(
-                state, self._params, dt_util.now(), current_price,
-                self._hp_running, hp_last_change_min,
-            )
-            if hp_action is not None:
-                await self._async_act_hp(hp_action, opts)
+        if opts.get(CONF_HP_ENABLED) and self.regelung_aktiv:
+            await self._async_control_hp(state, opts, current_price)
 
 
     async def _async_act_wallbox(self, state: MaestroState, opts: dict) -> None:
@@ -338,32 +340,83 @@ class CoordinatorActMixin:
                     self._log(f"Wallbox {desired_current:.0f}A (Überschuss)")
 
 
-    async def _async_act_hp(self, turn_on: bool, opts: dict) -> None:
-        service_key = CONF_HP_SERVICE_ON if turn_on else CONF_HP_SERVICE_OFF
-        service = opts.get(service_key)
-        ok = True
-        try:
-            if service:
-                await self._call_generic_service(service)
-            elif opts.get(CONF_HP_SWITCH_ENTITY):
-                domain = "switch"
-                entity_id = opts[CONF_HP_SWITCH_ENTITY]
-                await self.hass.services.async_call(
-                    domain,
-                    "turn_on" if turn_on else "turn_off",
-                    {"entity_id": entity_id},
-                    blocking=True,
-                )
-            else:
-                ok = False
-        except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
-            _LOGGER.warning("Wärmepumpen-Umschaltung fehlgeschlagen: %s", err)
-            ok = False
-        if not ok:
+    def _sync_hp_running(self, opts: dict) -> None:
+        """Adopt the real switch state (restart, manual switching)."""
+        entity_id = opts.get(CONF_HP_SWITCH_ENTITY)
+        st = self.hass.states.get(entity_id) if entity_id else None
+        if st is None or st.state not in ("on", "off"):
             return
+        real = st.state == "on"
+        if real != self._hp_running:
+            self._hp_running = real
+            self._hp_last_change = dt_util.utcnow()
+            self._log(f"Wärmepumpe läuft extern {'an' if real else 'aus'}, übernommen")
+
+    async def _async_control_hp(
+        self, state: MaestroState, opts: dict, current_price: float | None
+    ) -> None:
+        if not self._params.hp_shadow:
+            self._sync_hp_running(opts)
+        now = dt_util.now()
+        if hp_surplus_w(state, self._params) >= self._params.hp_min_surplus:
+            if self._hp_surplus_since is None:
+                self._hp_surplus_since = now
+            surplus_min = (now - self._hp_surplus_since).total_seconds() / 60
+        else:
+            self._hp_surplus_since = None
+            surplus_min = 0.0
+        hp_last_change_min = (dt_util.utcnow() - self._hp_last_change).total_seconds() / 60
+        hp_action = hp_desired_state(
+            state, self._params, now, current_price,
+            self._hp_running, hp_last_change_min, surplus_min,
+        )
+        if hp_action is not None:
+            await self._async_act_hp(
+                hp_action, opts, state, current_price, surplus_min
+            )
+
+    async def _async_act_hp(
+        self,
+        turn_on: bool,
+        opts: dict,
+        state: MaestroState | None = None,
+        current_price: float | None = None,
+        surplus_min: float = math.inf,
+    ) -> None:
+        shadow = self._params.hp_shadow
+        service = opts.get(CONF_HP_SERVICE_ON if turn_on else CONF_HP_SERVICE_OFF)
+        entity_id = opts.get(CONF_HP_SWITCH_ENTITY)
+        if not shadow and not service and not entity_id:
+            if not self._hp_no_target_warned:
+                _LOGGER.warning(
+                    "Wärmepumpen-Regelung aktiv, aber weder Schalter noch Service konfiguriert"
+                )
+                self._hp_no_target_warned = True
+            return
+        if not shadow:
+            try:
+                if service:
+                    await self._call_generic_service(service)
+                else:
+                    await self.hass.services.async_call(
+                        entity_id.split(".", 1)[0],
+                        "turn_on" if turn_on else "turn_off",
+                        {"entity_id": entity_id},
+                        blocking=True,
+                    )
+            except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
+                _LOGGER.warning("Wärmepumpen-Umschaltung fehlgeschlagen: %s", err)
+                return
         self._hp_running = turn_on
         self._hp_last_change = dt_util.utcnow()
-        self._log(f"Wärmepumpe {'ein' if turn_on else 'aus'}geschaltet")
+        explanation = f"Wärmepumpe {'ein' if turn_on else 'aus'}geschaltet"
+        if state is not None:
+            explanation = hp_action_explanation(
+                turn_on, state, self._params, current_price, dt_util.now(),
+                surplus_min, shadow=shadow,
+            )
+        self._hp_last_explanation = explanation
+        self._log(explanation)
 
 
     async def _async_release_limits(self, reason: str) -> None:

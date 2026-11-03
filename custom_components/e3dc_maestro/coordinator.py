@@ -261,6 +261,9 @@ class E3DCMaestroCoordinator(
         # Heat pump tracking
         self._hp_running: bool = False
         self._hp_last_change: datetime = dt_util.utcnow()
+        self._hp_last_explanation: str | None = None
+        self._hp_surplus_since: datetime | None = None
+        self._hp_no_target_warned: bool = False
 
         # Debug log ring buffer (last 50 lines)
         self.debug_log: deque[str] = deque(maxlen=50)

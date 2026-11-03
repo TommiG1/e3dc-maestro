@@ -1064,6 +1064,8 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
                 "feed_in_excess_w": dec.feed_in_excess_w,
                 "battery_priority": dec.battery_priority,
                 "low_yield_coverage": coord.low_yield_coverage,
+                "hp_running": coord._hp_running,
+                "hp_reason": coord._hp_last_explanation,
                 "timestamp": coord.last_action_info.get("timestamp"),
             }
         if key == "price_plan":

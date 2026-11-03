@@ -191,6 +191,10 @@
           "hp_service_on": "Service: heat pump on",
           "hp_service_off": "Service: heat pump off",
           "hp_min_surplus": "Minimum PV surplus (W)",
+          "hp_subtract_battery": "Count PV surplus without battery charging",
+          "hp_surplus_delay_minutes": "Surplus duration before switching on (min)",
+          "hp_off_surplus": "Off threshold while running (W)",
+          "hp_shadow": "Shadow mode (calculate only, no switching)",
           "hp_max_price": "Max. electricity price (€/kWh)",
           "hp_time_start": "Daily window start",
           "hp_time_end": "Daily window end",
@@ -535,6 +539,10 @@
           "hp_service_on": "Service: heat pump on",
           "hp_service_off": "Service: heat pump off",
           "hp_min_surplus": "Minimum PV surplus (W)",
+          "hp_subtract_battery": "Count PV surplus without battery charging",
+          "hp_surplus_delay_minutes": "Surplus duration before switching on (min)",
+          "hp_off_surplus": "Off threshold while running (W)",
+          "hp_shadow": "Shadow mode (calculate only, no switching)",
           "hp_max_price": "Max. electricity price (€/kWh)",
           "hp_time_start": "Daily window start",
           "hp_time_end": "Daily window end",
@@ -543,6 +551,10 @@
         },
         "data_description": {
           "hp_min_surplus": "Maestro only switches the heat pump on once this PV surplus is exceeded.",
+          "hp_subtract_battery": "Only counts PV surplus that is not going into the battery (like the wallbox). Off: PV minus house load, even while the battery absorbs it.",
+          "hp_surplus_delay_minutes": "The surplus must last this long without a break before the heat pump switches on. A load briefly dropping out no longer triggers it.",
+          "hp_off_surplus": "While running, the heat pump load is part of the house power. It stays on as long as the surplus is at least this value. 0 W means PV covers house and heat pump.",
+          "hp_shadow": "Maestro calculates and explains its decisions but does not switch the heat pump.",
           "hp_max_price": "Even with little PV, the heat pump can switch on if the spot price is below this. 0 = PV surplus only.",
           "hp_min_run_minutes": "Minimum run time after switching on. Prevents short cycling that stresses the compressor.",
           "hp_min_pause_minutes": "Minimum pause after switching off. Protects against restarting too quickly."
@@ -815,6 +827,12 @@
       },
       "fast_charge_floor_enabled": {
         "name": "Fast charge floor"
+      },
+      "hp_subtract_battery": {
+        "name": "HP surplus without battery charging"
+      },
+      "hp_shadow": {
+        "name": "HP shadow mode"
       }
     },
     "select": {
@@ -889,6 +907,24 @@
       },
       "fast_charge_floor_soc": {
         "name": "Fast charge floor SoC"
+      },
+      "hp_off_surplus": {
+        "name": "HP off threshold"
+      },
+      "hp_surplus_delay_minutes": {
+        "name": "HP surplus hold time"
+      },
+      "hp_min_surplus": {
+        "name": "HP minimum surplus"
+      },
+      "hp_max_price": {
+        "name": "HP max price"
+      },
+      "hp_min_run_minutes": {
+        "name": "HP minimum runtime"
+      },
+      "hp_min_pause_minutes": {
+        "name": "HP minimum pause"
       }
     },
     "button": {

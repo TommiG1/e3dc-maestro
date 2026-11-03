@@ -11,6 +11,36 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5-beta.7] – Wärmepumpe: ruhiger schalten und nachvollziehbar (2026-11-03)
+
+> **Beta.** Enthält 0.5.5-beta.6. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.7.md](docs/release-notes/v0.5.5-beta.7.md). Anlass: [Discussion #41](https://github.com/TommiG1/e3dc-maestro/discussions/41).
+
+### Neu
+- **Mindestdauer für den Überschuss.** Die Wärmepumpe schaltet erst ein, wenn der Überschuss die eingestellte Zeit am Stück anliegt (Standard 5 Minuten). Kurzes Wegfallen einer Last löst nicht mehr aus. Der Preispfad wartet bewusst nicht. Neu: `number.e3dc_maestro_wp_uberschuss_dauer`.
+- **Aus-Schwelle bei laufender Wärmepumpe.** Läuft sie, steckt ihr Verbrauch im Hausverbrauch. Bisher fiel der Überschuss dadurch nach dem Einschalten oft auf null, und die Wärmepumpe ging nach der Mindestlaufzeit wieder aus. Jetzt bleibt sie an, solange der Überschuss die Aus-Schwelle erreicht (Standard 0 W, also PV deckt Haus und Wärmepumpe). Neu: `number.e3dc_maestro_wp_aus_schwelle`.
+- **Überschuss ohne Akkuladung zählen (Opt-in).** Bisher rechnete die Wärmepumpe mit PV minus Hausverbrauch. Das zählt auch Leistung, die gerade in den Akku fließt. Wer nur echten Überschuss will, schaltet das ein, dann zieht Maestro die Akkuladung ab, wie bei der Wallbox. Standard aus, das bisherige Verhalten bleibt. Neu: `switch.e3dc_maestro_wp_uberschuss_ohne_akkuladung`.
+- **Schattenmodus für die Wärmepumpe.** Maestro rechnet und erklärt weiter, schaltet aber nicht. Gedacht zum Beobachten, bis die Einstellungen passen. Neu: `switch.e3dc_maestro_wp_schattenmodus`.
+- **Entscheidung nachvollziehbar.** Schaltet Maestro die Wärmepumpe, steht der Grund mit Uhrzeit in der Entscheidungserklärung und im Debug-Log, zum Beispiel „12:00 Wärmepumpe eingeschaltet: Überschuss 3000 W ≥ 2000 W seit 6 min (Akku-Abzug aus).“ oder „… Preis 0.100 €/kWh ≤ 0.150“. Beim Ausschalten steht, ob die Aus-Schwelle oder das Zeitfenster der Grund war. Im Schattenmodus heißt es „würde einschalten“. Der Sensor hat dafür die Attribute `hp_running` und `hp_reason`.
+- **Panel:** Unter Einstellungen → Wärmepumpe gibt es die neuen Zeilen Schattenmodus, Überschuss-Dauer, Aus-Schwelle und Überschuss ohne Akkuladung, jeweils mit Hilfetext. Beschreibung des Abschnitts, Lasten-Hilfe, Konzept-Hilfe und der Untertitel von „Regelung aktiv“ sind auf den neuen Stand gebracht.
+- **Einrichtung:** Alle neuen Optionen stehen auch im Config-Flow der Wärmepumpe.
+- **Übersetzungen:** Die neuen Schalter und Zahlen haben deutsche und englische Entity-Namen.
+
+### Geändert
+- **„Regelung aktiv“ gilt jetzt auch für die Wärmepumpe.** Ist der Hauptschalter aus, schaltet Maestro die Wärmepumpe nicht mehr. Bisher lief sie davon unabhängig weiter.
+- **Echter Schaltzustand wird übernommen.** Ist ein Schalter als Entity konfiguriert, liest Maestro seinen Zustand in jedem Zyklus. Nach einem Neustart von Home Assistant oder wenn jemand von Hand schaltet, gilt der echte Zustand, und ein Hinweis steht im Debug-Log. Vorher startete Maestro immer mit „aus“ und konnte eine laufende Wärmepumpe danach nie mehr ausschalten.
+- **Schalter-Domain:** Als Wärmepumpen-Schalter funktioniert jetzt auch ein `input_boolean`. Vorher war die Domain fest auf `switch` gesetzt.
+
+### Korrekturen
+- **Zeitfenster über Mitternacht.** Fenster wie 22:00 bis 06:00 haben nie gegriffen. Sie funktionieren jetzt.
+- **Fehlendes Schaltziel.** Sind weder Schalter noch Service konfiguriert, warnt Maestro einmal im Log. Vorher brach die Schaltung jeden Zyklus ohne Hinweis ab.
+
+### Hinweise
+- **Geänderte Standardwerte nach dem Update.** Mit 5 Minuten Überschuss-Dauer und 0 W Aus-Schwelle schaltet die Wärmepumpe etwas später ein und läuft länger durch. Wer das alte Verhalten will, setzt Überschuss-Dauer auf 0 und die Aus-Schwelle auf den Mindestüberschuss.
+- **Schattenmodus der Wärmepumpe.** Maestro arbeitet dabei mit einem virtuellen Zustand und übernimmt den echten Schalterzustand nicht. Fürs Beobachten reicht das. Läuft die Wärmepumpe gerade von Hand, kann die Erklärung davon abweichen. Der Schattenmodus der Wärmepumpe ist unabhängig vom Schattenmodus des Preisplans.
+- **Nicht enthalten.** Die Wallbox hat weiterhin keine Mindestdauer und reagiert nicht auf „Regelung aktiv“. Das Planungschart zeigt die Wärmepumpe nicht, der Vergleich im Schattenmodus betrifft nur den Akku.
+
+---
+
 ## [0.5.5-beta.6] – HACS-Review: Static Path, Repair, Event-Loop (2026-11-02)
 
 > **Beta.** Enthält 0.5.5-beta.5. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.6.md](docs/release-notes/v0.5.5-beta.6.md).

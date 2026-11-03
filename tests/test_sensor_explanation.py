@@ -108,3 +108,27 @@ def test_explanation_state_string_truncated_to_255() -> None:
     coord = _make_coord(decision)
     text = _decision_explanation(coord)
     assert len(text) == 255
+
+
+
+def test_explanation_appends_heat_pump_reason() -> None:
+    decision = MaestroDecision(phase="idle", reason="ok")
+    coord = _make_coord(decision)
+    coord._hp_last_explanation = (
+        "Wärmepumpe eingeschaltet: Überschuss 3000 W ≥ 2000 W (Akku-Abzug aus)."
+    )
+    text = _decision_explanation(coord)
+    assert "Wärmepumpe eingeschaltet" in text
+    assert "3000 W" in text
+    assert len(text) <= 255
+
+
+def test_explanation_prefers_hp_when_space_is_tight() -> None:
+    decision = MaestroDecision(phase="future_phase", reason="x" * 200)
+    coord = _make_coord(decision)
+    hp = "Wärmepumpe eingeschaltet: Überschuss 3000 W ≥ 2000 W (Akku-Abzug aus)."
+    coord._hp_last_explanation = hp
+    text = _decision_explanation(coord)
+    assert text.endswith(hp) or text == hp
+    assert "Wärmepumpe" in text
+    assert len(text) <= 255

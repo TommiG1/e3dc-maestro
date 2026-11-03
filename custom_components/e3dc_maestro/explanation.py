@@ -229,4 +229,16 @@ def decision_explanation(coord) -> str:
     else:
         text = f"Phase {phase}: {dec.reason}"
 
+    hp = getattr(coord, "_hp_last_explanation", None)
+    if hp:
+        combined = f"{text} {hp}"
+        if len(combined) <= 255:
+            text = combined
+        else:
+            budget = 255 - len(hp) - 2  # "… "
+            if budget >= 20:
+                text = text[:budget].rstrip(" .") + "… " + hp
+            else:
+                text = hp[:255]
+        return text
     return text[:255]

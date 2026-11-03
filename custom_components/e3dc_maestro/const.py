@@ -216,6 +216,10 @@ CONF_HP_TIME_START = "hp_time_start"                  # HH:MM
 CONF_HP_TIME_END = "hp_time_end"                      # HH:MM
 CONF_HP_MIN_RUN_MINUTES = "hp_min_run_minutes"
 CONF_HP_MIN_PAUSE_MINUTES = "hp_min_pause_minutes"
+CONF_HP_SUBTRACT_BATTERY = "hp_subtract_battery"      # bool, Opt-in
+CONF_HP_OFF_SURPLUS = "hp_off_surplus"                # W, Aus-Schwelle bei laufender WP
+CONF_HP_SURPLUS_DELAY_MINUTES = "hp_surplus_delay_minutes"
+CONF_HP_SHADOW = "hp_shadow"                          # bool, rechnet ohne zu schalten
 
 # Config entry keys – PV forecast (charge delay)
 CONF_PV_FORECAST_ENABLED = "pv_forecast_enabled"
@@ -458,6 +462,10 @@ DEFAULT_HP_MIN_SURPLUS = 2000
 DEFAULT_HP_MAX_PRICE = 0.15
 DEFAULT_HP_MIN_RUN_MINUTES = 20
 DEFAULT_HP_MIN_PAUSE_MINUTES = 15
+DEFAULT_HP_SUBTRACT_BATTERY = False
+DEFAULT_HP_OFF_SURPLUS = 0
+DEFAULT_HP_SURPLUS_DELAY_MINUTES = 5
+DEFAULT_HP_SHADOW = False
 DEFAULT_WATCHDOG_TIMEOUT = 10
 DEFAULT_UPDATE_INTERVAL = 30
 DEFAULT_LOWER_CORRIDOR = 500
