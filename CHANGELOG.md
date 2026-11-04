@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.5-beta.9] – Wärmepumpe: Verlauf der Ereignisse im Panel (2026-11-04)
+
+> **Beta.** Enthält 0.5.5-beta.8. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.9.md](docs/release-notes/v0.5.5-beta.9.md). Anlass: [Discussion #41](https://github.com/TommiG1/e3dc-maestro/discussions/41).
+
 ### Neu
 - **Wärmepumpe: Verlauf der letzten Ereignisse.** Auf der Seite Entscheidung zeigt eine neue Karte die letzten 20 Wärmepumpen-Ereignisse mit Uhrzeit und Grund: Schalten durch Maestro, „würde einschalten“ im Schattenmodus und Schalten von außen (zum Beispiel durch die E3DC-Steuerung am Shelly). Der Verlauf steht auch als Attribut `hp_history` am Sensor der Entscheidungserklärung und im Support-Dump ([Discussion #41](https://github.com/TommiG1/e3dc-maestro/discussions/41)).
 
