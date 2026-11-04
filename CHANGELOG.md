@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.5-beta.8] – Akku-Priorität, Reserve-Anzeige und klarere Prognose-Felder (2026-11-04)
+
+> **Beta.** Enthält 0.5.5-beta.7. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.8.md](docs/release-notes/v0.5.5-beta.8.md). Anlass: [Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42).
+
 ### Neu
 - **Saisonale und adaptive Reserve im Schnellzugriff** („Akku-Steuerung“), inklusive Anzeige, welche Reserve gerade gilt.
 - **Reserve in der Akku-Kachel.** Der gelbe Sockel und die Reserve-Zeile erscheinen auch bei saisonaler und verbrauchsadaptiver Notstromreserve, nicht nur bei der festen, mit Angabe der Quelle ([Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42)).
