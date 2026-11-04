@@ -121,8 +121,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Local hour until which the morning cap applies.",
   },
   gentle_charge_enabled: {
-    de: "Lädt mit einem Bruchteil der möglichen Leistung, schonender für den Akku.",
-    en: "Charges at a fraction of the possible power, easier on the battery.",
+    de: "Lädt mit einem Bruchteil der möglichen Leistung, schonender für den Akku. Nicht bei Akku-Priorität am schwachen PV-Tag.",
+    en: "Charges at a fraction of the possible power, easier on the battery. Not during battery priority on a weak PV day.",
   },
   gentle_charge_factor: {
     de: "Anteil der Ladeleistung im Schonmodus. 0,5 ist die Hälfte.",
