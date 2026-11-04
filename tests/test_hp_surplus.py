@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -135,6 +136,7 @@ class _Fake(CoordinatorActMixin):
         self._hp_running = False
         self._hp_last_change = dt_util.utcnow() - timedelta(days=1)
         self._hp_last_explanation = None
+        self._hp_history: deque = deque(maxlen=20)
         self._hp_surplus_since = None
         self._hp_no_target_warned = False
         self.service_calls: list[tuple[str, str, dict]] = []
@@ -159,6 +161,7 @@ def test_shadow_mode_does_not_switch():
     assert c.service_calls == []
     assert c._hp_running is True
     assert "würde einschalten" in c._hp_last_explanation
+    assert "würde einschalten" in c._hp_history[0]["text"]
 
 
 def test_switches_real_entity_domain():
@@ -172,6 +175,7 @@ def test_adopts_real_switch_state():
     c._sync_hp_running({CONF_HP_SWITCH_ENTITY: "switch.wp"})
     assert c._hp_running is True
     assert dt_util.utcnow() - c._hp_last_change < timedelta(minutes=1)
+    assert "extern an" in c._hp_history[0]["text"]
 
 
 def test_delay_tracked_across_ticks():

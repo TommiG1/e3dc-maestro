@@ -94,5 +94,6 @@ def build_support_dump(
     }
     data["debug_log"] = list(getattr(coordinator, "debug_log", []) or [])
     data["last_action"] = dict(getattr(coordinator, "last_action_info", {}) or {})
+    data["hp_history"] = list(getattr(coordinator, "_hp_history", []) or [])
     data["action_history"] = list(getattr(coordinator, "_action_history", []) or [])
     return data

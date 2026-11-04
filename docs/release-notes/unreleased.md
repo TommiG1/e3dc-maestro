@@ -4,6 +4,12 @@ Neue Punkte hier sammeln und beim nächsten Release in eine Versionsdatei versch
 
 ## Neu
 
-## Fixes
+- **Wärmepumpe: Verlauf der letzten Ereignisse.** Auf der Seite Entscheidung zeigt eine neue Karte die letzten 20 Wärmepumpen-Ereignisse mit Uhrzeit und Grund: Schalten durch Maestro, „würde einschalten“ im Schattenmodus und Schalten von außen (zum Beispiel durch die E3DC-Steuerung am Shelly). Der Verlauf steht auch als Attribut `hp_history` am Sensor der Entscheidungserklärung und im Support-Dump ([Discussion #41](https://github.com/TommiG1/e3dc-maestro/discussions/41)).
 
-- **Hilfetexte nachgezogen.** Die Hilfe zur Akku-Karte erklärt jetzt die Reserve mit Quelle (manuell, saisonal, adaptiv) und die neuen Schalter in „Akku steuern“. Die Regel „Schwacher Tag“ und der Tipp zur Schonladung sagen, dass die Schonladung bei Akku-Priorität nicht kürzt ([Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42)).
+## Geändert
+
+- **Debug-Log hält 200 statt 50 Zeilen.** Bei aktivem Debug-Log gingen ältere Einträge bisher nach wenigen Minuten verloren.
+
+## Gut zu wissen
+
+- Der Verlauf liegt im Speicher und ist nach einem Neustart von Home Assistant leer.

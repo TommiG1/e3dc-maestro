@@ -350,7 +350,14 @@ class CoordinatorActMixin:
         if real != self._hp_running:
             self._hp_running = real
             self._hp_last_change = dt_util.utcnow()
-            self._log(f"Wärmepumpe läuft extern {'an' if real else 'aus'}, übernommen")
+            msg = f"Wärmepumpe läuft extern {'an' if real else 'aus'}, übernommen"
+            self._hp_record(msg)
+            self._log(msg)
+
+    def _hp_record(self, text: str) -> None:
+        self._hp_history.appendleft(
+            {"timestamp": dt_util.now().isoformat(timespec="seconds"), "text": text}
+        )
 
     async def _async_control_hp(
         self, state: MaestroState, opts: dict, current_price: float | None
@@ -416,6 +423,7 @@ class CoordinatorActMixin:
                 surplus_min, shadow=shadow,
             )
         self._hp_last_explanation = explanation
+        self._hp_record(explanation)
         self._log(explanation)
 
 

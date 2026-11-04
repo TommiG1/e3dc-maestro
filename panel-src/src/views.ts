@@ -1629,6 +1629,11 @@ export function decisionView(c: Ctx): TemplateResult {
   const leftPct = (ms: number) => Math.max(0, Math.min(100, ((ms - origin) / windowMs) * 100));
   const widthPct = (x: number, x2: number) => Math.max(0.2, Math.min(100, ((x2 - x) / windowMs) * 100));
   const list = (c.timeline ?? []).slice(0, 12);
+  const hpHistory = (Array.isArray(d.hp_history) ? d.hp_history : []).filter(
+    (h): h is { timestamp: string; text: string } =>
+      !!h && typeof h.timestamp === "string" && typeof h.text === "string",
+  );
+  const showHp = typeof d.hp_running === "boolean" && (hpHistory.length > 0 || d.hp_running);
 
   return html`
     <div class="grid dec-top">
@@ -1709,6 +1714,21 @@ export function decisionView(c: Ctx): TemplateResult {
           </div>`
         : html`<p class="empty">${c.timeline ? t("timelineEmpty") : t("loading")}</p>`}
     </div>
+    ${showHp
+      ? html`<div class="card tl-card">
+          <h3>${t("hpHistoryTitle")}</h3>
+          ${hpHistory.length
+            ? html`<div class="timeline">
+                ${hpHistory.map(
+                  (h) => html`<div class="tl-item">
+                    <div class="tl-time">${c.fmt.dayTime(h.timestamp)}</div>
+                    <div class="tl-reason">${h.text}</div>
+                  </div>`,
+                )}
+              </div>`
+            : html`<p class="empty">${t("hpHistoryEmpty")}</p>`}
+        </div>`
+      : nothing}
     <div class="grid stat-row dec-extra">
       <div class="card">
         <h3>${t("reserveTitle")}</h3>
