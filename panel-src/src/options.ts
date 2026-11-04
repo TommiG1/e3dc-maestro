@@ -261,8 +261,11 @@ const labels: Record<string, { de: string; en: string }> = {
   modul3_vat_percent: { de: "Eigener MwSt.-Satz", en: "Custom VAT rate" },
   pv_forecast_sensor: { de: "Restprognose heute", en: "Remaining forecast today" },
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
-  tomorrow_pv_sensor: { de: "Prognose morgen", en: "Tomorrow's forecast" },
-  pv_forecast_sensor_day2: { de: "Prognose übermorgen", en: "Day-after forecast" },
+  tomorrow_pv_sensor: { de: "Prognose morgen (Tagessumme)", en: "Tomorrow's forecast (daily total)" },
+  pv_forecast_sensor_day2: {
+    de: "Prognose morgen (Stundenprofil), optional, bei Solcast leer lassen",
+    en: "Tomorrow's forecast (hourly profile), optional, leave empty for Solcast",
+  },
   wallbox_power_sensor: { de: "Wallbox-Leistung", en: "Wallbox power" },
   wallbox_soc_sensor: { de: "Fahrzeug-SoC", en: "Vehicle SoC" },
   wallbox_plug_entity: { de: "Stecker angesteckt", en: "Plug connected" },

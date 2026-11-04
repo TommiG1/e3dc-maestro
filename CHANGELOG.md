@@ -9,6 +9,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Saisonale und adaptive Reserve im Schnellzugriff** („Akku-Steuerung“), inklusive Anzeige, welche Reserve gerade gilt.
+- **Reserve in der Akku-Kachel.** Der gelbe Sockel und die Reserve-Zeile erscheinen auch bei saisonaler und verbrauchsadaptiver Notstromreserve, nicht nur bei der festen, mit Angabe der Quelle ([Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42)).
+
+### Fixes
+- **Schonladung bremst die Akku-Priorität nicht mehr.** Bei Schwacher-PV-Tag oder knapper Restprognose bleibt das volle Ladelimit bestehen, der Überschuss geht nicht mehr ins Netz ([Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42)).
+- **Prognose-Felder eindeutig benannt.** „Prognose übermorgen“ heißt im Panel jetzt wie im HA-Dialog „Prognose morgen (Stundenprofil)“; die Kopfzeile zeigt nur Rest heute und morgen.
+- **Reserve „Äquinoktium“ heißt jetzt Sommer** (Notstromreserve und Speicherreserve): Der Wert gilt am längsten Tag, dazwischen wird nach der Tageslänge interpoliert. Entity-IDs unverändert.
+- **Adaptive Reserve korrekt beschrieben:** Sie ersetzt den saisonalen Wert und kann ihn auch senken.
+- **Ladeende Sommermaximum:** Hinweis „derzeit ungenutzt“ jetzt auch in den Einstellungen unter Geräte und Dienste.
+
 ---
 
 ## [0.5.5-beta.7] – Wärmepumpe: ruhiger schalten und nachvollziehbar (2026-11-03)

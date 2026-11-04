@@ -58,8 +58,10 @@ import { setupBanner } from "./onboarding-view";
 import type { OptionCtx } from "./options-view";
 import { planControls, strategyOf } from "./settings";
 import {
+  activeReserve,
   AUTONOMY_BAR_HOURS,
   batteryForecast,
+  type ReserveSource,
   parseAutonomyHours,
   displaySlots,
   forecastWindow,
@@ -139,6 +141,9 @@ export interface Ctx {
   motion: boolean;
   collapsed: ReadonlySet<string>;
   onToggleGroup: (id: string) => void;
+  /** Seasonal / adaptive reserve switches (entry options, not entities). */
+  reserveOptions: { seasonal: boolean; adaptive: boolean; ready: boolean };
+  onReserveOption: (key: "seasonal_reserve_enabled" | "adaptive_reserve_enabled", on: boolean) => void;
   batteryCtrlOpen: boolean;
   onOpenBatteryCtrl: () => void;
   onCloseBatteryCtrl: () => void;
@@ -608,9 +613,9 @@ export function liveView(c: Ctx): TemplateResult {
   const lockValue = c.lockPowerDraft ?? num(st(c, E.dischargeLockPower)) ?? 0;
   const reserveValue = c.reserveDraft ?? num(st(c, E.fixedReserveSoc)) ?? 0;
   const reserveOn = on(E.fixedReserve);
-  const reserveLabel = reserveOn
-    ? `${t("fixedReserve")} ${t("ctrlReserveSoc", { v: Math.round(reserveValue) })}`
-    : undefined;
+  const activeRes = reserveNow(c, reserveOn, reserveValue);
+  const shownReserve = activeRes?.soc;
+  const reserveLabel = activeRes ? reserveText(c, activeRes) : undefined;
   const modes = [on(E.ctrlPredictive) ? t("modePredictive") : "", on(E.ctrlPlanShadow) ? t("modeShadow") : ""]
     .filter(Boolean)
     .join(" · ");
@@ -778,11 +783,11 @@ export function liveView(c: Ctx): TemplateResult {
           ${soc === undefined
             ? html`<p class="empty">${t("unavailable")}</p>`
             : c.batteryStyle === "pack"
-              ? socPack(soc, t("stateOfCharge"), bat, reserveOn ? reserveValue : undefined, reserveLabel)
-              : html`${socRing(soc, t("stateOfCharge"), reserveOn ? reserveValue : undefined)}
+              ? socPack(soc, t("stateOfCharge"), bat, shownReserve, reserveLabel)
+              : html`${socRing(soc, t("stateOfCharge"), shownReserve)}
                 ${reserveLabel ? reserveHint(reserveLabel) : nothing}`}
         </div>
-        ${socMetrics(c, soc, target, reserveOn ? reserveValue : undefined)}
+        ${socMetrics(c, soc, target, shownReserve)}
         <button type="button" class="soc-ctrl-btn" @click=${() => c.onOpenBatteryCtrl()}>
           <span class="soc-ctrl-copy">
             <span class="soc-ctrl-label">${t("batteryCtrl")}</span>
@@ -1310,12 +1315,37 @@ function autoSummary(c: Ctx): { text: string; tone: string } {
   return { text: t("autoOn", { goal, eur }), tone: "on" };
 }
 
+/**
+ * The reserve the control applies right now. Fixed (cockpit switch) wins, then the
+ * consumption-adaptive one once it has data, then the seasonal one (same order as the control).
+ */
+function reserveNow(c: Ctx, fixedOn: boolean, fixed: number): { soc: number; source: ReserveSource } | undefined {
+  return activeReserve({
+    fixedOn,
+    fixed,
+    seasonal: num(st(c, E.seasonalReserve)),
+    adaptive: num(st(c, E.adaptiveReserve)),
+  });
+}
+
+const RESERVE_SOURCE_KEY = {
+  fixed: "reserveSrcFixed",
+  seasonal: "reserveSrcSeasonal",
+  adaptive: "reserveSrcAdaptive",
+} as const;
+
+function reserveText(c: Ctx, r: { soc: number; source: ReserveSource }): string {
+  const { t } = c.i18n;
+  return `${t("fixedReserve")} ${t(RESERVE_SOURCE_KEY[r.source])} ${t("ctrlReserveSoc", { v: Math.round(r.soc) })}`;
+}
+
 function batteryCtrlMeta(c: Ctx, powerValue: number, lockValue: number, reserveValue: number): string {
   const { t } = c.i18n;
   const parts: string[] = [];
   if (isOn(st(c, E.forceDischarge))) parts.push(t("controlsForceOn", { v: c.fmt.w(powerValue) }));
   if (isOn(st(c, E.manualDischargeLock))) parts.push(t("controlsLockOn", { v: c.fmt.w(lockValue) }));
-  if (isOn(st(c, E.fixedReserve))) parts.push(t("controlsReserveOn", { v: Math.round(reserveValue) }));
+  const res = reserveNow(c, isOn(st(c, E.fixedReserve)), reserveValue);
+  if (res) parts.push(reserveText(c, res));
   if (isOn(st(c, E.ctrlAuto))) parts.push(autoSummary(c).text);
   return parts.length ? parts.join(" · ") : t("batteryCtrlIdle");
 }
@@ -1422,6 +1452,18 @@ export function batteryControlOverlay(c: Ctx): TemplateResult {
     ?disabled=${!st(c, id) || c.pending.has(id)}
     @click=${() => c.onToggle(id)}
   ></button>`;
+  const optionSwitch = (key: "seasonal_reserve_enabled" | "adaptive_reserve_enabled", value: boolean, label: string) => html`<button
+    class="switch ${value ? "on" : ""}"
+    role="switch"
+    aria-checked=${value}
+    aria-label=${label}
+    ?disabled=${!c.isAdmin || !c.reserveOptions.ready || c.pending.has(key)}
+    @click=${() => c.onReserveOption(key, !value)}
+  ></button>`;
+  const reserveActive = reserveNow(c, isOn(st(c, E.fixedReserve)), reserveValue);
+  const reserveNowLine = reserveActive
+    ? t("reserveActiveNow", { v: reserveText(c, reserveActive) })
+    : t("reserveNoneActive");
 
   return html`
     <div class="scrim open hist-scrim" @click=${() => c.onCloseBatteryCtrl()}></div>
@@ -1482,6 +1524,15 @@ export function batteryControlOverlay(c: Ctx): TemplateResult {
               onCommit: c.onReserveCommit,
             })}
           </div>
+          <div class="force">
+            <div class="txt"><b>${t("reserveSeasonalTitle")}</b><span>${t("reserveSeasonalSub")}</span></div>
+            ${optionSwitch("seasonal_reserve_enabled", c.reserveOptions.seasonal, t("reserveSeasonalTitle"))}
+          </div>
+          <div class="force">
+            <div class="txt"><b>${t("reserveAdaptiveTitle")}</b><span>${t("reserveAdaptiveSub")}</span></div>
+            ${optionSwitch("adaptive_reserve_enabled", c.reserveOptions.adaptive, t("reserveAdaptiveTitle"))}
+          </div>
+          <p class="sub reserve-now">${reserveNowLine}</p>
         </section>
         <section class="battery-ctrl-block">
           <div class="force">

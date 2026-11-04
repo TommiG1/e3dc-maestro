@@ -639,11 +639,9 @@ class MaestroPanel extends LitElement {
     const p10 = hass.states[E.p10];
     const p50 = p10?.attributes.p50_remaining_kwh;
     const rest = configured("pv_forecast_sensor") ?? (typeof p50 === "number" ? p50 : num(p10));
-    const dayAfter = configured("pv_forecast_sensor_day2");
     return html`<p class="facts">
       <span>${t("factRest")} <b>${kwh(rest)}</b></span>
       <span>${t("factTomorrow")} <b>${kwh(num(hass.states[E.pvTomorrow]))}</b></span>
-      ${dayAfter === undefined ? nothing : html`<span>${t("factDayAfter")} <b>${kwh(dayAfter)}</b></span>`}
     </p>`;
   }
 
@@ -1840,6 +1838,12 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
         if (id === "balancePulse" && !next.has("balancePulse")) void this._ensureHistory();
       },
+      reserveOptions: {
+        seasonal: this._storedOptions.seasonal_reserve_enabled === true,
+        adaptive: this._storedOptions.adaptive_reserve_enabled === true,
+        ready: this._optionsReady,
+      },
+      onReserveOption: (key, on) => void this._setOption(key, on, true),
       batteryCtrlOpen: this._batteryCtrlOpen,
       onOpenBatteryCtrl: () => {
         this._batteryCtrlOpen = true;

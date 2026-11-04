@@ -64,7 +64,7 @@
           "summer_charge_end": "Ziel-Ladeende im Sommer (Stunde)",
           "seasonal_reserve_enabled": "Saisonale Notstromreserve aktivieren",
           "reserve_winter_percent": "Reserve Winter (% SoC)",
-          "reserve_equinox_percent": "Reserve Äquinoktium (% SoC)",
+          "reserve_equinox_percent": "Reserve Sommer (% SoC)",
           "adaptive_reserve_enabled": "Verbrauchsadaptive Reserve aktivieren",
           "adaptive_reserve_lookback_days": "Adaptive Reserve – Lookback (Tage)",
           "adaptive_reserve_min_days": "Adaptive Reserve – Mindestdaten (Tage)",
@@ -80,7 +80,7 @@
           "ht_on": "Hochtarif Beginn (Stunde, lokal)",
           "ht_off": "Hochtarif Ende (Stunde, lokal)",
           "ht_min": "Speicherreserve Winter (%)",
-          "ht_sockel": "Speicherreserve Äquinoktium (%)",
+          "ht_sockel": "Speicherreserve Sommer (%)",
           "ht_sat": "Hochtarif Samstag",
           "ht_sun": "Hochtarif Sonntag"
         }
@@ -91,8 +91,8 @@
         "data": {
           "pv_forecast_enabled": "PV-Prognose-Verzögerung aktivieren",
           "pv_forecast_sensor": "Prognose heute – verbleibende kWh (z. B. Solcast: Prognose verbleibende Leistung heute)",
-          "tomorrow_pv_sensor": "Prognose morgen – Tagessumme kWh (z. B. Solcast: Prognose morgen) – Forward-Looking und Fallback für 48 h-Optimizer",
-          "pv_forecast_sensor_day2": "Prognose morgen (Stundenprofil) – optional (z. B. Solcast: Prognose morgen) – aktiviert 48 h-Horizont im Auto-Optimizer",
+          "tomorrow_pv_sensor": "Prognose morgen, Tagessumme in kWh (z. B. Solcast: Prognose morgen). Bei Solcast liefert er auch das Stundenprofil für den 48 h-Horizont.",
+          "pv_forecast_sensor_day2": "Prognose morgen, Stundenprofil (optional, bei Solcast leer lassen). Nur nötig, wenn der Sensor für morgen keine Stundenwerte liefert. Keine Sensoren für übermorgen eintragen.",
           "pv_forecast_threshold_kwh": "Mindest-Prognose (kWh)",
           "battery_capacity_kwh": "Nutzbare Batteriekapazität (kWh)",
           "pv_forecast_safety_factor": "Sicherheitsfaktor (Prognose ≥ Bedarf × Faktor)",
@@ -353,11 +353,11 @@
           "charge_threshold": "Ladeschwelle – Notfallladung unter x% SoC",
           "charge_target": "Ladeende SoC (%)",
           "winter_minimum_hour": "Ladeende Winterminimum (Stunde)",
-          "summer_maximum_hour": "Ladeende Sommermaximum (Stunde)",
+          "summer_maximum_hour": "Ladeende Sommermaximum (Stunde) — derzeit ungenutzt",
           "summer_charge_end": "Ziel-Ladeende im Sommer (Stunde)",
           "seasonal_reserve_enabled": "Saisonale Notstromreserve aktivieren",
           "reserve_winter_percent": "Reserve Winter (% SoC)",
-          "reserve_equinox_percent": "Reserve Äquinoktium (% SoC)",
+          "reserve_equinox_percent": "Reserve Sommer (% SoC)",
           "adaptive_reserve_enabled": "Verbrauchsadaptive Reserve aktivieren",
           "adaptive_reserve_lookback_days": "Adaptive Reserve – Lookback (Tage)",
           "adaptive_reserve_min_days": "Adaptive Reserve – Mindestdaten (Tage)",
@@ -368,9 +368,10 @@
           "charge_threshold": "Unter diesem SoC lädt Maestro sofort nach, unabhängig von PV oder Tarif (Notfall-Schutz).",
           "charge_target": "Maximaler Lade-SoC im Normalbetrieb. Werte >95 % beschleunigen Zellalterung.",
           "winter_minimum_hour": "Uhrzeit des Ladeendes am kürzesten Tag. Bis zum Sommer-Ladeende rechnet Maestro dazwischen linear.",
+          "summer_maximum_hour": "Wird von der Regelung nicht gelesen. Das Sommer-Ladeende steht im Feld „Ziel-Ladeende im Sommer“.",
           "summer_charge_end": "Zielzeit für das Ladeende im Sommer – danach wird nur noch PV-Überschuss nachgeladen.",
           "reserve_winter_percent": "Fest gehaltene Mindest-Reserve im Winter (Dez.–Feb.) für Stromausfälle.",
-          "reserve_equinox_percent": "Reserve zur Tagundnachtgleiche (Mrz./Sep.) – Übergangswert zwischen Winter und Sommer.",
+          "reserve_equinox_percent": "Reserve im Sommer, am längsten Tag. Dazwischen rechnet Maestro nach der Tageslänge, zur Tagundnachtgleiche (März und September) liegt der Wert etwa in der Mitte zwischen Winter und Sommer.",
           "adaptive_reserve_safety_factor": "Multiplikator auf den berechneten Nachtbedarf (z. B. 1.2 = 20 % Puffer). Höhere Werte = mehr Reserve, aber weniger Entladetiefe.",
           "adaptive_reserve_lookback_days": "Wie viele vergangene Tage für die Verbrauchsmittelung herangezogen werden.",
           "adaptive_reserve_min_days": "Mindestanzahl an Datenpunkten – darunter greift die statische Saisonreserve statt der adaptiven.",
@@ -383,8 +384,8 @@
         "data": {
           "pv_forecast_enabled": "PV-Prognose-Verzögerung aktivieren",
           "pv_forecast_sensor": "Prognose heute – verbleibende kWh (z. B. Solcast: Prognose verbleibende Leistung heute)",
-          "tomorrow_pv_sensor": "Prognose morgen – Tagessumme kWh (z. B. Solcast: Prognose morgen) – Forward-Looking und Fallback für 48 h-Optimizer",
-          "pv_forecast_sensor_day2": "Prognose morgen (Stundenprofil) – optional (z. B. Solcast: Prognose morgen) – aktiviert 48 h-Horizont im Auto-Optimizer",
+          "tomorrow_pv_sensor": "Prognose morgen, Tagessumme in kWh (z. B. Solcast: Prognose morgen). Bei Solcast liefert er auch das Stundenprofil für den 48 h-Horizont.",
+          "pv_forecast_sensor_day2": "Prognose morgen, Stundenprofil (optional, bei Solcast leer lassen). Nur nötig, wenn der Sensor für morgen keine Stundenwerte liefert. Keine Sensoren für übermorgen eintragen.",
           "pv_forecast_threshold_kwh": "Mindest-Prognose (kWh)",
           "battery_capacity_kwh": "Nutzbare Batteriekapazität (kWh)",
           "pv_forecast_safety_factor": "Sicherheitsfaktor (Prognose ≥ Bedarf × Faktor)",
@@ -418,7 +419,7 @@
           "ht_on": "Hochtarif Beginn (Stunde, lokal)",
           "ht_off": "Hochtarif Ende (Stunde, lokal)",
           "ht_min": "Speicherreserve Winter (%)",
-          "ht_sockel": "Speicherreserve Äquinoktium (%)",
+          "ht_sockel": "Speicherreserve Sommer (%)",
           "ht_sat": "Hochtarif Samstag",
           "ht_sun": "Hochtarif Sonntag"
         },
@@ -426,7 +427,7 @@
           "ht_on": "Ganzzahl in lokaler Zeit, z. B. 7 für 07:00 Uhr.",
           "ht_off": "Ganzzahl in lokaler Zeit, z. B. 21 für 21:00 Uhr.",
           "ht_min": "Ziel-SoC, den Maestro im Hochtarif-Fenster mindestens hält (Winter, Dez.–Feb.).",
-          "ht_sockel": "Reserve zur Tagundnachtgleiche – Übergangswert zwischen Winter und Sommer."
+          "ht_sockel": "Reserve im Sommer, am längsten Tag. Dazwischen rechnet Maestro nach der Tageslänge, zur Tagundnachtgleiche liegt der Wert etwa in der Mitte zwischen Winter und Sommer."
         }
       },
       "tariff_slots": {

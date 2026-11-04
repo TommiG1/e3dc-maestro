@@ -90,6 +90,7 @@ from .coordinator_helpers import (
     E3DC_RSCP_POWER_MODE_MAP,
     POWER_DEBOUNCE_W,
     _action_history_changed,
+    _apply_gentle_charge,
     _build_power_mode_data,
     _FULL_POWER_PHASES,
     _effective_discharge_limit_w,
@@ -115,6 +116,7 @@ __all__ = [
     "E3DC_RSCP_POWER_MODE_MAP",
     "POWER_DEBOUNCE_W",
     "_action_history_changed",
+    "_apply_gentle_charge",
     "_build_power_mode_data",
     "_effective_discharge_limit_w",
     "_limits_changed_vs_sent_values",
@@ -831,17 +833,10 @@ class E3DCMaestroCoordinator(
         else:
             self._last_applied_charge_power = 0
 
-        # F0: Gentle-Charge – scale charge power for comfort phases
-        if (
-            active.gentle_charge_enabled
-            and decision.phase not in _FULL_POWER_PHASES
-            and decision.charge_power_limit is not None
-        ):
-            decision = dataclasses.replace(
-                decision,
-                charge_power_limit=decision.charge_power_limit * active.gentle_charge_factor,
-                reason=decision.reason + f" (Schonladung ×{active.gentle_charge_factor:.0%})",
-            )
+        # F0: Gentle-Charge (nicht bei Vollleistung und Akku-Priorität)
+        decision = _apply_gentle_charge(
+            decision, active.gentle_charge_enabled, active.gentle_charge_factor
+        )
 
         await self._async_schedule_act(decision, state_data, opts, current_price)
 

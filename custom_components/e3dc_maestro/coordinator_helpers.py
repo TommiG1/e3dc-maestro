@@ -6,6 +6,7 @@ debounce and forecast-cache logic without Home Assistant.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -217,6 +218,28 @@ def _ramp_bypass_for_phase(decision: MaestroDecision) -> bool:
     Bedarfsprüfung die Priorität bereits freigegeben hatte).
     """
     return decision.phase in _FULL_POWER_PHASES or decision.battery_priority
+
+
+def _apply_gentle_charge(
+    decision: MaestroDecision, enabled: bool, factor: float
+) -> MaestroDecision:
+    """F0: Schonladung skaliert das Ladelimit in Komfortphasen.
+
+    Nicht bei Vollleistungsphasen und nicht bei Akku-Priorität (Schwacher-PV-Tag /
+    Prognose-Gate): dort soll der Akku den vollen PV-Überschuss nehmen, sonst
+    geht der Rest ins Netz (Discussion #42).
+    """
+    if (
+        not enabled
+        or _ramp_bypass_for_phase(decision)
+        or decision.charge_power_limit is None
+    ):
+        return decision
+    return replace(
+        decision,
+        charge_power_limit=decision.charge_power_limit * factor,
+        reason=decision.reason + f" (Schonladung ×{factor:.0%})",
+    )
 
 
 def _ramp_bypass_due_to_resync(

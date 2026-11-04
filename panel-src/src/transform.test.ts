@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeReserve,
   batteryForecast,
   bucket,
   bucketSlots,
@@ -262,6 +263,25 @@ describe("batteryForecast", () => {
   it("returns undefined when the trajectory has no future points", () => {
     expect(batteryForecast([[now - 1000, 40]], [], { now, timeZone: "UTC" })).toBeUndefined();
     expect(batteryForecast([], [], { now, timeZone: "UTC" })).toBeUndefined();
+  });
+});
+
+describe("activeReserve", () => {
+  it("uses the fixed reserve while its switch is on", () => {
+    expect(activeReserve({ fixedOn: true, fixed: 20, seasonal: 20, adaptive: 40 })).toEqual({ soc: 20, source: "fixed" });
+  });
+
+  it("falls back to the seasonal reserve when the fixed one is off", () => {
+    expect(activeReserve({ fixedOn: false, fixed: 20, seasonal: 30 })).toEqual({ soc: 30, source: "seasonal" });
+  });
+
+  it("prefers the adaptive reserve once it has data, like the control", () => {
+    expect(activeReserve({ fixedOn: false, seasonal: 30, adaptive: 42 })).toEqual({ soc: 42, source: "adaptive" });
+  });
+
+  it("shows nothing when no reserve is in effect", () => {
+    expect(activeReserve({ fixedOn: false, fixed: 20 })).toBeUndefined();
+    expect(activeReserve({ fixedOn: false, adaptive: 42 })).toBeUndefined();
   });
 });
 

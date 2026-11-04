@@ -281,8 +281,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "SoC that discharge protection will not go below in winter.",
   },
   ht_sockel: {
-    de: "SoC-Sockel zur Tag-und-Nacht-Gleiche, zwischen Winter- und Sommerwert.",
-    en: "SoC floor at the equinox, between the winter and summer values.",
+    de: "SoC-Sockel im Sommer, am längsten Tag. Dazwischen rechnet Maestro nach der Tageslänge.",
+    en: "SoC floor in summer, on the longest day. In between Maestro follows the day length.",
   },
   seasonal_reserve_enabled: {
     de: "Die Notstromreserve folgt der Jahreszeit, höher im Winter, niedriger im Sommer.",
@@ -293,8 +293,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Backup reserve at the winter solstice.",
   },
   reserve_equinox_percent: {
-    de: "Notstromreserve zur Tag-und-Nacht-Gleiche.",
-    en: "Backup reserve at the equinox.",
+    de: "Notstromreserve im Sommer, am längsten Tag. Zur Tag-und-Nacht-Gleiche liegt der Wert etwa in der Mitte zwischen Winter und Sommer.",
+    en: "Backup reserve in summer, on the longest day. At the equinox the value is roughly halfway between winter and summer.",
   },
   fixed_reserve_enabled: {
     de: "Ersetzt die saisonale Reserve durch einen festen SoC und lädt darunter aus dem Netz.",
@@ -305,8 +305,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Fixed backup SoC. Discharge is blocked below it.",
   },
   adaptive_reserve_enabled: {
-    de: "Hebt die Reserve anhand des Verbrauchs der letzten Tage an.",
-    en: "Raises the reserve from the consumption of recent days.",
+    de: "Ersetzt den saisonalen Wert durch einen aus dem Hausverbrauch der letzten Tage berechneten Wert, höchstens bis zur Obergrenze.",
+    en: "Replaces the seasonal value with one calculated from the house consumption of recent days, up to the ceiling at most.",
   },
   evcc_enabled: {
     de: "Begrenzt die Entladung, während die Wallbox Sofortladen meldet (EVCC, openWB, go-e, …).",

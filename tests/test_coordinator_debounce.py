@@ -17,6 +17,7 @@ from custom_components.e3dc_maestro.const import (
 from custom_components.e3dc_maestro.coordinator import (
     _FULL_POWER_PHASES,
     _action_history_changed,
+    _apply_gentle_charge,
     _build_power_mode_data,
     _effective_discharge_limit_w,
     _limits_changed_vs_sent_values,
@@ -158,6 +159,32 @@ def test_ramp_bypass_not_tied_to_day_flag_only_to_decision():
 
     idle = MaestroDecision(phase=PHASE_IDLE, reason="x", battery_priority=False)
     assert _ramp_bypass_for_phase(idle) is False
+
+
+def test_gentle_charge_scales_corridor_without_battery_priority():
+    d = MaestroDecision(
+        phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0, battery_priority=False
+    )
+    out = _apply_gentle_charge(d, True, 0.35)
+    assert out.charge_power_limit == 4500.0 * 0.35
+    assert "Schonladung ×35%" in out.reason
+
+
+def test_gentle_charge_skipped_with_battery_priority():
+    """Discussion #42: Akku-Priorität will vollen Überschuss, Schonladung darf nicht kürzen."""
+    d = MaestroDecision(
+        phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0, battery_priority=True
+    )
+    out = _apply_gentle_charge(d, True, 0.35)
+    assert out.charge_power_limit == 4500.0
+    assert "Schonladung" not in out.reason
+
+
+def test_gentle_charge_skipped_when_disabled_or_no_limit():
+    d = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0)
+    assert _apply_gentle_charge(d, False, 0.35).charge_power_limit == 4500.0
+    d2 = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", charge_power_limit=None)
+    assert _apply_gentle_charge(d2, True, 0.35).charge_power_limit is None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

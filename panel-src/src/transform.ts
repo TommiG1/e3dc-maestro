@@ -252,6 +252,27 @@ export function batteryForecast(
 
 
 
+/**
+ * Reserve floor (%) for the battery card, in the order the control uses it: the fixed cockpit
+ * reserve while its switch is on, otherwise the seasonal reserve, replaced by the
+ * consumption-adaptive one once that has data. `seasonal` is only set by Maestro while the fixed or
+ * seasonal reserve is enabled, so no value means no reserve is in effect.
+ */
+export type ReserveSource = "fixed" | "seasonal" | "adaptive";
+
+export function activeReserve(opts: {
+  fixedOn: boolean;
+  fixed?: number;
+  seasonal?: number;
+  adaptive?: number;
+}): { soc: number; source: ReserveSource } | undefined {
+  if (opts.fixedOn) return opts.fixed === undefined ? undefined : { soc: opts.fixed, source: "fixed" };
+  if (opts.seasonal === undefined) return undefined;
+  return opts.adaptive === undefined
+    ? { soc: opts.seasonal, source: "seasonal" }
+    : { soc: opts.adaptive, source: "adaptive" };
+}
+
 /** Grid power: negative = import, positive = feed-in (E3DC convention used by the trajectory). */
 export function splitGrid(pts: Point[]): { imp: Point[]; exp: Point[] } {
   return {

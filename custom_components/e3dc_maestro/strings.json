@@ -64,7 +64,7 @@
           "summer_charge_end": "Target charge end in summer (hour)",
           "seasonal_reserve_enabled": "Enable seasonal backup reserve",
           "reserve_winter_percent": "Reserve winter (% SoC)",
-          "reserve_equinox_percent": "Reserve equinox (% SoC)",
+          "reserve_equinox_percent": "Reserve summer (% SoC)",
           "adaptive_reserve_enabled": "Enable consumption-adaptive reserve",
           "adaptive_reserve_lookback_days": "Adaptive reserve – lookback (days)",
           "adaptive_reserve_min_days": "Adaptive reserve – minimum data (days)",
@@ -80,7 +80,7 @@
           "ht_on": "High tariff start (hour, local)",
           "ht_off": "High tariff end (hour, local)",
           "ht_min": "Storage reserve winter (%)",
-          "ht_sockel": "Storage reserve equinox (%)",
+          "ht_sockel": "Storage reserve summer (%)",
           "ht_sat": "High tariff on Saturday",
           "ht_sun": "High tariff on Sunday"
         }
@@ -91,8 +91,8 @@
         "data": {
           "pv_forecast_enabled": "Enable PV forecast delay",
           "pv_forecast_sensor": "Forecast today – remaining kWh (e.g. Solcast: Forecast remaining today)",
-          "tomorrow_pv_sensor": "Forecast tomorrow – daily total kWh (e.g. Solcast: Forecast tomorrow) – Forward-Looking and fallback for 48 h optimizer",
-          "pv_forecast_sensor_day2": "Forecast tomorrow (hourly profile) – optional (e.g. Solcast: Forecast tomorrow) – enables 48 h horizon in the auto-optimizer",
+          "tomorrow_pv_sensor": "Forecast tomorrow, daily total in kWh (e.g. Solcast: Forecast tomorrow). With Solcast it also provides the hourly profile for the 48 h horizon.",
+          "pv_forecast_sensor_day2": "Forecast tomorrow, hourly profile (optional, leave empty for Solcast). Only needed if the tomorrow sensor has no hourly values. Do not enter day-after-tomorrow sensors.",
           "pv_forecast_threshold_kwh": "Minimum forecast (kWh)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "pv_forecast_safety_factor": "Safety factor (forecast ≥ demand × factor)",
@@ -351,11 +351,11 @@
           "charge_threshold": "Charge threshold – emergency charge below x% SoC",
           "charge_target": "Charge end SoC (%)",
           "winter_minimum_hour": "Charge end at winter minimum (hour)",
-          "summer_maximum_hour": "Charge end at summer maximum (hour)",
+          "summer_maximum_hour": "Charge end at summer maximum (hour) — currently unused",
           "summer_charge_end": "Target charge end in summer (hour)",
           "seasonal_reserve_enabled": "Enable seasonal backup reserve",
           "reserve_winter_percent": "Reserve winter (% SoC)",
-          "reserve_equinox_percent": "Reserve equinox (% SoC)",
+          "reserve_equinox_percent": "Reserve summer (% SoC)",
           "adaptive_reserve_enabled": "Enable consumption-adaptive reserve",
           "adaptive_reserve_lookback_days": "Adaptive reserve – lookback (days)",
           "adaptive_reserve_min_days": "Adaptive reserve – minimum data (days)",
@@ -366,9 +366,10 @@
           "charge_threshold": "Below this SoC, Maestro recharges immediately, regardless of PV or tariff (emergency protection).",
           "charge_target": "Maximum charge SoC in normal operation. Values >95 % accelerate cell aging.",
           "winter_minimum_hour": "Time of day when charging ends on the shortest day. Maestro interpolates from here to the summer end of charging.",
+          "summer_maximum_hour": "The control logic does not read this. The summer end of charging is the field \"Target charge end in summer\".",
           "summer_charge_end": "Target time for the end of charging in summer – after that, only PV surplus is used for recharging.",
           "reserve_winter_percent": "Fixed minimum reserve in winter (Dec–Feb) for power outages.",
-          "reserve_equinox_percent": "Reserve at the equinox (Mar/Sep) – transitional value between winter and summer.",
+          "reserve_equinox_percent": "Reserve in summer, on the longest day. In between Maestro follows the day length, so at the equinox (March and September) the value is roughly halfway between winter and summer.",
           "adaptive_reserve_safety_factor": "Multiplier applied to the calculated night-time demand (e.g. 1.2 = 20 % buffer). Higher values = more reserve, but less depth of discharge.",
           "adaptive_reserve_lookback_days": "How many past days are used for averaging consumption.",
           "adaptive_reserve_min_days": "Minimum number of data points – below this, the static seasonal reserve applies instead of the adaptive one.",
@@ -381,8 +382,8 @@
         "data": {
           "pv_forecast_enabled": "Enable PV forecast delay",
           "pv_forecast_sensor": "Forecast today – remaining kWh (e.g. Solcast: Forecast remaining today)",
-          "tomorrow_pv_sensor": "Forecast tomorrow – daily total kWh (e.g. Solcast: Forecast tomorrow) – Forward-Looking and fallback for 48 h optimizer",
-          "pv_forecast_sensor_day2": "Forecast tomorrow (hourly profile) – optional (e.g. Solcast: Forecast tomorrow) – enables 48 h horizon in the auto-optimizer",
+          "tomorrow_pv_sensor": "Forecast tomorrow, daily total in kWh (e.g. Solcast: Forecast tomorrow). With Solcast it also provides the hourly profile for the 48 h horizon.",
+          "pv_forecast_sensor_day2": "Forecast tomorrow, hourly profile (optional, leave empty for Solcast). Only needed if the tomorrow sensor has no hourly values. Do not enter day-after-tomorrow sensors.",
           "pv_forecast_threshold_kwh": "Minimum forecast (kWh)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "pv_forecast_safety_factor": "Safety factor (forecast ≥ demand × factor)",
@@ -416,7 +417,7 @@
           "ht_on": "High tariff start (hour, local)",
           "ht_off": "High tariff end (hour, local)",
           "ht_min": "Storage reserve winter (%)",
-          "ht_sockel": "Storage reserve equinox (%)",
+          "ht_sockel": "Storage reserve summer (%)",
           "ht_sat": "High tariff on Saturday",
           "ht_sun": "High tariff on Sunday"
         },
@@ -424,7 +425,7 @@
           "ht_on": "Integer in local time, e.g. 7 for 07:00.",
           "ht_off": "Integer in local time, e.g. 21 for 21:00.",
           "ht_min": "Target SoC that Maestro keeps at minimum during the high-tariff window (winter, Dec–Feb).",
-          "ht_sockel": "Reserve at the equinox – transitional value between winter and summer."
+          "ht_sockel": "Reserve in summer, on the longest day. In between Maestro follows the day length, so at the equinox the value is roughly halfway between winter and summer."
         }
       },
       "tariff_slots": {
