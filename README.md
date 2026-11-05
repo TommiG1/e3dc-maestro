@@ -63,6 +63,8 @@ Install and connect [torbennehmer/hacs-e3dc](https://github.com/torbennehmer/hac
 
 > **AI360 must be off.** Otherwise E3DC overrides external charge commands.
 
+> **Check disabled entities.** E3DC RSCP ships some entities disabled by default, for example battery net change, grid transfer and additional production. If Maestro shows "Unknown entity" during setup, enable them under Settings → Devices & services → E3DC Remote Storage Control Protocol → device → "entities not shown".
+
 ### 2. Install Maestro
 
 **HACS (until HA 2026.10):** Custom repository `https://github.com/TommiG1/e3dc-maestro` → Integration → Download → restart.
@@ -86,6 +88,8 @@ Add the integration → **Maestro** in the sidebar. Onboarding included.
 ## Requirements
 
 Home Assistant ≥ 2024.1 · E3DC RSCP running · tested with S10E / S10E Pro among others · PV forecast optional.
+
+**Experimental:** Heat pump control is new and not yet widely tested on real systems. Start with **shadow mode**: Maestro then calculates and explains its decisions but switches nothing.
 
 **Handbook:** [glowdash.de/maestro/docs](https://glowdash.de/maestro/docs/) · Website: [glowdash.de/maestro](https://glowdash.de/maestro/) · [Discussions](https://github.com/TommiG1/e3dc-maestro/discussions) · [Issues](https://github.com/TommiG1/e3dc-maestro/issues) · [Releases](https://github.com/TommiG1/e3dc-maestro/releases)
 

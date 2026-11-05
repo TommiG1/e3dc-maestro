@@ -63,6 +63,8 @@ Maestro setzt **[E3DC RSCP](https://github.com/torbennehmer/hacs-e3dc)** voraus.
 
 > **AI360 muss aus sein.** Sonst überschreibt E3DC externe Ladebefehle.
 
+> **Deaktivierte Entities prüfen.** E3DC RSCP liefert einige Entities standardmäßig deaktiviert, zum Beispiel Batterie-Nettoänderung, Netzübertragung und Zusatzerzeugung. Zeigt Maestro im Setup „Unbekannte Entität“, aktiviere sie unter Einstellungen → Geräte & Dienste → E3DC Remote Storage Control Protocol → Gerät → „Entitäten nicht angezeigt“.
+
 ### 2. Maestro installieren
 
 **HACS (bis HA 2026.10):** Custom Repository `https://github.com/TommiG1/e3dc-maestro` → Integration → Download → Neustart.
@@ -86,6 +88,8 @@ Integration hinzufügen → **Maestro** in der Seitenleiste. Onboarding inklusiv
 ## Voraussetzungen
 
 Home Assistant ≥ 2024.1 · E3DC RSCP aktiv · getestet u. a. mit S10E / S10E Pro · PV-Prognose optional.
+
+**Experimentell:** Die Wärmepumpen-Regelung ist neu und noch wenig auf echten Anlagen erprobt. Starte mit dem **Schattenmodus**: Maestro berechnet und erklärt dann die Entscheidungen, schaltet aber nichts.
 
 **Handbuch:** [glowdash.de/maestro/docs](https://glowdash.de/maestro/docs/) · Website: [glowdash.de/maestro](https://glowdash.de/maestro/) · [Discussions](https://github.com/TommiG1/e3dc-maestro/discussions) · [Issues](https://github.com/TommiG1/e3dc-maestro/issues) · [Releases](https://github.com/TommiG1/e3dc-maestro/releases)
 

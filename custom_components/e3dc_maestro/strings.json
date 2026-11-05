@@ -181,8 +181,8 @@
         }
       },
       "heatpump": {
-        "title": "Heat pump",
-        "description": "Control the heat pump on PV surplus or cheap electricity.",
+        "title": "Heat pump (experimental)",
+        "description": "Experimental: controls the heat pump on PV surplus or cheap electricity. Start with shadow mode: Maestro then only calculates and explains its decisions without switching.",
         "data": {
           "hp_enabled": "Enable heat pump control",
           "hp_switch_entity": "Heat pump switch entity",
@@ -528,8 +528,8 @@
         }
       },
       "heatpump": {
-        "title": "Heat pump",
-        "description": "Controls the heat pump on PV surplus or when the electricity price falls below the price limit.",
+        "title": "Heat pump (experimental)",
+        "description": "Experimental: controls the heat pump on PV surplus or when the electricity price falls below the price limit. Start with shadow mode: Maestro then only calculates and explains its decisions without switching.",
         "data": {
           "hp_enabled": "Enable heat pump control",
           "hp_switch_entity": "Heat pump switch entity",

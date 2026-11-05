@@ -183,8 +183,8 @@
         }
       },
       "heatpump": {
-        "title": "Wärmepumpe",
-        "description": "Steuere die Wärmepumpe bei PV-Überschuss oder günstigem Strom.",
+        "title": "Wärmepumpe (experimentell)",
+        "description": "Experimentell: Steuert die Wärmepumpe bei PV-Überschuss oder günstigem Strom. Starte mit dem Schattenmodus, dann berechnet und erklärt Maestro nur und schaltet nichts.",
         "data": {
           "hp_enabled": "Wärmepumpen-Regelung aktivieren",
           "hp_switch_entity": "Wärmepumpen-Schalter-Entity",
@@ -532,8 +532,8 @@
         }
       },
       "heatpump": {
-        "title": "Wärmepumpe",
-        "description": "Steuert die Wärmepumpe bei PV-Überschuss oder wenn der Strompreis die Preisgrenze unterschreitet.",
+        "title": "Wärmepumpe (experimentell)",
+        "description": "Experimentell: Steuert die Wärmepumpe bei PV-Überschuss oder wenn der Strompreis die Preisgrenze unterschreitet. Starte mit dem Schattenmodus, dann berechnet und erklärt Maestro nur und schaltet nichts.",
         "data": {
           "hp_enabled": "Wärmepumpen-Regelung aktivieren",
           "hp_switch_entity": "Wärmepumpen-Schalter-Entity",
