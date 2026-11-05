@@ -297,8 +297,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Backup reserve in summer, on the longest day. At the equinox the value is roughly halfway between winter and summer.",
   },
   fixed_reserve_enabled: {
-    de: "Ersetzt die saisonale Reserve durch einen festen SoC und lädt darunter aus dem Netz.",
-    en: "Replaces the seasonal reserve with a fixed SoC and charges from the grid below it.",
+    de: "Ersetzt die saisonale und die adaptive Reserve durch einen festen SoC und lädt darunter aus dem Netz.",
+    en: "Replaces the seasonal and the adaptive reserve with a fixed SoC and charges from the grid below it.",
   },
   fixed_reserve_soc: {
     de: "Fester SoC der Notstromreserve. Darunter ist die Entladung gesperrt.",

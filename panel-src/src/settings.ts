@@ -487,8 +487,7 @@ const focused = (el: HTMLInputElement): boolean => {
 
 const labelOf = (entity: HassEntity | undefined, key: string): string => {
   const name = entity?.attributes.friendly_name;
-  // Die Entities heißen noch "… Äquinoktium", der Wert gilt aber am längsten Tag (Sommer).
-  // Der Name steckt in der Entity-ID, deshalb wird er nur in der Anzeige korrigiert.
+  // Alte Installationen können noch "… Äquinoktium" als friendly_name haben.
   return typeof name === "string" && name.trim() ? name.trim().replace("Äquinoktium", "Sommer") : key;
 };
 

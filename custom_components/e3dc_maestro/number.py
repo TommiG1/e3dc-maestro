@@ -254,7 +254,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
     ),
     MaestroNumberDescription(
         key=CONF_HT_SOCKEL,
-        name="Entladeschutz-Sockel Äquinoktium",
+        name="Entladeschutz-Sockel Sommer",
         icon="mdi:battery-20",
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_HT_SOCKEL,
@@ -481,7 +481,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
     ),
     MaestroNumberDescription(
         key=CONF_RESERVE_EQUINOX_PERCENT,
-        name="Notstromreserve Äquinoktium",
+        name="Notstromreserve Sommer",
         icon="mdi:battery-alert-variant-outline",
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_RESERVE_EQUINOX_PERCENT,

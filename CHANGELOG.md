@@ -11,6 +11,30 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.5] – HACS-tauglich, Wärmepumpe, Entladesperre und Portal-Historie (2026-11-05)
+
+Stabiles Release. Enthält 0.5.5-beta.1 bis beta.9 sowie nachgezogene Hilfe. Ausführlich: [docs/release-notes/v0.5.5.md](docs/release-notes/v0.5.5.md).
+
+### Neu
+- **Portal-CSV-Historie** aus my.e3dc für Sizing und Verbrauchsprofil.
+- **Manuelle Entladesperre** in Schnellsteuerung und Akku-Steuerung.
+- **Wärmepumpe:** Mindestdauer, Aus-Schwelle, Überschuss ohne Akkuladung, Schattenmodus, Ereignisverlauf.
+- **go-e Auto-Detect** und UI-Name **Sofortladen: Akku-Schutz**.
+- **Reserve-Schnellzugriff** und Anzeige für saisonale/adaptive Reserve.
+
+### Geändert
+- **HACS-Review:** kein `www`-Copy, RSCP-Reparatur statt Registry-Eingriff, Asset-Hash im Executor.
+- **Schonladung** bremst Akku-Priorität nicht mehr.
+- **Reserve „Sommer“** statt Äquinoktium; Hilfe und Classic-Dashboards nachgezogen.
+- **Verbrauchsprognose ohne Wallbox** bei „im Hausverbrauch enthalten“.
+
+### Hinweise
+- Neustart von Home Assistant und hartes Neuladen des Browsers.
+- Optional `config/www/e3dc_maestro/` löschen.
+- Wärmepumpe- und Prognose-Hinweise siehe Release Notes.
+
+---
+
 ## [0.5.5-beta.9] – Wärmepumpe: Verlauf der Ereignisse im Panel (2026-11-04)
 
 > **Beta.** Enthält 0.5.5-beta.8. In HACS Beta-Versionen anzeigen. Ausführlich: [docs/release-notes/v0.5.5-beta.9.md](docs/release-notes/v0.5.5-beta.9.md). Anlass: [Discussion #41](https://github.com/TommiG1/e3dc-maestro/discussions/41).

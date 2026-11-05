@@ -1098,7 +1098,7 @@ TAB_4 = (
     + entity_row("number.e3dc_maestro_entladeschutz_beginn",             "HT Beginn (Stunde, lokal)")
     + entity_row("number.e3dc_maestro_entladeschutz_ende",               "HT Ende (Stunde, lokal)")
     + entity_row("number.e3dc_maestro_entladeschutz_reserve_winter",     "HT-Reserve Winter (%)")
-    + entity_row("number.e3dc_maestro_entladeschutz_sockel_aquinoktium", "HT-Reserve Äquinoktium (%)")
+    + entity_row("number.e3dc_maestro_entladeschutz_sockel_aquinoktium", "HT-Reserve Sommer (%)")
     + help_btn("help-ht")
     + """\
 
@@ -1277,7 +1277,7 @@ TAB_6 = (
             name: Reserve heute (%)
 """
     + entity_row("number.e3dc_maestro_notstromreserve_winter",      "Reserve Winter (%)")
-    + entity_row("number.e3dc_maestro_notstromreserve_aquinoktium", "Reserve Äquinoktium (%)")
+    + entity_row("number.e3dc_maestro_notstromreserve_aquinoktium", "Reserve Sommer (%)")
     + help_btn("help-notstromreserve")
     + """\
 
@@ -1566,7 +1566,7 @@ TAB_8 = """\
 
           Verhindert das Entladen des Akkus im Hochtarif-Fenster (Phase ht_protection).
           Die Mindest-Reserve ist saisonal variabel (cosinus-interpoliert zwischen
-          Winter- und Äquinoktium-Wert).
+          Winter- und Sommer-Wert).
 
           Alle Zeitangaben werden in der **HA-Lokalzeit** ausgewertet
           (Europe/Berlin → automatisch MEZ/MESZ). Keine UTC-Umrechnung nötig.
@@ -2002,11 +2002,11 @@ Spielraum für Vorentladung.
 
 ---
 
-### HT-Reserve Äquinoktium (%)
+### HT-Reserve Sommer (%)
 
-**Wirkung:** Minimaler SoC zur Tagundnachtgleiche (ca. 21. März / 23. September).
-Maestro interpoliert **tageslängenbasiert** (astrobasiert) zwischen Winter- und Äquinoktiumswert.
-Im Sommer (längster Tag) liegt die Reserve nahe 0 %.
+**Wirkung:** Minimaler SoC am längsten Tag (Sommer).
+Maestro interpoliert **tageslängenbasiert** (astrobasiert) zwischen Winter- und Sommerwert.
+Zur Tag-und-Nacht-Gleiche liegt der Sockel etwa in der Mitte.
 
 **Empfehlung:** 10–20 %. Kleiner als der Winterwert.
 
@@ -2452,7 +2452,7 @@ saisonalen Notstromreserve. Nützlich z. B. für Abend-Spitzenlast.
 
 ### Verhältnis zu Legacy-HT-Feldern
 
-Die alten Felder `HT Beginn`, `HT Ende`, `HT-Reserve Winter/Äquinoktium` und die
+Die alten Felder `HT Beginn`, `HT Ende`, `HT-Reserve Winter/Sommer` und die
 HT-Switches bleiben als schnelle Grundkonfiguration erhalten und werden weiterhin
 berücksichtigt, wenn keine Tarif-Slots definiert sind. Tarif-Slots haben Vorrang.
 """,
@@ -2536,7 +2536,7 @@ Netzausfalls. Maestro entlädt den Akku nie unter diesen Wert, solange die
 Reserve aktiv ist.
 
 Die Reserve wird **tageslängenbasiert** (astrobasiert) zwischen dem Winterwert
-(kürzester Tag) und dem Äquinoktiumswert (Tagundnachtgleiche) interpoliert und
+(kürzester Tag) und dem Sommerwert (längster Tag) interpoliert und
 sinkt im Sommer (längster Tag) weiter auf nahe 0 %. Der Breitengrad wird
 automatisch aus den HA-Systemeinstellungen übernommen.
 
@@ -2549,17 +2549,18 @@ Entladung unter diesen Wert.
 
 **Empfehlung:** 15–30 %. Je mehr Verbrauch im Notfall (Heizung, Licht), desto höher.
 
-**Wechselwirkung:** Muss größer oder gleich dem Äquinoktiumswert sein, sonst ist
+**Wechselwirkung:** Muss größer oder gleich dem Sommerwert sein, sonst ist
 die Interpolation invertiert.
 
 **Standard:** 20 %
 
 ---
 
-### Reserve Äquinoktium (%)
+### Reserve Sommer (%)
 
-**Wirkung:** Minimaler SoC zur Tagundnachtgleiche (ca. 21. März / 23. September).
-Die Reserve fällt von diesem Wert zu den Sommermonaten hin weiter ab.
+**Wirkung:** Minimaler SoC am längsten Tag (Sommer).
+Die Regelung rechnet zwischen Winterwert (kürzester Tag) und diesem Wert;
+zur Tag-und-Nacht-Gleiche liegt der Sockel etwa in der Mitte.
 
 **Empfehlung:** 5–15 %. Im Sommer ist ausreichend PV für schnelle Nachladung
 vorhanden.
