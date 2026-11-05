@@ -87,6 +87,7 @@ from .const import (
     CONF_PV_FORECAST_SAFETY_FACTOR,
     CONF_PV_FORECAST_SENSOR,
     CONF_PV_FORECAST_SENSOR_DAY2,
+    CONF_PV_FORECAST_SENSOR_DAY3,
     CONF_PV_FORECAST_TODAY_SENSOR,
     CONF_PV_FORECAST_THRESHOLD_KWH,
     CONF_DELAY_MIN_SOC,
@@ -1072,6 +1073,7 @@ STEP_PV_FORECAST_SCHEMA = vol.Schema(
         vol.Optional(CONF_PV_FORECAST_SENSOR): _entity_selector(),
         vol.Optional(CONF_TOMORROW_PV_SENSOR): _entity_selector(),
         vol.Optional(CONF_PV_FORECAST_SENSOR_DAY2): _entity_selector(),
+        vol.Optional(CONF_PV_FORECAST_SENSOR_DAY3): _entity_selector(),
         # Schwellwerte / Akku-Parameter
         vol.Optional(
             CONF_PV_FORECAST_THRESHOLD_KWH, default=DEFAULT_PV_FORECAST_THRESHOLD_KWH

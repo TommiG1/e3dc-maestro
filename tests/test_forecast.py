@@ -100,6 +100,31 @@ class TestSimulateNext24h:
         assert r.trajectory_pv_w[0] == 0  # still today (10:15)
         assert r.trajectory_pv_w[-1] == 4000  # tomorrow 09:45
 
+    def _day3_sim(self, pv_h_day3):
+        return simulate_next_24h(
+            soc=50.0,
+            consumption_h=[300.0] * 24,
+            pv_h=[0.0] * 24,
+            params=_PARAMS,
+            now=_NOW,
+            battery_capacity_kwh=15.0,
+            pv_h_day2=[4000.0] * 24,
+            consumption_h_day2=[300.0] * 24,
+            day2_from_calendar=True,
+            horizon_h=48,
+            pv_h_day3=pv_h_day3,
+        )
+
+    def test_day3_profile_used_after_second_midnight(self):
+        r = self._day3_sim([1000.0] * 24)
+        assert r.trajectory_pv_w[0] == 0  # today
+        assert r.trajectory_pv_w[60] == 4000  # tomorrow
+        assert r.trajectory_pv_w[-1] == 1000  # day after tomorrow 09:45
+
+    def test_without_day3_profile_day2_repeats(self):
+        r = self._day3_sim(None)
+        assert r.trajectory_pv_w[-1] == 4000
+
     def test_power_traces_match_trajectory_length(self):
         result = _simulate(cons=500.0, pv=2000.0)
         for trace in (

@@ -225,6 +225,7 @@ CONF_HP_SHADOW = "hp_shadow"                          # bool, rechnet ohne zu sc
 CONF_PV_FORECAST_ENABLED = "pv_forecast_enabled"
 CONF_PV_FORECAST_SENSOR = "pv_forecast_sensor"        # entity_id, value = remaining kWh today
 CONF_PV_FORECAST_SENSOR_DAY2 = "pv_forecast_sensor_day2"  # optional: hourly forecast for tomorrow (Solcast: prognose_morgen)
+CONF_PV_FORECAST_SENSOR_DAY3 = "pv_forecast_sensor_day3"  # optional, display only: hourly forecast for the day after tomorrow (Solcast: prognose_tag_3)
 CONF_PV_FORECAST_THRESHOLD_KWH = "pv_forecast_threshold_kwh"  # min remaining kWh to delay
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"    # usable capacity for sizing
 CONF_PV_FORECAST_SAFETY_FACTOR = "pv_forecast_safety_factor"  # forecast_remaining >= required * factor

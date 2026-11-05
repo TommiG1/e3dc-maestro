@@ -89,6 +89,7 @@ def simulate_next_24h(
     consumption_h_day2: list[float] | None = None,  # 24 hourly W for the day after
     horizon_h: int = 24,                          # 24 or 48
     day2_from_calendar: bool = False,
+    pv_h_day3: list[float] | None = None,        # 24/48/96 W for the day after tomorrow (display)
     consumption_anchor_w: float | None = None,
     anchor_tau_h: float = 2.0,
     battery_anchor_w: float | None = None,
@@ -128,6 +129,10 @@ def simulate_next_24h(
         Switch to the ``*_day2`` arrays at the next local calendar day instead
         of after 24 h, and allow this with ``horizon_h=24`` (display forecast
         that runs past midnight).
+    pv_h_day3:
+        Optional PV profile for the second calendar day after today. Only used
+        with ``day2_from_calendar`` and a day-2 profile; without it the day-2
+        profile is repeated for that part of the horizon.
     consumption_anchor_w:
         Current measured house load (W).  The difference to the profile value at
         *now* is added to the profile and decays exponentially with
@@ -272,6 +277,12 @@ def simulate_next_24h(
         if _have_day2 and _use_day2:
             cons_arr = consumption_h_day2
             pv_arr = pv_h_day2
+            if (
+                pv_h_day3 is not None
+                and day2_from_calendar
+                and (sim_now.date() - base.date()).days >= 2
+            ):
+                pv_arr = pv_h_day3
         else:
             cons_arr = consumption_h
             pv_arr = pv_h

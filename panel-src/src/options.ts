@@ -163,6 +163,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       entity("pv_forecast_today_sensor", sensor),
       entity("tomorrow_pv_sensor", sensor),
       entity("pv_forecast_sensor_day2", sensor),
+      entity("pv_forecast_sensor_day3", sensor),
     ],
     bundle: true,
   },
@@ -265,6 +266,10 @@ const labels: Record<string, { de: string; en: string }> = {
   pv_forecast_sensor_day2: {
     de: "Prognose morgen (Stundenprofil), optional, bei Solcast leer lassen",
     en: "Tomorrow's forecast (hourly profile), optional, leave empty for Solcast",
+  },
+  pv_forecast_sensor_day3: {
+    de: "Prognose übermorgen (Stundenprofil), optional, nur Anzeige",
+    en: "Day-after-tomorrow forecast (hourly profile), optional, display only",
   },
   wallbox_power_sensor: { de: "Wallbox-Leistung", en: "Wallbox power" },
   wallbox_soc_sensor: { de: "Fahrzeug-SoC", en: "Vehicle SoC" },

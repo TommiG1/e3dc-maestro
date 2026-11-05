@@ -12,6 +12,7 @@ from .const import (
     CONF_PV_FORECAST_ENABLED,
     CONF_PV_FORECAST_SENSOR,
     CONF_PV_FORECAST_SENSOR_DAY2,
+    CONF_PV_FORECAST_SENSOR_DAY3,
     CONF_PV_FORECAST_TODAY_SENSOR,
     CONF_TOMORROW_PV_SENSOR,
     EWMA_JUMP_THRESHOLD_W,
@@ -108,12 +109,17 @@ class CoordinatorForecastMixin:
                 now, days_ahead=0, ignore_enabled=True
             )
             pv_day2 = None
+            pv_day3 = None
             if pv_forecast is not None:
                 pv_used = pv_forecast
                 pv_source = "day_forecast"
                 pv_day2 = self._read_pv_forecast_profile(
                     now, days_ahead=1, ignore_enabled=True
                 )
+                if pv_day2 is not None:
+                    pv_day3 = self._read_pv_forecast_profile(
+                        now, days_ahead=2, ignore_enabled=True
+                    )
             elif pv_h is not None:
                 pv_used = pv_h
             else:
@@ -146,6 +152,7 @@ class CoordinatorForecastMixin:
                     pv_source, pv_used if pv_source == "day_forecast" else None
                 )
                 + profile_source_tag("day2", pv_day2)
+                + profile_source_tag("day3", pv_day3)
                 + (
                     48,  # display forecast horizon (invalidate cache on change)
                     _forecast_power_bucket(self._forecast_house_ewma),
@@ -187,6 +194,7 @@ class CoordinatorForecastMixin:
                     _cap=active.battery_capacity_kwh,
                     _active=self.regelung_aktiv,
                     _pv2=pv_day2,
+                    _pv3=pv_day3,
                     _anchor=self._forecast_house_ewma,
                     _batt=self._forecast_battery_ewma,
                     _need=need_fn,
@@ -205,6 +213,7 @@ class CoordinatorForecastMixin:
                         consumption_h_day2=_cons if _pv2 is not None else None,
                         horizon_h=48,
                         day2_from_calendar=_pv2 is not None,
+                        pv_h_day3=_pv3,
                         consumption_anchor_w=_anchor,
                         battery_anchor_w=_batt,
                         bridge_need_fn=_need,
@@ -385,7 +394,11 @@ class CoordinatorForecastMixin:
         # Solcast "Tag 3"/übermorgen. Prefer the Forward-Looking tomorrow
         # sensor (same day), then an explicit day-2 override, then the main
         # forecast sensor.
-        if days_ahead >= 1:
+        if days_ahead >= 2:
+            # Display only: an explicit day-after-tomorrow sensor, never a
+            # fallback to the tomorrow/main sensors (would repeat the wrong day).
+            candidate_ids = [opts.get(CONF_PV_FORECAST_SENSOR_DAY3)]
+        elif days_ahead >= 1:
             candidate_ids = [
                 opts.get(CONF_TOMORROW_PV_SENSOR),
                 opts.get(CONF_PV_FORECAST_SENSOR_DAY2),

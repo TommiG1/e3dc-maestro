@@ -167,6 +167,7 @@ _SPECS: dict[str, _Spec] = {
     "pv_forecast_sensor": _entity(),
     "tomorrow_pv_sensor": _entity(),
     "pv_forecast_sensor_day2": _entity(),
+    "pv_forecast_sensor_day3": _entity(),
     "pv_forecast_threshold_kwh": _n(0, 100),
     "pv_forecast_safety_factor": _n(1, 3),
     "delay_min_soc": _n(0, 80),
