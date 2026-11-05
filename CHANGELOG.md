@@ -11,6 +11,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.7] – Setup-Hinweis zu deaktivierten RSCP-Entities, Wärmepumpe experimentell (2026-11-05)
+
+Stabiles Release. Ausführlich: [docs/release-notes/v0.5.7.md](docs/release-notes/v0.5.7.md). Anlass: [Issue #45](https://github.com/TommiG1/e3dc-maestro/issues/45).
+
+### Geändert
+- **Setup und Optionen, Schritt Quell-Entities:** Ein Hinweis erklärt, dass „Unbekannte Entität“ meist eine in E3DC RSCP noch deaktivierte Entity bedeutet, und wo man sie aktiviert. Beim Ladezustand steht dabei, dass der Speicher-Sensor gemeint ist und nicht der Wallbox-Sensor.
+- **Wärmepumpe ist als experimentell gekennzeichnet.** Der Schritt heißt „Wärmepumpe (experimentell)“ und empfiehlt den Schattenmodus als Einstieg.
+- **README:** Hinweis zu deaktivierten E3DC-RSCP-Entities und zur experimentellen Wärmepumpen-Regelung.
+
+---
+
 ## [0.5.6] – Watchdog-Meldung, Schnelllade-Boden und Regelleiter (2026-11-05)
 
 Stabiles Release. Ausführlich: [docs/release-notes/v0.5.6.md](docs/release-notes/v0.5.6.md). Anlass: HACS-Review und [Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42).
