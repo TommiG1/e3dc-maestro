@@ -1666,7 +1666,7 @@ export function decisionView(c: Ctx): TemplateResult {
       c.i18n,
       d.phase,
       isOn(st(c, E.ctrlPlanControls)),
-      isOn(st(c, E.lowYield)),
+      isOn(st(c, E.batteryPriority)),
       c.onOpenGroup,
     )}
     <div class="card tl-card">

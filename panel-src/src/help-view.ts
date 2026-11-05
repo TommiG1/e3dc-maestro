@@ -31,7 +31,7 @@ export interface HelpCtx {
   query: string;
   phase?: string;
   planActive: boolean;
-  lowYield: boolean;
+  batteryPriority: boolean;
   current: string;
   onQuery: (query: string) => void;
   onClose: () => void;
@@ -72,7 +72,7 @@ const toc = (ctx: HelpCtx, hits: Set<string> | undefined) => {
 
 const ladder = (ctx: HelpCtx): TemplateResult => {
   const { t } = ctx.i18n;
-  const active = ladderActive(ctx.phase, ctx.planActive, ctx.lowYield);
+  const active = ladderActive(ctx.phase, ctx.planActive, ctx.batteryPriority);
   const step = active ? byId.get(active) : undefined;
   return html`<div class="help-live">
     <p class="help-now">${step ? t("helpActive", { rule: t(step.label) }) : t("helpNoPhase")}</p>

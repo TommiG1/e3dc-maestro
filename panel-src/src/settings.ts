@@ -1782,7 +1782,7 @@ export function settingsView(c: SettingsCtx): TemplateResult {
     c.i18n,
     phase,
     isOn(c.hass.states[E.ctrlPlanControls]),
-    isOn(c.hass.states[E.lowYield]),
+    isOn(c.hass.states[E.batteryPriority]),
     c.onOpenGroup,
   )}
     <label class="settings-search">

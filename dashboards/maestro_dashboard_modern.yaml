@@ -5399,19 +5399,24 @@ views:
           
           ### Schonladung aktivieren
           
-          **Wirkung:** Reduziert die maximale Ladeleistung auf den eingestellten Faktor.
-          Schützt die Batterie vor schneller Vollladung (High-Rate-Stress).
+          **Wirkung:** Multipliziert das Ladelimit, das die jeweils aktive Phase
+          berechnet hat, mit dem Faktor. Schützt die Batterie vor schneller
+          Vollladung (High-Rate-Stress).
           
-          **Ausnahmen:** Curtailment Guard, Notfall-Ladung und Einspeisedrosselung
-          laden immer mit voller Leistung – Schonladung wird dort ignoriert.
+          **Ausnahmen:** Curtailment Guard, Notfall-Ladung, Einspeisedrosselung,
+          Schnelllade-Boden, Netzladung im Tiefpreis und die Akku-Priorität
+          (Schwacher-PV-Tag / knappe Restprognose) laden mit vollem Limit –
+          Schonladung wird dort ignoriert.
           
           ---
           
           ### Schonladung Faktor (0.05–1.0)
           
-          **Wirkung:** Multiplikator auf die konfigurierte Max-Ladeleistung.
+          **Wirkung:** Multiplikator auf das Ladelimit der aktiven Phase, nicht auf
+          die Max-Ladeleistung. Im Ladekorridor ist das die dosierte Korridor-Leistung.
           
-          Beispiel: Max-Ladeleistung = 5 000 W, Faktor = 0.35 → max. 1 750 W.
+          Beispiel: Korridor will 1 200 W, Faktor = 0.35 → 420 W. Nur Phasen mit
+          vollem Limit (z. B. Akku-Priorität) rechnen von der Max-Ladeleistung aus.
           
           **Empfehlung:** 0.25–0.50 für sanften Betrieb. 1.0 deaktiviert die Drosselung
           effektiv (Schalter bleibt bestimmend).

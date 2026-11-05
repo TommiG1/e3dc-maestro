@@ -21,6 +21,7 @@ describe("LADDER", () => {
     expect(ladderActive("grid_charge", false)).toBe("grid");
     expect(ladderActive("grid_hold", false)).toBe("hold");
     expect(ladderActive("corridor", false, true)).toBe("low");
+    expect(ladderActive("corridor", false, false)).toBe("corridor");
     expect(ladderActive("corridor")).toBe("corridor");
     expect(ladderActive("pv_delay")).toBe("corridor");
     expect(ladderActive("manual")).toBeUndefined();

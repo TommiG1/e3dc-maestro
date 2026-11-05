@@ -125,8 +125,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Charges at a fraction of the possible power, easier on the battery. Not during battery priority on a weak PV day.",
   },
   gentle_charge_factor: {
-    de: "Anteil der Ladeleistung im Schonmodus. 0,5 ist die Hälfte.",
-    en: "Share of charge power in gentle mode. 0.5 is half.",
+    de: "Anteil des Ladelimits, das die aktive Phase berechnet hat, nicht der Max-Ladeleistung. 0,5 ist die Hälfte.",
+    en: "Share of the charge limit the active phase calculated, not of max charge power. 0.5 is half.",
   },
   spreading_enabled: {
     de: "Verteilt die Ladung über das Fenster, statt in einem Rutsch voll zu laden.",

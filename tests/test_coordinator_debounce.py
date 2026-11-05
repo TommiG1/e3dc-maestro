@@ -131,6 +131,15 @@ def test_grid_charge_skips_ramp_and_gentle_charge():
     assert PHASE_GRID_CHARGE in _FULL_POWER_PHASES
 
 
+def test_fast_floor_skips_ramp_and_gentle_charge():
+    """Schnelllade-Boden will vollen PV-Überschuss, Schonladung und Rampe bremsen nicht."""
+    d = MaestroDecision(
+        phase=PHASE_FAST_FLOOR, reason="x", charge_power_limit=4500.0, battery_priority=False
+    )
+    assert _ramp_bypass_for_phase(d) is True
+    assert _apply_gentle_charge(d, True, 0.35).charge_power_limit == 4500.0
+
+
 def test_ramp_bypass_inactive_for_normal_phase_without_battery_priority():
     """Ohne battery_priority und außerhalb der Sonderphasen bleibt die Rampe aktiv."""
     d = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", battery_priority=False)

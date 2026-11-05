@@ -60,17 +60,18 @@ const byId = new Map(LADDER.map((step) => [step.id, step]));
 
 `grid_charge` and `grid_hold` belong to the price plan when that plan may
 control the battery, otherwise to the cheap-slot charge. `corridor` belongs
-to the weak-PV rule while that day is latched.
+to the weak-PV rule only while battery priority is really active. A weak
+day whose forecast already covers the need falls back to the normal corridor.
 */
 export function ladderActive(
   phase: string | undefined,
   planActive = false,
-  lowYield = false,
+  batteryPriority = false,
 ): string | undefined {
   if (!phase) return undefined;
   if (phase === "grid_charge") return planActive ? "price" : "grid";
   if (phase === "grid_hold") return planActive ? "price" : "hold";
-  if (phase === "corridor") return lowYield ? "low" : "corridor";
+  if (phase === "corridor") return batteryPriority ? "low" : "corridor";
   return LADDER.find((step) => step.phases.includes(phase))?.id;
 }
 
@@ -78,11 +79,11 @@ export function ladderView(
   i18n: I18n,
   phase: string | undefined,
   planActive: boolean,
-  lowYield: boolean,
+  batteryPriority: boolean,
   onOpen: (group: string) => void,
 ): TemplateResult {
   const { t } = i18n;
-  const active = ladderActive(phase, planActive, lowYield);
+  const active = ladderActive(phase, planActive, batteryPriority);
   return html`<section id="regelleiter" class="ladder" aria-label=${t("ladderTitle")}>
     <div class="ladder-head">
       <h3>${t("ladderTitle")}</h3>

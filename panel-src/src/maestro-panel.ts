@@ -2155,7 +2155,7 @@ class MaestroPanel extends LitElement {
             query: this._helpQuery,
             phase,
             planActive: isOn(hass.states[E.ctrlPlanControls]),
-            lowYield: isOn(hass.states[E.lowYield]),
+            batteryPriority: isOn(hass.states[E.batteryPriority]),
             current: this._helpCurrent,
             onQuery: (query) => {
               this._helpQuery = query;
