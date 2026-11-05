@@ -6,6 +6,7 @@ import math
 import logging
 from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -555,13 +556,14 @@ class CoordinatorActMixin:
                 self._async_release_limits("Watchdog ausgelöst"),
                 "e3dc_maestro_watchdog_release",
             )
-            self.hass.components.persistent_notification.async_create(
+            self._watchdog_notified = True
+            persistent_notification.async_create(
+                self.hass,
                 f"E3DC Maestro: Verbindungsproblem nach {timeout} min – "
                 "Limits wurden zurückgesetzt.",
                 title="E3DC Maestro Warnung",
                 notification_id="e3dc_maestro_watchdog",
             )
-            self._watchdog_notified = True
 
 
     def _check_rscp_watchdog(self) -> None:
@@ -580,13 +582,14 @@ class CoordinatorActMixin:
                 self._async_release_limits("RSCP-Watchdog ausgelöst"),
                 "e3dc_maestro_rscp_watchdog_release",
             )
-            self.hass.components.persistent_notification.async_create(
+            self._rscp_watchdog_notified = True
+            persistent_notification.async_create(
+                self.hass,
                 f"E3DC Maestro: RSCP-Servicefehler nach {timeout} min – "
                 "Limits wurden zurückgesetzt.",
                 title="E3DC Maestro Warnung",
                 notification_id="e3dc_maestro_rscp_watchdog",
             )
-            self._rscp_watchdog_notified = True
 
 
     def _can_manual_charge(self) -> bool:
