@@ -259,6 +259,7 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_HT_SOCKEL,
         min_value=0, max_value=100, step_value=1,
+        stable_object_id="e3dc_maestro_entladeschutz_sockel_aquinoktium",
     ),
     # ── Dynamic tariff ────────────────────────────────────────────────────
     MaestroNumberDescription(
@@ -485,7 +486,9 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         icon="mdi:battery-alert-variant-outline",
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_RESERVE_EQUINOX_PERCENT,
-        min_value=0, max_value=50, step_value=1,    ),
+        min_value=0, max_value=50, step_value=1,
+        stable_object_id="e3dc_maestro_notstromreserve_aquinoktium",
+    ),
     # ── E3/Phase 1: Curtailment Guard ─────────────────────────────────
     MaestroNumberDescription(
         key=CONF_CURTAILMENT_ACTIVATION_W,
