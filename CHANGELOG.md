@@ -11,6 +11,21 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.6] – Watchdog-Meldung, Schnelllade-Boden und Regelleiter (2026-11-05)
+
+Stabiles Release. Ausführlich: [docs/release-notes/v0.5.6.md](docs/release-notes/v0.5.6.md). Anlass: HACS-Review und [Discussion #42](https://github.com/TommiG1/e3dc-maestro/discussions/42).
+
+### Behoben
+- **Watchdog-Meldung:** Beide Watchdogs nutzen den `persistent_notification`-Helper statt `hass.components`. Vorher schlug der Aufruf fehl, und bei jedem Takt wurde das Limit erneut freigegeben.
+- **Schnelllade-Boden** wird von Schonladung und Anlauf-Rampe nicht mehr gebremst.
+- **Regelungsleiter:** „Schwacher PV-Tag“ leuchtet nur, wenn die Akku-Priorität in diesem Takt wirklich greift.
+- **Sommer-Reserve:** Entity-IDs bleiben auch bei Neuinstallationen `…_aquinoktium`.
+
+### Geändert
+- **Hilfe zur Schonladung:** Der Faktor wirkt auf das Ladelimit der aktiven Phase, nicht auf die maximale Ladeleistung. Die Ausnahmenliste ist vollständig.
+
+---
+
 ## [0.5.5] – HACS-tauglich, Wärmepumpe, Entladesperre und Portal-Historie (2026-11-05)
 
 Stabiles Release. Enthält 0.5.5-beta.1 bis beta.9 sowie nachgezogene Hilfe. Ausführlich: [docs/release-notes/v0.5.5.md](docs/release-notes/v0.5.5.md).
