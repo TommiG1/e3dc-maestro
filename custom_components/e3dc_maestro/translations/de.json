@@ -3,7 +3,7 @@
     "step": {
       "sources": {
         "title": "Quell-Entities",
-        "description": "✅ **Auto-Detect:** {detected_count} Sensor(en) aus der E3DC RSCP Integration (Torben Nehmer) erkannt:\n\n{detected_list}\n\nDie Werte sind unten als Vorschlag eingetragen. Bitte prüfen und ggf. anpassen.",
+        "description": "✅ **Auto-Detect:** {detected_count} Sensor(en) aus der E3DC RSCP Integration (Torben Nehmer) erkannt:\n\n{detected_list}\n\nDie Werte sind unten als Vorschlag eingetragen. Bitte prüfen und ggf. anpassen.\n\n⚠️ Zeigt ein Feld „Unbekannte Entität“, ist die Entity in der E3DC-RSCP-Integration (hacs-e3dc) wahrscheinlich noch deaktiviert. Aktiviere sie unter **Einstellungen → Geräte & Dienste → E3DC Remote Storage Control Protocol → Gerät → „Entitäten nicht angezeigt“**. Achte beim Ladezustand darauf, den Sensor deines Speichers zu wählen und nicht den der Wallbox.",
         "data": {
           "soc_sensor": "Ladezustand (SoC)",
           "pv_power_sensor": "PV-Leistung",
@@ -289,7 +289,7 @@
       },
       "sources": {
         "title": "Quell-Entities",
-        "description": "✅ **Auto-Detect:** {detected_count} Sensor(en) aus der RSCP-Integration erkannt:\n\n{detected_list}\n\nBestehende Einstellungen haben Vorrang. Überschreibe die Werte unten manuell, falls du die Auto-Detect-Werte übernehmen willst.",
+        "description": "✅ **Auto-Detect:** {detected_count} Sensor(en) aus der RSCP-Integration erkannt:\n\n{detected_list}\n\nBestehende Einstellungen haben Vorrang. Überschreibe die Werte unten manuell, falls du die Auto-Detect-Werte übernehmen willst.\n\n⚠️ Zeigt ein Feld „Unbekannte Entität“, ist die Entity in der E3DC-RSCP-Integration (hacs-e3dc) wahrscheinlich noch deaktiviert. Aktiviere sie unter **Einstellungen → Geräte & Dienste → E3DC Remote Storage Control Protocol → Gerät → „Entitäten nicht angezeigt“**. Achte beim Ladezustand darauf, den Sensor deines Speichers zu wählen und nicht den der Wallbox.",
         "data": {
           "soc_sensor": "Ladezustand (SoC)",
           "pv_power_sensor": "PV-Leistung",

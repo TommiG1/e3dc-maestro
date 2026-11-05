@@ -3,7 +3,7 @@
     "step": {
       "sources": {
         "title": "Source entities",
-        "description": "✅ **Auto-detect:** {detected_count} sensor(s) detected from the E3DC RSCP integration (Torben Nehmer):\n\n{detected_list}\n\nThe values have been pre-filled below as suggestions. Please review and adjust if necessary.",
+        "description": "✅ **Auto-detect:** {detected_count} sensor(s) detected from the E3DC RSCP integration (Torben Nehmer):\n\n{detected_list}\n\nThe values have been pre-filled below as suggestions. Please review and adjust if necessary.\n\n⚠️ If a field shows \"Unknown entity\", that entity is probably still disabled in the E3DC RSCP integration (hacs-e3dc). Enable it under **Settings → Devices & services → E3DC Remote Storage Control Protocol → device → \"entities not shown\"**. For the state of charge, pick your battery's sensor, not the wallbox one.",
         "data": {
           "soc_sensor": "State of charge (SoC)",
           "pv_power_sensor": "PV power",
@@ -287,7 +287,7 @@
       },
       "sources": {
         "title": "Source entities",
-        "description": "✅ **Auto-detect:** {detected_count} sensor(s) detected from the RSCP integration:\n\n{detected_list}\n\nExisting settings take precedence. Manually overwrite the values below if you want to adopt the auto-detected values.",
+        "description": "✅ **Auto-detect:** {detected_count} sensor(s) detected from the RSCP integration:\n\n{detected_list}\n\nExisting settings take precedence. Manually overwrite the values below if you want to adopt the auto-detected values.\n\n⚠️ If a field shows \"Unknown entity\", that entity is probably still disabled in the E3DC RSCP integration (hacs-e3dc). Enable it under **Settings → Devices & services → E3DC Remote Storage Control Protocol → device → \"entities not shown\"**. For the state of charge, pick your battery's sensor, not the wallbox one.",
         "data": {
           "soc_sensor": "State of charge (SoC)",
           "pv_power_sensor": "PV power",
