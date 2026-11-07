@@ -9,8 +9,20 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.8-beta.1] – Module auch ohne gemeldeten SOH, Solcast Tag 3 (2026-11-07)
+
+Beta nach 0.5.7. Ausführlich: [docs/release-notes/v0.5.8-beta.1.md](docs/release-notes/v0.5.8-beta.1.md).
+
 ### Korrekturen
 - **Anlage → Akku:** Module erscheinen auch dann unter „Zellzustand“ und in der SOH-Prognose, wenn das Gerät keinen Modul-SOH meldet (z. B. bei Farm). Maestro nimmt dann den von hacs-e3dc berechneten Modul-SOH.
+
+### Neu
+- **Solcast Tag 3:** Optionaler Sensor für übermorgen füllt den 48-Stunden-Chart, ohne die Regelung zu beeinflussen.
+
+### Hinweise
+- Home Assistant neu starten; Browser hart neu laden.
 
 ---
 
