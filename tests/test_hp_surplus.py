@@ -5,6 +5,7 @@ import asyncio
 from collections import deque
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from custom_components.e3dc_maestro.const import (
     CONF_HP_SERVICE_ON,
@@ -156,8 +157,10 @@ class _Fake(CoordinatorActMixin):
 
 
 def test_shadow_mode_does_not_switch():
+    # Control uses wall-clock time for the default 06:00–22:00 window; freeze it.
     c = _Fake(_params(hp_shadow=True))
-    asyncio.run(c._async_control_hp(_state(), {CONF_HP_SWITCH_ENTITY: "switch.wp"}, None))
+    with patch.object(dt_util, "now", return_value=NOON):
+        asyncio.run(c._async_control_hp(_state(), {CONF_HP_SWITCH_ENTITY: "switch.wp"}, None))
     assert c.service_calls == []
     assert c._hp_running is True
     assert "würde einschalten" in c._hp_last_explanation
@@ -181,15 +184,16 @@ def test_adopts_real_switch_state():
 def test_delay_tracked_across_ticks():
     c = _Fake(_params(hp_surplus_delay_minutes=5))
     opts = {CONF_HP_SERVICE_ON: {"action": "switch.turn_on"}}
-    asyncio.run(c._async_control_hp(_state(), opts, None))
-    assert c._hp_running is False
-    c._hp_surplus_since -= timedelta(minutes=6)
+    with patch.object(dt_util, "now", return_value=NOON):
+        asyncio.run(c._async_control_hp(_state(), opts, None))
+        assert c._hp_running is False
+        c._hp_surplus_since -= timedelta(minutes=6)
 
-    async def _svc(_service):
-        c.service_calls.append(("svc", "on", {}))
+        async def _svc(_service):
+            c.service_calls.append(("svc", "on", {}))
 
-    c._call_generic_service = _svc
-    asyncio.run(c._async_control_hp(_state(), opts, None))
+        c._call_generic_service = _svc
+        asyncio.run(c._async_control_hp(_state(), opts, None))
     assert c._hp_running is True
 
 
