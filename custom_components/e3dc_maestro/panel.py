@@ -213,6 +213,7 @@ _PACK_KEYS: dict[str, str] = {
     "energy": "battery-pack-usable-remaining-energy",
     "current": "battery-pack-current",
     "voltage": "battery-pack-module-voltage",
+    "usableCapacity": "battery-pack-usable-capacity",
     "tempMax": "battery-pack-max-dcb-cell-temperature",
     "tempMin": "battery-pack-min-dcb-cell-temperature",
 }
@@ -226,10 +227,15 @@ _WALLBOX_KEYS: dict[str, str] = {
     "current": "wallbox-max-charge-current",
 }
 # Device-reported module health, with hacs-e3dc's calculated SoH as fallback
-# for systems that do not report one (e.g. some farm members).
+# for systems that do not report one (e.g. some farm members). Design capacity
+# (Ah) times design voltage (V) gives the module's gross energy; summed over all
+# modules it matches the installed capacity and also works on S10X, whose
+# installed-capacity sensor is wrong (hacs-e3dc#45).
 _MODULE_KEYS: dict[str, str] = {
     "sohReported": "battery-module-soh-reported",
     "sohCalc": "battery-module-soh",
+    "designCapacity": "battery-module-design-capacity",
+    "designVoltage": "battery-module-design-voltage",
 }
 # System switches and numbers RSCP can write. Same translation may also exist as a sensor.
 _GENERAL_CONTROLS: dict[str, str] = {

@@ -11,6 +11,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.8-beta.2] – Kapazität aus Modulen, Nutzbar netto (2026-11-07)
+
+Beta nach 0.5.8-beta.1. Ausführlich: [docs/release-notes/v0.5.8-beta.2.md](docs/release-notes/v0.5.8-beta.2.md).
+
+### Korrekturen
+- **Anlage → Akku bei Farm und S10X:** Die Zeile Kapazität wird aus den Modulen berechnet (Nennkapazität in Ah mal Nennspannung, summiert). Dadurch stimmt sie bei Farm über alle Anlagen und auch beim S10X, dessen gemeldete installierte Kapazität 0 kWh zeigt (hacs-e3dc#45). Der Füllstand je Pack nutzt die Kapazität des jeweiligen Packs.
+
+### Neu
+- **Anlage → Akku:** Neue Zeile „Nutzbar (netto)“, berechnet aus der nutzbaren Kapazität (Ah) der Packs mal Modulspannung. Bei Farm als Summe aller Packs.
+
+---
+
 ## [0.5.8-beta.1] – Module auch ohne gemeldeten SOH, Solcast Tag 3 (2026-11-07)
 
 Beta nach 0.5.7. Ausführlich: [docs/release-notes/v0.5.8-beta.1.md](docs/release-notes/v0.5.8-beta.1.md).

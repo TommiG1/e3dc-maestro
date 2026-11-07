@@ -159,6 +159,54 @@ export function moduleSohEntity(
   return calc && !blank(calc.state) ? calc : reported ?? calc;
 }
 
+/**
+ * Gross energy of modules in kWh: design capacity (Ah) times design voltage (V).
+ * Holds for modules wired in series (S10X) and in parallel (S10E). Modules without
+ * both values are skipped; nothing readable gives undefined.
+ */
+export function moduleGrossKwh(
+  modules: { entities: Record<string, string> }[],
+  lookup: (id: string) => HassEntity | undefined,
+): number | undefined {
+  let total: number | undefined;
+  for (const mod of modules) {
+    const { designCapacity, designVoltage } = mod.entities;
+    const ah = designCapacity ? plantValue(lookup(designCapacity)) : undefined;
+    const volt = designVoltage ? plantValue(lookup(designVoltage)) : undefined;
+    if (ah === undefined || volt === undefined || ah <= 0 || volt <= 0) continue;
+    total = (total ?? 0) + (ah * volt) / 1000;
+  }
+  return total;
+}
+
+/** Gross energy of all packs, summed over their modules. */
+export function plantGrossKwh(
+  packs: { modules?: { entities: Record<string, string> }[] }[],
+  lookup: (id: string) => HassEntity | undefined,
+): number | undefined {
+  const parts = packs.map((pack) => moduleGrossKwh(pack.modules ?? [], lookup)).filter((v): v is number => v !== undefined);
+  return parts.length ? parts.reduce((sum, v) => sum + v, 0) : undefined;
+}
+
+/**
+ * Net usable energy of all packs in kWh: usable capacity (Ah) times module voltage.
+ * Packs missing either value are skipped; nothing readable gives undefined.
+ */
+export function usableEnergyKwh(
+  packs: { entities: Record<string, string> }[],
+  lookup: (id: string) => HassEntity | undefined,
+): number | undefined {
+  let total: number | undefined;
+  for (const pack of packs) {
+    const { usableCapacity, voltage } = pack.entities;
+    const ah = usableCapacity ? plantValue(lookup(usableCapacity)) : undefined;
+    const volt = voltage ? plantValue(lookup(voltage)) : undefined;
+    if (ah === undefined || volt === undefined || ah <= 0 || volt <= 0) continue;
+    total = (total ?? 0) + (ah * volt) / 1000;
+  }
+  return total;
+}
+
 /** Cell colour from the module state of health. */
 export function cellTone(soh: number | undefined): string {
   if (soh === undefined || !Number.isFinite(soh)) return "idle";
@@ -403,13 +451,18 @@ export function plantView(c: PlantCtx): TemplateResult {
     const max = Math.max(0, ...rows.map((item) => Math.abs(item.kw)));
     return bars(rows.map((item) => ({ label: item.label, value: metric(c, item.key), pct: max > 0 ? (Math.abs(item.kw) / max) * 100 : 0, cls: item.cls })));
   };
-  const capacity = has("batteryCapacity") ? plantValue(ent(c, plant.entities.batteryCapacity)) : undefined;
+  const lookup = (id: string) => ent(c, id);
+  const moduleGross = plantGrossKwh(plant.packs, lookup);
+  const installed = has("batteryCapacity") ? plantValue(ent(c, plant.entities.batteryCapacity)) : undefined;
+  const capacity = moduleGross ?? installed;
 
   const packCard = (name: string, entities: Record<string, string>, modules: { name: string; entities: Record<string, string> }[]) => {
     const value = (key: string) => formatPlant(ent(c, entities[key]), c.fmt);
     const num = (key: string) => plantValue(ent(c, entities[key]));
     const energy = entities.energy ? num("energy") : undefined;
-    const level = packFill(energy, capacity, plant.packs.length);
+    const sohModules = modules.filter((mod) => mod.entities.sohReported || mod.entities.sohCalc);
+    const ownGross = moduleGrossKwh(modules, lookup);
+    const level = ownGross !== undefined ? packFill(energy, ownGross, 1) : packFill(energy, capacity, plant.packs.length);
     const amps = entities.current ? num("current") : undefined;
     const flow = flowOf(amps);
     const tempMin = entities.tempMin ? num("tempMin") : undefined;
@@ -471,10 +524,10 @@ export function plantView(c: PlantCtx): TemplateResult {
             </div>`
           : nothing}
       </div>
-      ${modules.length
+      ${sohModules.length
         ? html`<div class="cells">
             <span class="cells-label">${t("plantCells")}</span>
-            ${modules.map((mod) => {
+            ${sohModules.map((mod) => {
               const sohEntity = moduleSohEntity(mod.entities, (id) => ent(c, id));
               const soh = plantValue(sohEntity);
               const text = formatPlant(sohEntity, c.fmt);
@@ -619,7 +672,15 @@ export function plantView(c: PlantCtx): TemplateResult {
       : nothing}
     ${fault ? html`<p class="hero-fault" role="status">${t("plantFault")}: ${fault}</p>` : nothing}
   </section>`;
-  const capacityRow: Row[] = has("batteryCapacity") ? [{ label: t("plantCapacity"), value: metric(c, "batteryCapacity") }] : [];
+  const usable = usableEnergyKwh(plant.packs, lookup);
+  const capacityRow: Row[] = [
+    ...(moduleGross !== undefined
+      ? [{ label: t("plantCapacity"), value: `${c.fmt.n(moduleGross, 1)} kWh` }]
+      : has("batteryCapacity")
+        ? [{ label: t("plantCapacity"), value: metric(c, "batteryCapacity") }]
+        : []),
+    ...(usable !== undefined ? [{ label: t("plantUsable"), value: `${c.fmt.n(usable, 1)} kWh` }] : []),
+  ];
   const derateRow: Row[] = has("deratePercent") ? [{ label: t("plantDeratePct"), value: metric(c, "deratePercent") }] : [];
   const rooms: Record<PlantRoom, { show: boolean; body: TemplateResult }> = {
     grid: {

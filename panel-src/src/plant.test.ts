@@ -7,12 +7,15 @@ import {
   formatPlant,
   formatSohEta,
   modeLabel,
+  moduleGrossKwh,
   moduleSohEntity,
   packFill,
+  plantGrossKwh,
   plantKw,
   plantValue,
   sohForecastView,
   sohPackForecast,
+  usableEnergyKwh,
 } from "./plant";
 
 const fmt = makeFmt("de");
@@ -80,6 +83,55 @@ describe("plant scales", () => {
     stale.attributes = { items: [{ time: Date.parse("2026-08-30T18:34:00Z") }], latest_message: "Netz L3Min" };
     expect(currentError(fresh, now)).toBe("Netz L1Min");
     expect(currentError(stale, now)).toBeUndefined();
+  });
+});
+
+describe("usableEnergyKwh", () => {
+  const states: Record<string, HassEntity> = {
+    ah1: entity("228.06", "Ah"),
+    v1: entity("48.5", "V"),
+    ah2: entity("114.03", "Ah"),
+    v2: entity("48.4", "V"),
+    off: entity("unavailable", "Ah"),
+  };
+  const lookup = (id: string) => states[id];
+
+  it("sums usable Ah times voltage over all packs", () => {
+    const kwh = usableEnergyKwh(
+      [{ entities: { usableCapacity: "ah1", voltage: "v1" } }, { entities: { usableCapacity: "ah2", voltage: "v2" } }],
+      lookup,
+    );
+    expect(kwh).toBeCloseTo((228.06 * 48.5 + 114.03 * 48.4) / 1000, 3);
+  });
+
+  it("skips packs without readable values", () => {
+    expect(usableEnergyKwh([{ entities: { usableCapacity: "off", voltage: "v1" } }, { entities: {} }], lookup)).toBeUndefined();
+  });
+});
+
+describe("moduleGrossKwh", () => {
+  const states: Record<string, HassEntity> = {
+    ah: entity("126", "Ah"),
+    v: entity("51.8", "V"),
+    sAh: entity("33.25", "Ah"),
+    sV: entity("102.4", "V"),
+    off: entity("unavailable", "Ah"),
+  };
+  const lookup = (id: string) => states[id];
+  const lv = { entities: { designCapacity: "ah", designVoltage: "v" } };
+  const hv = { entities: { designCapacity: "sAh", designVoltage: "sV" } };
+
+  it("matches the installed capacity of the S10E (three 126 Ah modules)", () => {
+    expect(moduleGrossKwh([lv, lv, lv], lookup)).toBeCloseTo(19.58, 2);
+  });
+
+  it("works for series modules of an S10X across packs", () => {
+    expect(plantGrossKwh([{ modules: [hv, hv, hv, hv] }, { modules: [lv] }], lookup)).toBeCloseTo(4 * 3.405 + 6.527, 2);
+  });
+
+  it("skips modules without readable values", () => {
+    expect(moduleGrossKwh([{ entities: { designCapacity: "off", designVoltage: "v" } }, { entities: {} }], lookup)).toBeUndefined();
+    expect(plantGrossKwh([{}], lookup)).toBeUndefined();
   });
 });
 

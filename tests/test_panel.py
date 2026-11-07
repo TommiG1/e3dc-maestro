@@ -365,6 +365,22 @@ def test_plant_from_entries_module_falls_back_to_calculated_soh():
     ]
 
 
+def test_plant_from_entries_lists_module_design_values():
+    def sensor(key, entity_id):
+        return SimpleNamespace(
+            translation_key=key, entity_id=entity_id, domain="sensor", device_id="m1", disabled_by=None
+        )
+
+    result = panel.plant_from_entries(
+        [sensor("battery-module-design-capacity", "sensor.m1_ah"), sensor("battery-module-design-voltage", "sensor.m1_v")],
+        {"p": {"name": "Pack", "via": None}, "m1": {"name": "Module 1", "via": "p"}},
+    )
+
+    assert result["packs"][0]["modules"] == [
+        {"name": "Module 1", "entities": {"designCapacity": "sensor.m1_ah", "designVoltage": "sensor.m1_v"}}
+    ]
+
+
 def test_plant_from_entries_prefers_farm_controller_scalars():
     """Farm system charge/discharge max wins over an earlier master copy."""
     entries = [
