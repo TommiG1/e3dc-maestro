@@ -504,7 +504,7 @@ class SohForecastService:
             pack_name = str(pack.get("name") or "")
             for mod in pack.get("modules") or []:
                 entities = mod.get("entities") or {}
-                eid = entities.get("sohReported")
+                eid = entities.get("sohReported") or entities.get("sohCalc")
                 if not eid:
                     continue
                 out.append(

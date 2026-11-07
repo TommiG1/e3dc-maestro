@@ -7,6 +7,7 @@ import {
   formatPlant,
   formatSohEta,
   modeLabel,
+  moduleSohEntity,
   packFill,
   plantKw,
   plantValue,
@@ -79,6 +80,28 @@ describe("plant scales", () => {
     stale.attributes = { items: [{ time: Date.parse("2026-08-30T18:34:00Z") }], latest_message: "Netz L3Min" };
     expect(currentError(fresh, now)).toBe("Netz L1Min");
     expect(currentError(stale, now)).toBeUndefined();
+  });
+});
+
+describe("moduleSohEntity", () => {
+  const states: Record<string, HassEntity> = {
+    rep: entity("87", "%"),
+    calc: entity("91", "%"),
+    gone: entity("unavailable", "%"),
+  };
+  const lookup = (id: string) => states[id];
+
+  it("prefers the device-reported value", () => {
+    expect(moduleSohEntity({ sohReported: "rep", sohCalc: "calc" }, lookup)).toBe(states.rep);
+  });
+
+  it("falls back to the calculated value", () => {
+    expect(moduleSohEntity({ sohCalc: "calc" }, lookup)).toBe(states.calc);
+    expect(moduleSohEntity({ sohReported: "gone", sohCalc: "calc" }, lookup)).toBe(states.calc);
+  });
+
+  it("returns nothing without sensors", () => {
+    expect(moduleSohEntity({}, lookup)).toBeUndefined();
   });
 });
 

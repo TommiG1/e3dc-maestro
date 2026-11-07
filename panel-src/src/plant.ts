@@ -148,7 +148,18 @@ export function currentError(entity: HassEntity | undefined, now = Date.now()): 
   return typeof message === "string" && message.trim() ? message.trim() : undefined;
 }
 
-/** Cell colour from the device-reported state of health. */
+/** Device-reported module SOH, else the calculated one from hacs-e3dc. */
+export function moduleSohEntity(
+  entities: Record<string, string>,
+  lookup: (id: string) => HassEntity | undefined,
+): HassEntity | undefined {
+  const reported = entities.sohReported ? lookup(entities.sohReported) : undefined;
+  if (reported && !blank(reported.state)) return reported;
+  const calc = entities.sohCalc ? lookup(entities.sohCalc) : undefined;
+  return calc && !blank(calc.state) ? calc : reported ?? calc;
+}
+
+/** Cell colour from the module state of health. */
 export function cellTone(soh: number | undefined): string {
   if (soh === undefined || !Number.isFinite(soh)) return "idle";
   if (soh >= 90) return "soh-good";
@@ -464,8 +475,9 @@ export function plantView(c: PlantCtx): TemplateResult {
         ? html`<div class="cells">
             <span class="cells-label">${t("plantCells")}</span>
             ${modules.map((mod) => {
-              const soh = plantValue(ent(c, mod.entities.sohReported));
-              const text = formatPlant(ent(c, mod.entities.sohReported), c.fmt);
+              const sohEntity = moduleSohEntity(mod.entities, (id) => ent(c, id));
+              const soh = plantValue(sohEntity);
+              const text = formatPlant(sohEntity, c.fmt);
               return html`<div class="cell">
                 ${battery(`${mod.name}, ${text}`, soh, cellTone(soh), true)}
                 <b>${text}</b>

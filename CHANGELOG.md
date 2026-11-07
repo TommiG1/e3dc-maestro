@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Korrekturen
+- **Anlage → Akku:** Module erscheinen auch dann unter „Zellzustand“ und in der SOH-Prognose, wenn das Gerät keinen Modul-SOH meldet (z. B. bei Farm). Maestro nimmt dann den von hacs-e3dc berechneten Modul-SOH.
+
 ---
 
 ## [0.5.7] – Setup-Hinweis zu deaktivierten RSCP-Entities, Wärmepumpe experimentell (2026-11-05)

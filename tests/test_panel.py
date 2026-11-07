@@ -319,6 +319,52 @@ def test_plant_from_entries_groups_packs_and_skips_disabled():
     assert result["identity"] == {"name": "S10", "model": "S10E_Pro", "serial": "702207024837", "firmware": "P10_2026_027"}
 
 
+def test_plant_from_entries_module_falls_back_to_calculated_soh():
+    entries = [
+        SimpleNamespace(
+            translation_key="battery-module-soh",
+            entity_id="sensor.m1_soh",
+            domain="sensor",
+            device_id="m1",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-module-soh",
+            entity_id="sensor.m2_soh",
+            domain="sensor",
+            device_id="m2",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-module-soh-reported",
+            entity_id="sensor.m2_soh_reported",
+            domain="sensor",
+            device_id="m2",
+            disabled_by=None,
+        ),
+        SimpleNamespace(
+            translation_key="battery-pack-state-of-health",
+            entity_id="sensor.pack_soh",
+            domain="sensor",
+            device_id="p",
+            disabled_by=None,
+        ),
+    ]
+    result = panel.plant_from_entries(
+        entries,
+        {
+            "p": {"name": "Pack", "via": None},
+            "m1": {"name": "Module 1", "via": "p"},
+            "m2": {"name": "Module 2", "via": "p"},
+        },
+    )
+
+    assert result["packs"][0]["modules"] == [
+        {"name": "Module 1", "entities": {"sohCalc": "sensor.m1_soh"}},
+        {"name": "Module 2", "entities": {"sohCalc": "sensor.m2_soh", "sohReported": "sensor.m2_soh_reported"}},
+    ]
+
+
 def test_plant_from_entries_prefers_farm_controller_scalars():
     """Farm system charge/discharge max wins over an earlier master copy."""
     entries = [

@@ -225,9 +225,11 @@ _WALLBOX_KEYS: dict[str, str] = {
     "soc": "wallbox-soc",
     "current": "wallbox-max-charge-current",
 }
-# Device-reported module health. The calculated module SoH is a different entity.
+# Device-reported module health, with hacs-e3dc's calculated SoH as fallback
+# for systems that do not report one (e.g. some farm members).
 _MODULE_KEYS: dict[str, str] = {
     "sohReported": "battery-module-soh-reported",
+    "sohCalc": "battery-module-soh",
 }
 # System switches and numbers RSCP can write. Same translation may also exist as a sensor.
 _GENERAL_CONTROLS: dict[str, str] = {
