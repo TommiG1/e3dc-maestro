@@ -1,6 +1,7 @@
 """E3DC Maestro – charge orchestration for E3DC storage systems."""
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -177,16 +178,26 @@ def _async_sync_rscp_plant_repair(hass: HomeAssistant, entry: ConfigEntry) -> No
         return
 
     entities = "\n".join(f"- `{entity_id}`" for entity_id in disabled)
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        _RSCP_PLANT_REPAIR_ID,
-        is_fixable=False,
-        severity=ir.IssueSeverity.WARNING,
-        translation_key="rscp_plant_entities_disabled",
-        translation_placeholders={"entities": entities},
-        config_entry_id=entry.entry_id,
-    )
+    issue_kwargs: dict[str, Any] = {
+        "is_fixable": False,
+        "severity": ir.IssueSeverity.WARNING,
+        "translation_key": "rscp_plant_entities_disabled",
+        "translation_placeholders": {"entities": entities},
+    }
+    # config_entry_id exists only in newer Home Assistant versions.
+    params = inspect.signature(ir.async_create_issue).parameters
+    if "config_entry_id" in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    ):
+        issue_kwargs["config_entry_id"] = entry.entry_id
+    try:
+        ir.async_create_issue(hass, DOMAIN, _RSCP_PLANT_REPAIR_ID, **issue_kwargs)
+    except Exception:  # noqa: BLE001 - a hint must never block setup
+        _LOGGER.warning(
+            "E3DC Maestro: Repair-Hinweis zu deaktivierten RSCP-Entities konnte nicht angelegt werden",
+            exc_info=True,
+        )
+        return
     _LOGGER.info(
         "E3DC Maestro: %s RSCP-Anlagen-Entities sind noch deaktiviert – "
         "Repair unter Einstellungen → System → Reparaturen",

@@ -42,7 +42,7 @@ async def test_migrate_v1_removes_power_factor():
     entry = SimpleNamespace(version=1, options={"power_factor": 1.2, "spreading_enabled": True})
     hass = _make_hass()
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 4
+    assert entry.version == 5
     assert "power_factor" not in entry.options
 
 
@@ -52,7 +52,7 @@ async def test_migrate_v2_enables_spreading_default():
     hass = _make_hass()
     assert await async_migrate_entry(hass, entry) is True
     assert entry.options["spreading_enabled"] is True
-    assert entry.version == 4
+    assert entry.version == 5
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_migrate_v3_grid_charge_cap(stored, expected):
     entry = SimpleNamespace(version=3, options=options)
     hass = _make_hass()
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 4
+    assert entry.version == 5
     assert entry.options.get("max_grid_charge_kwh") == expected
 
 
@@ -497,3 +497,31 @@ def test_dashboard_entity_ids_are_produced_by_the_integration():
             if f"{domain}.{obj}" not in produced:
                 missing.add(f"{dash.name}: {domain}.{obj}")
     assert not missing, sorted(missing)
+
+
+@pytest.mark.asyncio
+async def test_rscp_plant_repair_works_without_config_entry_id_support(monkeypatch):
+    """Older Home Assistant: async_create_issue has no config_entry_id keyword."""
+    derate = _rscp_registry_entry(
+        "sensor.keller_s10e_pro_derate_power",
+        "system-derate-power",
+        disabled_by="integration",
+    )
+    _patch_rscp_registry(monkeypatch, {"rscp-1": [derate]})
+    calls: list[dict] = []
+
+    def old_create_issue(hass, domain, issue_id, *, is_fixable, severity, translation_key, translation_placeholders):
+        calls.append({"issue_id": issue_id})
+
+    monkeypatch.setattr(maestro_init.ir, "async_create_issue", old_create_issue, raising=False)
+    monkeypatch.setattr(maestro_init.ir, "async_delete_issue", MagicMock(), raising=False)
+    monkeypatch.setattr(
+        maestro_init.ir, "IssueSeverity", SimpleNamespace(WARNING="warning"), raising=False
+    )
+    hass = MagicMock()
+    hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="rscp-1")]
+    entry = SimpleNamespace(entry_id="maestro-1", async_on_unload=MagicMock())
+
+    await _async_check_rscp_plant_entities(hass, entry)
+
+    assert calls == [{"issue_id": _RSCP_PLANT_REPAIR_ID}]

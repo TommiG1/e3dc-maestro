@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.8-beta.4] – Einrichtungsfehler bei älterem Home Assistant (2026-11-08)
+
+Beta nach 0.5.8-beta.3. Ausführlich: [docs/release-notes/v0.5.8-beta.4.md](docs/release-notes/v0.5.8-beta.4.md).
+
+### Korrekturen
+- **Einrichtung brach ab** („unexpected keyword argument config_entry_id“), wenn hacs-e3dc Anlagen-Entities deaktiviert hatte und die Home-Assistant-Version den Parameter nicht kennt. Die Reparatur-Meldung wird jetzt kompatibel angelegt und kann die Einrichtung nicht mehr blockieren.
+
+---
+
 ## [0.5.8-beta.3] – Wallbox-Bilanz aus Energiezähler (2026-11-08)
 
 Beta nach 0.5.8-beta.2. Ausführlich: [docs/release-notes/v0.5.8-beta.3.md](docs/release-notes/v0.5.8-beta.3.md).
