@@ -201,9 +201,12 @@ CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = "wallbox_discharge_guard_threshold_w"
 # nicht durch Ladespitzen verfälscht werden.
 CONF_WALLBOX_PROVIDER = "wallbox_provider"                  # none|e3dc|openwb|goe|custom (UI-Hinweis)
 CONF_WALLBOX_POWER_SENSOR = "wallbox_power_sensor"          # entity_id, W
+CONF_WALLBOX_ENERGY_SENSOR = "wallbox_energy_sensor"        # entity_id, kWh (Tag oder Gesamt)
 CONF_WALLBOX_SOC_SENSOR = "wallbox_soc_sensor"              # entity_id, % Fahrzeug-SoC (Anzeige im Flow)
 CONF_WALLBOX_PLUG_ENTITY = "wallbox_plug_entity"            # binary_sensor: Stecker angesteckt (Flow-Icon)
 CONF_WALLBOX_INCLUDED_IN_HOUSE = "wallbox_included_in_house"  # bool: True = Hausverbrauchszähler enthält Wallbox bereits
+# Riemann-Fallback: unveränderte Rohleistung länger als so viele Sekunden → 0 W für Energie.
+WALLBOX_POWER_FREEZE_SECONDS = 900
 
 # Config entry keys – heat pump (Step 7)
 CONF_HP_ENABLED = "hp_enabled"
@@ -623,8 +626,38 @@ CONF_SIZING_GRID_IMPORT_ENERGY_SENSOR = "sizing_grid_import_energy_sensor"
 CONF_SIZING_GRID_EXPORT_ENERGY_SENSOR = "sizing_grid_export_energy_sensor"
 CONF_SIZING_BATTERY_CHARGE_ENERGY_SENSOR = "sizing_battery_charge_energy_sensor"
 CONF_SIZING_BATTERY_DISCHARGE_ENERGY_SENSOR = "sizing_battery_discharge_energy_sensor"
-CONF_SIZING_WALLBOX_ENERGY_SENSOR = "sizing_wallbox_energy_sensor"        # optional
+CONF_SIZING_WALLBOX_ENERGY_SENSOR = "sizing_wallbox_energy_sensor"        # optional; synced with CONF_WALLBOX_ENERGY_SENSOR
 CONF_SIZING_HEAT_PUMP_ENERGY_SENSOR = "sizing_heat_pump_energy_sensor"    # optional
+
+
+def wallbox_energy_sensor_id(options: dict) -> str | None:
+    """Prefer Loads wiring, fall back to sizing/Energy-dashboard option."""
+    for key in (CONF_WALLBOX_ENERGY_SENSOR, CONF_SIZING_WALLBOX_ENERGY_SENSOR):
+        value = options.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def sync_wallbox_energy_options(options: dict) -> dict:
+    """Keep wallbox_energy_sensor and sizing_wallbox_energy_sensor aligned.
+
+    Loads wiring wins when both differ. Returns a new dict (may be unchanged).
+    """
+    out = dict(options)
+    primary = out.get(CONF_WALLBOX_ENERGY_SENSOR)
+    sizing = out.get(CONF_SIZING_WALLBOX_ENERGY_SENSOR)
+    primary_ok = isinstance(primary, str) and bool(primary.strip())
+    sizing_ok = isinstance(sizing, str) and bool(sizing.strip())
+    if primary_ok:
+        cleaned = primary.strip()
+        out[CONF_WALLBOX_ENERGY_SENSOR] = cleaned
+        out[CONF_SIZING_WALLBOX_ENERGY_SENSOR] = cleaned
+    elif sizing_ok:
+        cleaned = sizing.strip()
+        out[CONF_WALLBOX_ENERGY_SENSOR] = cleaned
+        out[CONF_SIZING_WALLBOX_ENERGY_SENSOR] = cleaned
+    return out
 CONF_SIZING_ANALYSIS_DAYS = "sizing_analysis_days"
 CONF_SIZING_ELECTRICITY_PRICE_EUR_KWH = "sizing_electricity_price_eur_kwh"
 CONF_SIZING_FEED_IN_PRICE_EUR_KWH = "sizing_feed_in_price_eur_kwh"

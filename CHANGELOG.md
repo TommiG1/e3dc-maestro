@@ -11,6 +11,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.8-beta.3] – Wallbox-Bilanz aus Energiezähler (2026-11-08)
+
+Beta nach 0.5.8-beta.2. Ausführlich: [docs/release-notes/v0.5.8-beta.3.md](docs/release-notes/v0.5.8-beta.3.md).
+
+### Korrekturen
+- **BilanzPuls Wallbox:** Tagesenergie kommt bevorzugt aus einem echten kWh-Zähler (openWB heute/gesamt oder E3DC energy-all). Ohne Zähler bleibt die Leistungsintegration, stoppt aber bei eingefrorener Leistung nach etwa 15 Minuten.
+
+### Neu
+- **Wallbox-Energie-Sensor** gemeinsam für Loads, Sizing und Energy-Dashboard, mit Autodetect beim Start.
+
+---
+
 ## [0.5.8-beta.2] – Kapazität aus Modulen, Nutzbar netto (2026-11-07)
 
 Beta nach 0.5.8-beta.1. Ausführlich: [docs/release-notes/v0.5.8-beta.2.md](docs/release-notes/v0.5.8-beta.2.md).

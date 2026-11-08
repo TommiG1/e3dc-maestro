@@ -42,6 +42,8 @@ from .const import (
     DOMAIN,
     EWMA_JUMP_THRESHOLD_W,
     EWMA_TAU_S,
+    WALLBOX_POWER_FREEZE_SECONDS,
+    wallbox_energy_sensor_id,
     PHASE_CURTAILMENT_GUARD,
     PHASE_FEED_IN_LIMIT,
     PHASE_IDLE,
@@ -276,6 +278,9 @@ class E3DCMaestroCoordinator(
 
         # Wallbox current tracking for debounce
         self._last_wallbox_current: float | None = None
+        # Riemann freeze guard: stuck power must not inflate daily kWh.
+        self._wallbox_energy_last_power: float | None = None
+        self._wallbox_energy_power_changed_at: datetime | None = None
 
         # A1: SoC hysteresis – dampened SoC for rule engine
         self._stable_soc: float | None = None
@@ -625,6 +630,8 @@ class E3DCMaestroCoordinator(
         if self._last_stats_date != today_str:
             self.stats = {k: 0.0 for k in self.stats}
             self._additional_bases = {}
+            self._wallbox_energy_last_power = None
+            self._wallbox_energy_power_changed_at = None
             self._last_stats_date = today_str
             self._watchdog_notified = False
             self._stats_dirty = True
@@ -663,6 +670,7 @@ class E3DCMaestroCoordinator(
         # schnelle Reaktion und wird separat durch Schwellen-Hysterese entstört.
         _instant_pv = state_data.pv_power
         _instant_house = state_data.house_power
+        _instant_wallbox = state_data.wallbox_power or 0.0
         _dt_s = self.update_interval.total_seconds()
         self._ewma_pv = _ewma_update(
             self._ewma_pv, state_data.pv_power or 0.0,
@@ -687,6 +695,8 @@ class E3DCMaestroCoordinator(
             pv_power_instant=_instant_pv,
             house_power_instant=_instant_house,
         )
+        # Instant wallbox power for energy bookkeeping (EWMA is for control only).
+        self._wallbox_power_instant = _instant_wallbox
 
         # Current electricity price (optional). Octopus day-rate events have a
         # timestamp state — fall back to the slot that covers ``now``.
@@ -923,6 +933,13 @@ class E3DCMaestroCoordinator(
         self.cost_simulation_active = _buy_sim is not None
         _feed_in_price = getattr(self._params, "feed_in_price", 0.08)
 
+        # Wallbox today: prefer energy meter (openWB / E3DC energy-all), else Riemann.
+        await self._async_update_wallbox_energy_today(
+            opts,
+            interval_h,
+            getattr(self, "_wallbox_power_instant", state_data.wallbox_power or 0.0),
+        )
+
         if interval_h is not None:
             if state_data.grid_power > 0:
                 feed_kwh = state_data.grid_power / 1000 * interval_h
@@ -949,11 +966,6 @@ class E3DCMaestroCoordinator(
             # Throughput = |Akku-Leistung| für Wear-Cost-Berechnung.
             throughput_kwh = abs(state_data.battery_power) / 1000 * interval_h
             self.stats[STAT_BATTERY_THROUGHPUT_TODAY] += throughput_kwh
-            # Wallbox-Energie heute (kWh) – getrennter Verbrauchszähler
-            if state_data.wallbox_power > 0:
-                self.stats[STAT_WALLBOX_ENERGY_TODAY] += (
-                    state_data.wallbox_power / 1000 * interval_h
-                )
             # Wear cost: capex / (cycles × 2 × capacity_kwh) × throughput
             _cap = max(getattr(self._params, "battery_capacity_kwh", 10.0), 1.0)
             _cycles = max(getattr(self._params, "battery_total_cycles", 5000.0), 100.0)
@@ -1016,6 +1028,56 @@ class E3DCMaestroCoordinator(
             "current_price": current_price,
         }
 
+
+    def _wallbox_power_for_energy(self, power_w: float) -> float:
+        """Power for Riemann integration; zero when the reading looks frozen."""
+        now = dt_util.utcnow()
+        rounded = round(max(0.0, power_w), 1)
+        last = self._wallbox_energy_last_power
+        if last is None or rounded != last:
+            self._wallbox_energy_last_power = rounded
+            self._wallbox_energy_power_changed_at = now
+            return rounded
+        changed_at = self._wallbox_energy_power_changed_at
+        if changed_at is None:
+            self._wallbox_energy_power_changed_at = now
+            return rounded
+        if rounded > 0 and (now - changed_at).total_seconds() >= WALLBOX_POWER_FREEZE_SECONDS:
+            return 0.0
+        return rounded
+
+    async def _async_update_wallbox_energy_today(
+        self,
+        opts: Mapping[str, Any],
+        interval_h: float | None,
+        wallbox_power_w: float,
+    ) -> None:
+        """Set wallbox_energy_today from a kWh meter or integrate power."""
+        energy_eid = wallbox_energy_sensor_id(dict(opts))
+        if energy_eid:
+            total_now = self._read_energy_total_kwh(energy_eid)
+            if total_now is not None:
+                base = self._additional_bases.get(energy_eid)
+                if base is None:
+                    change = await self._async_today_stat_change(energy_eid)
+                    if change is not None:
+                        self._additional_bases[energy_eid] = max(0.0, total_now - change)
+                    else:
+                        self._additional_bases[energy_eid] = total_now
+                elif total_now < base:
+                    # Day/month meter reset: keep today's already counted kWh.
+                    self._additional_bases[energy_eid] = total_now - float(
+                        self.stats.get(STAT_WALLBOX_ENERGY_TODAY, 0.0) or 0.0
+                    )
+                self.stats[STAT_WALLBOX_ENERGY_TODAY] = max(
+                    0.0, total_now - self._additional_bases[energy_eid]
+                )
+                return
+        if interval_h is None:
+            return
+        integrate_w = self._wallbox_power_for_energy(wallbox_power_w)
+        if integrate_w > 0:
+            self.stats[STAT_WALLBOX_ENERGY_TODAY] += integrate_w / 1000 * interval_h
 
     async def _async_today_stat_change(self, statistic_id: str) -> float | None:
         """Sum of recorder ``change`` for ``statistic_id`` since local midnight."""

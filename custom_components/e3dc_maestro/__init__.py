@@ -276,6 +276,16 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         hass.config_entries.async_update_entry(entry, options=new_options, version=4)
 
+    if entry.version < 5:
+        # Wallbox-Energie: Loads-Sensor und Sizing/Energy-Dashboard-Sensor syncen.
+        from .const import sync_wallbox_energy_options
+
+        new_options = sync_wallbox_energy_options(dict(entry.options))
+        hass.config_entries.async_update_entry(entry, options=new_options, version=5)
+        _LOGGER.info(
+            "E3DC Maestro: Wallbox-Energie-Sensor mit Sizing/Energy-Dashboard abgeglichen"
+        )
+
     return True
 
 

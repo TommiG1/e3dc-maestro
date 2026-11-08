@@ -173,6 +173,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
     hint: "secWallboxWireHint",
     fields: [
       entity("wallbox_power_sensor", sensor),
+      entity("wallbox_energy_sensor", energy),
       entity("wallbox_soc_sensor", sensor),
       entity("wallbox_plug_entity", ["binary_sensor", "sensor"]),
       { key: "wallbox_included_in_house", kind: "bool" },
@@ -272,6 +273,7 @@ const labels: Record<string, { de: string; en: string }> = {
     en: "Day-after-tomorrow forecast (hourly profile), optional, display only",
   },
   wallbox_power_sensor: { de: "Wallbox-Leistung", en: "Wallbox power" },
+  wallbox_energy_sensor: { de: "Wallbox-Energie", en: "Wallbox energy" },
   wallbox_soc_sensor: { de: "Fahrzeug-SoC", en: "Vehicle SoC" },
   wallbox_plug_entity: { de: "Stecker angesteckt", en: "Plug connected" },
   wallbox_included_in_house: { de: "In der Hauslast enthalten", en: "Included in house load" },

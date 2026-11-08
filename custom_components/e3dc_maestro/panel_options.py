@@ -17,12 +17,15 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     AUTO_MODE_OBJECTIVES,
+    CONF_SIZING_WALLBOX_ENERGY_SENSOR,
+    CONF_WALLBOX_ENERGY_SENSOR,
     DOMAIN,
     MAX_ADDITIONAL_PRODUCERS,
     TARIFF_MODES,
     WALLBOX_TYPE_E3DC,
     WALLBOX_TYPE_GENERIC,
     as_entity_list,
+    sync_wallbox_energy_options,
 )
 from .coordinator_helpers import _tariff_schedule_from_stored
 
@@ -133,6 +136,7 @@ _SPECS: dict[str, _Spec] = {
     "wallbox_enabled": ("bool",),
     "wallbox_type": ("select", (WALLBOX_TYPE_E3DC, WALLBOX_TYPE_GENERIC)),
     "wallbox_power_sensor": _entity(),
+    "wallbox_energy_sensor": _entity(),
     "wallbox_soc_sensor": _entity(),
     "wallbox_plug_entity": _entity(),
     "wallbox_included_in_house": ("bool",),
@@ -457,6 +461,27 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
     entry = _loaded_entry(hass)
     if entry is None:
         raise PanelOptionsError({"entry": "not_loaded"})
+    # Keep Loads energy sensor and Sizing/Energy-dashboard sensor in lockstep.
+    if CONF_WALLBOX_ENERGY_SENSOR in cleaned or CONF_SIZING_WALLBOX_ENERGY_SENSOR in cleaned:
+        merged = dict(entry.options)
+        for key, value in cleaned.items():
+            if value is None:
+                merged.pop(key, None)
+            else:
+                merged[key] = value
+        # Clearing either key clears both.
+        if cleaned.get(CONF_WALLBOX_ENERGY_SENSOR) is None and CONF_WALLBOX_ENERGY_SENSOR in cleaned:
+            merged.pop(CONF_WALLBOX_ENERGY_SENSOR, None)
+            merged.pop(CONF_SIZING_WALLBOX_ENERGY_SENSOR, None)
+            cleaned[CONF_SIZING_WALLBOX_ENERGY_SENSOR] = None
+        elif cleaned.get(CONF_SIZING_WALLBOX_ENERGY_SENSOR) is None and CONF_SIZING_WALLBOX_ENERGY_SENSOR in cleaned:
+            merged.pop(CONF_WALLBOX_ENERGY_SENSOR, None)
+            merged.pop(CONF_SIZING_WALLBOX_ENERGY_SENSOR, None)
+            cleaned[CONF_WALLBOX_ENERGY_SENSOR] = None
+        else:
+            synced = sync_wallbox_energy_options(merged)
+            cleaned[CONF_WALLBOX_ENERGY_SENSOR] = synced.get(CONF_WALLBOX_ENERGY_SENSOR)
+            cleaned[CONF_SIZING_WALLBOX_ENERGY_SENSOR] = synced.get(CONF_SIZING_WALLBOX_ENERGY_SENSOR)
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     display = {key: value for key, value in cleaned.items() if key in _DISPLAY_OPTIONS}
     soft = {key: value for key, value in cleaned.items() if key in _SOFT_OPTIONS}

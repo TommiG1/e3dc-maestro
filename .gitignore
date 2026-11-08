@@ -65,6 +65,7 @@ scripts/test_local_tags.py
 scripts/test_rscp_lib.py
 scripts/probe_login_logs.py
 scripts/test_rscp_grid_tags.py
+scripts/wallbox_stats_backup_*.json
 
 # Logs
 *.log

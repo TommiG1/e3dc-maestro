@@ -17,6 +17,7 @@ from .const import (
     CONF_SIZING_WALLBOX_ENERGY_SENSOR,
     DOMAIN,
     E3DC_RSCP_DOMAIN,
+    wallbox_energy_sensor_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,7 +128,11 @@ def resolve_energy_sensors(hass: HomeAssistant) -> dict[Role, dict[str, str]]:
     panel = _maestro_panel_ids(hass)
     out: dict[Role, dict[str, str]] = {}
     for role in (*_SOURCE_ROLES, "wallbox"):
-        opt = _alive(hass, _first_option(options.get(_OPTION_KEY[role])))
+        if role == "wallbox":
+            # Loads wiring first, then sizing option (same helper as Bilanz).
+            opt = _alive(hass, wallbox_energy_sensor_id(options))
+        else:
+            opt = _alive(hass, _first_option(options.get(_OPTION_KEY[role])))
         if opt:
             out[role] = {"entity_id": opt, "origin": "options"}
             continue

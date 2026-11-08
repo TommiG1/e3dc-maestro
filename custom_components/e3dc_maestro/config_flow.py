@@ -112,12 +112,14 @@ from .const import (
     CONF_WALLBOX_MIN_SURPLUS,
     CONF_WALLBOX_PHASES,
     CONF_WALLBOX_POWER_SENSOR,
+    CONF_WALLBOX_ENERGY_SENSOR,
     CONF_WALLBOX_PROVIDER,
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
     CONF_WALLBOX_SOC_SENSOR,
     CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_TYPE,
+    sync_wallbox_energy_options,
     CONF_WATCHDOG_TIMEOUT,
     CONF_WINTER_MINIMUM_HOUR,
     DEFAULT_CHARGE_TARGET,
@@ -419,6 +421,7 @@ _SEEDABLE_SOURCE_KEYS: tuple[str, ...] = (
     CONF_HOUSE_CONSUMPTION_TODAY_SENSOR,
     CONF_BATTERY_CHARGED_TODAY_SENSOR,
     CONF_BATTERY_DISCHARGED_TODAY_SENSOR,
+    CONF_WALLBOX_ENERGY_SENSOR,
 )
 
 
@@ -441,6 +444,10 @@ def seed_missing_rscp_source_options(hass, options: dict[str, Any]) -> dict[str,
         if key not in detected:
             continue
         new_options[key] = detected[key]
+        changed = True
+    synced = sync_wallbox_energy_options(new_options)
+    if synced != new_options:
+        new_options = synced
         changed = True
     if not changed:
         return None
@@ -563,6 +570,62 @@ def _autodetect_openwb_wallbox(hass) -> str | None:
         return None
     candidates.sort()
     return candidates[0][1]
+
+
+def _autodetect_openwb_wallbox_energy(hass) -> str | None:
+    """openWB chargepoint energy: prefer daily ``…_heute``, else lifetime ``…_gesamt``."""
+    registry = er.async_get(hass)
+    today: list[tuple[int, str]] = []
+    total: list[tuple[int, str]] = []
+    for ent in registry.entities.values():
+        if getattr(ent, "disabled_by", None) is not None:
+            continue
+        eid = ent.entity_id
+        if not eid.startswith("sensor.openwb_chargepoint"):
+            continue
+        m = _OPENWB_CP_RE.search(eid)
+        if not m:
+            continue
+        cp = int(m.group(1))
+        if eid.endswith("_geladene_energie_heute"):
+            today.append((cp, eid))
+        elif eid.endswith("_geladene_energie_gesamt"):
+            total.append((cp, eid))
+    if today:
+        today.sort()
+        return today[0][1]
+    if total:
+        total.sort()
+        return total[0][1]
+    return None
+
+
+def _autodetect_e3dc_wallbox_energy(hass) -> str | None:
+    """E3DC wallbox ``*-energy-all`` (EXTERN_DATA Wh, typically monthly)."""
+    registry = er.async_get(hass)
+    candidates: list[str] = []
+    for ent in registry.entities.values():
+        if getattr(ent, "disabled_by", None) is not None:
+            continue
+        eid = ent.entity_id
+        if not eid.startswith("sensor."):
+            continue
+        unique_id = (getattr(ent, "unique_id", "") or "").lower()
+        translation_key = (getattr(ent, "translation_key", "") or "").lower()
+        if translation_key == "wallbox-energy-all" or unique_id.endswith("_wallbox-energy-all") or eid.endswith(
+            "_energy_all"
+        ):
+            # Prefer wallbox energy-all; skip unrelated *_energy_all if no wallbox hint.
+            if "wallbox" in unique_id or "wallbox" in eid or translation_key == "wallbox-energy-all":
+                candidates.append(eid)
+                continue
+            # unique_id from hacs-e3dc is typically ``{uid}_{mac}-energy-all``
+            if "-energy-all" in unique_id or unique_id.endswith("energy-all"):
+                candidates.append(eid)
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0]
 
 
 def _openwb_plug_for_power(hass, power_eid: str | None) -> str | None:
@@ -739,6 +802,11 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
         openwb_plug = _openwb_plug_for_power(hass, out.get(CONF_WALLBOX_POWER_SENSOR))
         if openwb_plug:
             out[CONF_WALLBOX_PLUG_ENTITY] = openwb_plug
+    # Wallbox-Energiezähler: openWB (heute/gesamt) vor E3DC energy-all.
+    wb_energy = _autodetect_openwb_wallbox_energy(hass) or _autodetect_e3dc_wallbox_energy(hass)
+    if wb_energy:
+        out[CONF_WALLBOX_ENERGY_SENSOR] = wb_energy
+        out[CONF_SIZING_WALLBOX_ENERGY_SENSOR] = wb_energy
     # EVCC-Integration (marq24/ha-evcc) ist orthogonal zur Wallbox-Quelle
     # → unabhängig erkennen und mit auffüllen.
     out.update(_autodetect_evcc(hass))
@@ -1006,6 +1074,9 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
         # einbinden, damit Optimizer/Forecast/EWMA nicht durch Ladespitzen
         # verfälscht werden.
         vol.Optional(CONF_WALLBOX_POWER_SENSOR): _entity_selector(),
+        vol.Optional(CONF_WALLBOX_ENERGY_SENSOR): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["sensor"], device_class=["energy"])
+        ),
         vol.Optional(CONF_WALLBOX_SOC_SENSOR): _entity_selector(),
         vol.Optional(CONF_WALLBOX_PLUG_ENTITY): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
@@ -1397,7 +1468,7 @@ class _TariffSlotsMixin:
 class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
     """Multi-step config flow for E3DC Maestro."""
 
-    VERSION = 4
+    VERSION = 5
     _data: dict[str, Any] = {}
 
     def _slot_state(self) -> dict[str, Any]:
@@ -1497,6 +1568,7 @@ class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
         """Step 6: Wallbox settings."""
         if user_input is not None:
             self._data.update(user_input)
+            self._data = sync_wallbox_energy_options(self._data)
             return await self.async_step_evcc()
         # Auto-Detect Wallbox-Felder als Default-Vorschläge mitführen.
         auto = _autodetect_rscp_sources(self.hass)
@@ -1504,6 +1576,7 @@ class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
             CONF_WALLBOX_TYPE,
             CONF_WALLBOX_PROVIDER,
             CONF_WALLBOX_POWER_SENSOR,
+            CONF_WALLBOX_ENERGY_SENSOR,
             CONF_WALLBOX_INCLUDED_IN_HOUSE,
         }
         suggested = {k: v for k, v in auto.items() if k in wb_keys}
@@ -1766,12 +1839,14 @@ class E3DCMaestroOptionsFlow(_TariffSlotsMixin, OptionsFlow):
     async def async_step_wallbox(self, user_input: dict[str, Any] | None = None) -> dict[str, Any]:
         if user_input is not None:
             self._options.update(user_input)
+            self._options = sync_wallbox_energy_options(self._options)
             return await self.async_step_init()
         auto = _autodetect_rscp_sources(self.hass)
         wb_keys = {
             CONF_WALLBOX_TYPE,
             CONF_WALLBOX_PROVIDER,
             CONF_WALLBOX_POWER_SENSOR,
+            CONF_WALLBOX_ENERGY_SENSOR,
             CONF_WALLBOX_INCLUDED_IN_HOUSE,
         }
         suggested = {k: v for k, v in auto.items() if k in wb_keys}
