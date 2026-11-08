@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Hinweise
+- **Wallbox-Bilanz Bestand:** Ab 0.5.8-beta.3 stoppt Maestro neues Aufblasen (kWh-Zähler bzw. Freeze-Schutz). Bereits falsche Woche-/Monat-/Jahreswerte in der Langzeitstatistik heilt das Update nicht automatisch.
+
 ---
 
 ## [0.5.8-beta.4] – Einrichtungsfehler bei älterem Home Assistant (2026-11-08)
