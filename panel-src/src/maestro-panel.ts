@@ -27,7 +27,7 @@ import {
   type FlowConsumer,
 } from "./consumers";
 import { controlsSheet } from "./controls";
-import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, showHaMenu, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import {
   loadExpectedSocHidden,
   loadForecastHidden,
@@ -325,7 +325,12 @@ class MaestroPanel extends LitElement {
     this._hass = hass;
     if (!prev || this._missingKeys(hass).length) void this._resolveEntities();
     const sig = this._watchSignature(hass);
-    if (!prev || prev.language !== hass.language || sig !== this._watchSig) {
+    if (
+      !prev ||
+      prev.language !== hass.language ||
+      prev.dockedSidebar !== hass.dockedSidebar ||
+      sig !== this._watchSig
+    ) {
       this._watchSig = sig;
       this.requestUpdate();
     } else if (DEBUG) {
@@ -2036,7 +2041,7 @@ class MaestroPanel extends LitElement {
         </nav>
         <main>
           <header class="topbar">
-            ${this._narrow
+            ${showHaMenu(this._narrow, this._hass?.dockedSidebar)
               ? html`<button class="menu" aria-label=${t("menu")} @click=${this._toggleMenu}>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>
                 </button>`

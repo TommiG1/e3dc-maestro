@@ -13,7 +13,7 @@ import {
   type ConsumerPlace,
   type StoredConsumerPlace,
 } from "./consumer-layout";
-import { consumerPowerCaption, type FlowConsumer } from "./consumers";
+import { compactRowName, consumerPowerCaption, type FlowConsumer } from "./consumers";
 import {
   ACTIVE_W,
   compactBuses,
@@ -400,7 +400,8 @@ export function splitEnergyFlow(i: FlowInput): TemplateResult {
       <g transform=${iconTransform(pos.x, pos.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${strokeOf(color)} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">
         ${consumerGlyph(c, color, outline)}
       </g>
-      <text font-size="14" font-weight="700" fill="var(--text)" x=${pos.x - 26} y=${pos.y + 5} text-anchor="end">${power}  ${clip(c.name, 24)}</text>
+      <text class="node-val-sm" x=${pos.x - 26} y=${pos.y - 2} text-anchor="end">${power}</text>
+      <text class="node-lbl-sm" x=${pos.x - 26} y=${pos.y + 12} text-anchor="end">${compactRowName(c.name)}</text>
     </g>`;
   };
 

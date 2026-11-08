@@ -210,9 +210,16 @@ export interface HassEntity {
 export interface Hass {
   states: Record<string, HassEntity | undefined>;
   language: string;
+  /** HA sidebar mode; menu button must show when always_hidden (ha-menu-button). */
+  dockedSidebar?: "docked" | "auto" | "always_hidden";
   user?: { is_admin?: boolean };
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
+}
+
+/** Same rule as HA's ha-menu-button: narrow screens or sidebar set to always hidden. */
+export function showHaMenu(narrow: boolean, dockedSidebar?: Hass["dockedSidebar"]): boolean {
+  return narrow || dockedSidebar === "always_hidden";
 }
 
 export const num = (e: HassEntity | undefined): number | undefined => {

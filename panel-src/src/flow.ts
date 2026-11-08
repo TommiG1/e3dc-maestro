@@ -15,6 +15,7 @@ import {
   CONSUMER_ICON_PATH,
   WALLBOX_BODY_PATH,
   WALLBOX_PLUG_PATH,
+  compactRowName,
   consumerPowerCaption,
   type FlowConsumer,
 } from "./consumers";
@@ -509,7 +510,8 @@ export function energyFlow(i: FlowInput): TemplateResult {
         return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>
           <circle cx=${p.x} cy=${p.y} r=${COMPACT_LIST_R} fill=${outline ? "none" : "rgba(10,16,30,.9)"} stroke=${color} stroke-width=${outline ? "2.2" : "2"}/>
           <g transform=${iconTransform(p.x, p.y, iconFit(COMPACT_LIST_R))} fill="none" stroke=${color} stroke-width=${ICON_STROKE} stroke-linecap="round" stroke-linejoin="round">${consumerGlyph(c, c.mode === "included" ? "var(--house)" : "var(--accent)", outline)}</g>
-          <text font-size="14" font-weight="700" fill="var(--text)" x=${p.x - 26} y=${p.y + 5} text-anchor="end">${power}  ${clip(c.name, 24)}</text>
+          <text class="node-val-sm" x=${p.x - 26} y=${p.y - 2} text-anchor="end">${power}</text>
+          <text class="node-lbl-sm" x=${p.x - 26} y=${p.y + 12} text-anchor="end">${compactRowName(c.name)}</text>
         </g>`;
       }
       return svg`<g class="flow-node ${i.arrange ? "arrange" : ""}" opacity=${idle ? 0.55 : 1} role="button" tabindex="0" aria-label=${aria} @click=${open} @keydown=${key} @pointerdown=${drag}>

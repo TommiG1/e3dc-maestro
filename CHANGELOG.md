@@ -11,6 +11,16 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.8-beta.6] – Tablet Querformat und Energiefluss im Hochformat (2026-11-08)
+
+Beta nach 0.5.8-beta.5. Ausführlich: [docs/release-notes/v0.5.8-beta.6.md](docs/release-notes/v0.5.8-beta.6.md).
+
+### Korrekturen
+- **Menü-Button im Querformat:** Der Button zurück zu Home Assistant erscheint auch, wenn die HA-Seitenleiste auf „Immer ausblenden“ steht (Discussion #49).
+- **Energiefluss im Hochformat:** Lange Verbrauchernamen laufen nicht mehr unter Akku und Haus. Leistung und Name stehen auf zwei Zeilen (Discussion #49).
+
+---
+
 ## [0.5.8-beta.5] – Prognose-Zoom und Sidebar-Titel (2026-11-08)
 
 Beta nach 0.5.8-beta.4. Ausführlich: [docs/release-notes/v0.5.8-beta.5.md](docs/release-notes/v0.5.8-beta.5.md).

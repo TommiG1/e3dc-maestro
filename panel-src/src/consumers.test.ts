@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPACT_ROW_NAME_MAX,
+  compactRowName,
   consumerPowerCaption,
   consumerUnavailable,
   consumersFromOptions,
@@ -232,5 +234,14 @@ describe("separateDayEnergy", () => {
     expect(separateDayEnergy([flow(1000, "separate", "sensor.other")], 8.2)).toEqual([]);
     expect(separateDayEnergy([wb], 0)).toEqual([]);
     expect(separateDayEnergy([wb], undefined)).toEqual([]);
+  });
+});
+
+describe("compactRowName", () => {
+  it("keeps short names and clips long ones with an ellipsis", () => {
+    expect(compactRowName("Wallbox")).toBe("Wallbox");
+    const clipped = compactRowName("E3DC Maestro Wallbox-Leistung");
+    expect(clipped).toHaveLength(COMPACT_ROW_NAME_MAX);
+    expect(clipped.endsWith("…")).toBe(true);
   });
 });

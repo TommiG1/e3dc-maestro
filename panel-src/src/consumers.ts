@@ -95,6 +95,14 @@ export function consumerPowerCaption(fmt: Pick<Fmt, "w">, watts: number, soc?: n
   return `${power} · ${Math.round(soc)} %`;
 }
 
+/** Longest name on a phone list row. Power sits on its own line above, so this stays clear of the nodes. */
+export const COMPACT_ROW_NAME_MAX = 20;
+
+/** Name for a phone list row, clipped with an ellipsis. */
+export function compactRowName(name: string): string {
+  return name.length <= COMPACT_ROW_NAME_MAX ? name : `${name.slice(0, COMPACT_ROW_NAME_MAX - 1)}…`;
+}
+
 /** on/off (and a few sensor spellings) → boolean; unknown/unavailable → undefined. */
 export function pluggedOf(entity: HassEntity | undefined): boolean | undefined {
   if (!entity) return undefined;
