@@ -9,8 +9,18 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.8-beta.5] – Prognose-Zoom und Sidebar-Titel (2026-11-08)
+
+Beta nach 0.5.8-beta.4. Ausführlich: [docs/release-notes/v0.5.8-beta.5.md](docs/release-notes/v0.5.8-beta.5.md).
+
+### Korrekturen
+- **Prognose 6 / 12 / 24 / 48 h:** Die Brush-Zeitleiste folgt dem gewählten Fenster und der Zeitskala des Hauptcharts inklusive Ist-Verlauf (Issue #47).
+- **Sidebar-Titel nach Neustart:** Eigener Name unter Darstellung bleibt erhalten, auch wenn der Config-Entry beim Start noch `SETUP_IN_PROGRESS` ist (Issue #47).
+
 ### Hinweise
-- **Wallbox-Bilanz Bestand:** Ab 0.5.8-beta.3 stoppt Maestro neues Aufblasen (kWh-Zähler bzw. Freeze-Schutz). Bereits falsche Woche-/Monat-/Jahreswerte in der Langzeitstatistik heilt das Update nicht automatisch.
+- **Wallbox-Bilanz Bestand:** Ab 0.5.8-beta.3 stoppt Maestro neues Aufblasen. Bereits falsche Langzeitstatistik heilt das Update nicht automatisch.
 
 ---
 
