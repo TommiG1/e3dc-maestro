@@ -65,7 +65,7 @@ _HA_STUBS = [
         {
             "ConfigEntry": object,
             "ConfigEntryState": type(
-                "ConfigEntryState", (), {"LOADED": "loaded", "NOT_LOADED": "not_loaded"}
+                "ConfigEntryState", (), {"LOADED": "loaded", "NOT_LOADED": "not_loaded", "SETUP_IN_PROGRESS": "setup_in_progress"}
             ),
             "ConfigFlow": _ConfigFlow,
             "OptionsFlow": _OptionsFlow,

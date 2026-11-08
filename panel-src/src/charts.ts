@@ -612,9 +612,23 @@ export function forecastOptions({ traj, targetSoc, planSoc, planShadow, hideShad
   });
 }
 
-export function brushOptions(traj: Trajectory): Opts {
-  const x0 = traj.trajectory_points[0][0];
-  const x1 = traj.trajectory_points[traj.trajectory_points.length - 1][0];
+/**
+ * `win` is the visible forecast window; the brush selection drives the main chart, so it must follow it.
+ * `extent` is the full x-range of the main chart (Ist plus trajectory). The brush axis must span the same
+ * range, otherwise both charts share a pixel width but not a time scale.
+ */
+export function brushOptions(
+  traj: Trajectory,
+  win?: { from: number; to: number },
+  extent?: { from: number; to: number },
+  ist?: Pick<IstSeries, "pv" | "house">,
+): Opts {
+  // Ist history in front of the forecast, so the strip shows the same curves as the chart above it.
+  const t0 = traj.trajectory_points[0][0];
+  const withIst = (actual: Point[] | undefined, forecast: Point[]): Point[] =>
+    actual?.length ? [...actual.filter((p) => p[0] < t0), ...forecast] : forecast;
+  const x0 = win?.from ?? traj.trajectory_points[0][0];
+  const x1 = win?.to ?? traj.trajectory_points[traj.trajectory_points.length - 1][0];
   return withBase({
     chart: {
       id: "fc-brush",
@@ -624,13 +638,13 @@ export function brushOptions(traj: Trajectory): Opts {
       selection: { enabled: true, xaxis: { min: x0, max: x1 }, fill: { color: COLORS.accent, opacity: 0.12 }, stroke: { color: COLORS.accent } },
     },
     series: [
-      { name: "PV", data: toKw(traj.pv_points) },
-      { name: "House", data: toKw(traj.house_points) },
+      { name: "PV", data: toKw(withIst(ist?.pv, traj.pv_points)) },
+      { name: "House", data: toKw(withIst(ist?.house, traj.house_points)) },
     ],
     colors: [COLORS.pv, COLORS.house],
     stroke: { width: 1.5, curve: "smooth" },
     fill: { type: "gradient", gradient: { opacityFrom: 0.35, opacityTo: 0 } },
-    xaxis: xaxis(),
+    xaxis: xaxis(extent ? { min: extent.from, max: extent.to } : {}),
     yaxis: { show: false, min: 0 },
     grid: { show: false },
     tooltip: { enabled: false },

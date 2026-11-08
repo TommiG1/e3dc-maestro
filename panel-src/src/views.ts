@@ -1003,6 +1003,11 @@ export function forecastView(c: Ctx): TemplateResult {
         showIst: c.showIst,
         istStart: c.ist?.pv[0]?.[0] ?? c.ist?.soc[0]?.[0],
       });
+  // Full x-range of the main chart (Ist + whole trajectory), for the brush axis.
+  const extent = forecastWindow(traj, Number.POSITIVE_INFINITY, {
+    showIst: c.showIst,
+    istStart: c.ist?.pv[0]?.[0] ?? c.ist?.soc[0]?.[0],
+  });
   const stripSegs = showStrip ? planStripSegments(slots, win.from, win.to) : [];
 
   return html`
@@ -1129,7 +1134,7 @@ export function forecastView(c: Ctx): TemplateResult {
         : nothing}
       ${c.mobile
         ? nothing
-        : html`<maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory)], () => brushOptions(traj))}></maestro-chart>`}
+        : html`<maestro-chart id="fc-brush" .options=${memo("brush", [c.theme, st(c, E.trajectory), win.from, win.to, extent.from, extent.to, c.showIst ? c.ist : undefined], () => brushOptions(traj, win, extent, c.showIst ? c.ist : undefined))}></maestro-chart>`}
     </div>
     <div class="grid stat-row">
       ${stat(t("statMinMax"), html`${Math.round(socMin ?? 0)}<small>%</small> / ${Math.round(socMax ?? 0)}<small>%</small>`)}

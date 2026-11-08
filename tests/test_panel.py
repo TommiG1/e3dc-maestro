@@ -90,6 +90,17 @@ async def test_register_panel_again_when_sidebar_title_changes(ha_frontend):
 
 
 @pytest.mark.asyncio
+async def test_sidebar_title_applies_while_entry_is_still_setting_up(ha_frontend):
+    from homeassistant.config_entries import ConfigEntryState
+
+    register, _ = ha_frontend
+    entry = SimpleNamespace(state=ConfigEntryState.SETUP_IN_PROGRESS, options={"sidebar_title": "E3DC"})
+    hass = _hass(config_entries=SimpleNamespace(async_entries=lambda _domain: [entry]))
+    await panel.async_register_panel(hass)
+    assert register.await_args.kwargs["sidebar_title"] == "E3DC"
+
+
+@pytest.mark.asyncio
 async def test_unregister_panel_only_when_registered(ha_frontend):
     _, remove = ha_frontend
     hass = _hass()

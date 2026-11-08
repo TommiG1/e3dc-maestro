@@ -765,7 +765,10 @@ def effective_sidebar_title(hass: HomeAssistant) -> str:
     if config_entries is None:
         return PANEL_SIDEBAR_TITLE
     entries = config_entries.async_entries(DOMAIN)
-    entry = next((item for item in entries if item.state == ConfigEntryState.LOADED), None)
+    # The panel is registered from async_setup_entry, where the entry is still
+    # SETUP_IN_PROGRESS. Requiring LOADED there dropped the custom title on every restart.
+    active = (ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS)
+    entry = next((item for item in entries if item.state in active), None)
     if entry is None:
         return PANEL_SIDEBAR_TITLE
     raw = entry.options.get("sidebar_title")
