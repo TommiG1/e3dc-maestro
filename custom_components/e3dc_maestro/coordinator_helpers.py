@@ -222,13 +222,16 @@ def _ramp_bypass_for_phase(decision: MaestroDecision) -> bool:
 
 
 def _apply_gentle_charge(
-    decision: MaestroDecision, enabled: bool, factor: float
+    decision: MaestroDecision, enabled: bool, factor: float, max_charge_w: float
 ) -> MaestroDecision:
-    """F0: Schonladung skaliert das Ladelimit in Komfortphasen.
+    """F0: Schonladung deckelt das Ladelimit auf Faktor × max. Ladeleistung.
+
+    Ein Deckel statt eines Faktors auf das berechnete Limit: Ist das Limit schon
+    der nutzbare PV-Überschuss, würde ein Faktor einen festen Anteil davon ins
+    Netz schicken, egal wie weit der SoC vom Ziel entfernt ist (Discussion #42).
 
     Nicht bei Vollleistungsphasen und nicht bei Akku-Priorität (Schwacher-PV-Tag /
-    Prognose-Gate): dort soll der Akku den vollen PV-Überschuss nehmen, sonst
-    geht der Rest ins Netz (Discussion #42).
+    Prognose-Gate): dort soll der Akku den vollen PV-Überschuss nehmen.
     """
     if (
         not enabled
@@ -236,10 +239,13 @@ def _apply_gentle_charge(
         or decision.charge_power_limit is None
     ):
         return decision
+    cap = factor * max_charge_w
+    if decision.charge_power_limit <= cap:
+        return decision
     return replace(
         decision,
-        charge_power_limit=decision.charge_power_limit * factor,
-        reason=decision.reason + f" (Schonladung ×{factor:.0%})",
+        charge_power_limit=cap,
+        reason=decision.reason + f" (Schonladung max. {cap:.0f} W)",
     )
 
 

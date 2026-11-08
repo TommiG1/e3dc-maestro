@@ -137,7 +137,7 @@ def test_fast_floor_skips_ramp_and_gentle_charge():
         phase=PHASE_FAST_FLOOR, reason="x", charge_power_limit=4500.0, battery_priority=False
     )
     assert _ramp_bypass_for_phase(d) is True
-    assert _apply_gentle_charge(d, True, 0.35).charge_power_limit == 4500.0
+    assert _apply_gentle_charge(d, True, 0.35, 4500.0).charge_power_limit == 4500.0
 
 
 def test_ramp_bypass_inactive_for_normal_phase_without_battery_priority():
@@ -170,13 +170,35 @@ def test_ramp_bypass_not_tied_to_day_flag_only_to_decision():
     assert _ramp_bypass_for_phase(idle) is False
 
 
-def test_gentle_charge_scales_corridor_without_battery_priority():
+def test_gentle_charge_caps_corridor_at_factor_times_max():
     d = MaestroDecision(
         phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0, battery_priority=False
     )
-    out = _apply_gentle_charge(d, True, 0.35)
+    out = _apply_gentle_charge(d, True, 0.35, 4500.0)
     assert out.charge_power_limit == 4500.0 * 0.35
-    assert "Schonladung ×35%" in out.reason
+    assert "Schonladung max. 1575 W" in out.reason
+
+
+def test_gentle_charge_keeps_limit_below_cap():
+    """Discussion #42: Ein Überschuss-Limit unter dem Deckel wird nicht gekürzt."""
+    d = MaestroDecision(
+        phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4035.0, battery_priority=False
+    )
+    out = _apply_gentle_charge(d, True, 0.75, 4500.0)
+    assert out.charge_power_limit == 3375.0
+    low = MaestroDecision(
+        phase=PHASE_CORRIDOR, reason="x", charge_power_limit=1200.0, battery_priority=False
+    )
+    out = _apply_gentle_charge(low, True, 0.35, 4500.0)
+    assert out.charge_power_limit == 1200.0
+    assert "Schonladung" not in out.reason
+
+
+def test_gentle_charge_never_below_old_scaling():
+    for limit in (300.0, 1200.0, 3000.0, 4500.0):
+        d = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", charge_power_limit=limit)
+        out = _apply_gentle_charge(d, True, 0.5, 4500.0)
+        assert out.charge_power_limit >= limit * 0.5
 
 
 def test_gentle_charge_skipped_with_battery_priority():
@@ -184,16 +206,16 @@ def test_gentle_charge_skipped_with_battery_priority():
     d = MaestroDecision(
         phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0, battery_priority=True
     )
-    out = _apply_gentle_charge(d, True, 0.35)
+    out = _apply_gentle_charge(d, True, 0.35, 4500.0)
     assert out.charge_power_limit == 4500.0
     assert "Schonladung" not in out.reason
 
 
 def test_gentle_charge_skipped_when_disabled_or_no_limit():
     d = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", charge_power_limit=4500.0)
-    assert _apply_gentle_charge(d, False, 0.35).charge_power_limit == 4500.0
+    assert _apply_gentle_charge(d, False, 0.35, 4500.0).charge_power_limit == 4500.0
     d2 = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", charge_power_limit=None)
-    assert _apply_gentle_charge(d2, True, 0.35).charge_power_limit is None
+    assert _apply_gentle_charge(d2, True, 0.35, 4500.0).charge_power_limit is None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

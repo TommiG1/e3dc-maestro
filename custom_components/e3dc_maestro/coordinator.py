@@ -192,7 +192,7 @@ class E3DCMaestroCoordinator(
         # Ringpuffer der letzten Phasen-/Grund-Wechsel für den Dashboard-Ticker.
         # Neue Einträge nur bei geändertem (phase, reason) – nicht bei jedem Tick
         # mit identischem Ergebnis (coordinator_act._async_act).
-        self._action_history: deque[dict[str, Any]] = deque(maxlen=8)
+        self._action_history: deque[dict[str, Any]] = deque(maxlen=40)
 
         # Statistics (reset at midnight, persisted across restarts)
         self.stats: dict[str, float] = {
@@ -848,7 +848,10 @@ class E3DCMaestroCoordinator(
 
         # F0: Gentle-Charge (nicht bei Vollleistung und Akku-Priorität)
         decision = _apply_gentle_charge(
-            decision, active.gentle_charge_enabled, active.gentle_charge_factor
+            decision,
+            active.gentle_charge_enabled,
+            active.gentle_charge_factor,
+            active.max_charge_power,
         )
 
         await self._async_schedule_act(decision, state_data, opts, current_price)
@@ -866,7 +869,11 @@ class E3DCMaestroCoordinator(
             dis = decision.discharge_power_limit
             ch_s = f"{ch:.0f}W" if ch is not None else "—"
             dis_s = f"{dis:.0f}W" if dis is not None else "—"
-            self._log(f"[{decision.phase}] charge={ch_s} discharge={dis_s} → {decision.reason}")
+            self._log(
+                f"[{decision.phase}] charge={ch_s} discharge={dis_s} "
+                f"pv={state_data.pv_power:.0f}W haus={state_data.house_power:.0f}W "
+                f"akku={state_data.battery_power:.0f}W → {decision.reason}"
+            )
 
         # Update statistics
         charged_native = None
