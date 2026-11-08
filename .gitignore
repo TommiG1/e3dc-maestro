@@ -26,6 +26,7 @@ wheels/
 .venv*
 env/
 venv/
+uv.lock
 
 # Secrets / local environment
 .env
