@@ -1477,7 +1477,9 @@ def _decide_core(
     # Spreading würde sonst drosseln und den Überschuss ins Netz schicken,
     # obwohl später zu wenig Sonne kommt. Ohne Forecast-Daten (None) bleibt das
     # Gate inaktiv → keine Verhaltensänderung gegenüber vorher.
-    _forecast_insufficient = _is_forecast_insufficient(state, params, target)
+    # Gegen das Ladeende-Ziel rechnen, nicht gegen die Tagesrampe: sonst greift
+    # das Gate nie, solange der SoC über dem Rampenziel liegt.
+    _forecast_insufficient = _is_forecast_insufficient(state, params, params.charge_target)
     _battery_priority = (_low_yield and not _low_yield_released) or _forecast_insufficient
     _spread_on = params.spreading_enabled and not _battery_priority
 

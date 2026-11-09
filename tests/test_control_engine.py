@@ -3914,10 +3914,13 @@ class TestLowYieldGateDecide:
     def test_hysteresis_reengage_below_threshold(self):
         # War die Priorität bereits freigegeben (previous_battery_priority=False),
         # löst erst eine deutlich schwächere Deckung (< 0.85) die Priorität erneut aus.
+        # Das Restprognose-Gate rechnet gegen charge_target und greift schon bei
+        # Deckung < 1.0 (unabhängig vom Schwacher-PV-Tag); die Hysterese wirkt
+        # daher nur noch für die Schwacher-PV-Tag-Logik selbst.
         p = _coverage_gate_params()
         s = self._state(soc=90, p10_remaining=0.9)
         d = decide(s, p, _now(6, 15, 11), previous_battery_priority=False)
-        assert d.battery_priority is False
+        assert "Prognose unzureichend" in d.reason
 
         s_low = self._state(soc=90, p10_remaining=0.8)
         d_low = decide(s_low, p, _now(6, 15, 11), previous_battery_priority=False)
@@ -4161,6 +4164,19 @@ class TestForecastGateDecide:
         d = decide(s, p, _now(6, 15, 11))
         assert d.phase == PHASE_CORRIDOR
         assert d.charge_power_limit == p.max_charge_power
+        assert "Prognose unzureichend" in d.reason
+
+    def test_gate_uses_charge_target_not_ramp_when_soc_above_ramp(self):
+        """SoC liegt über der Tagesrampe, aber unter charge_target: Gate greift."""
+        p = _forecast_gate_params()
+        now = _now(6, 15, 7)
+        assert target_soc_for_time(now, p) < 60  # Rampenziel früh am Tag niedrig
+        s = MaestroState(
+            soc=60, pv_power=4000, house_power=800, grid_power=0, battery_power=0,
+            pv_forecast_remaining_p10_kwh=3.0, pv_forecast_remaining_kwh=40.0,
+        )
+        d = decide(s, p, now)
+        assert d.battery_priority is True
         assert "Prognose unzureichend" in d.reason
 
     def test_sufficient_p10_keeps_spreading_throttle(self):
