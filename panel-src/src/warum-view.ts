@@ -6,10 +6,12 @@ import {
   mergeTunableOverrides,
   settingGroupFor,
   warumCatalog,
+  warumHelpExamples,
   warumSuggestions,
   type WarumAnswer,
   type WarumCatalogEntry,
   type WarumGate,
+  type WarumHelpExample,
   type WarumPayload,
   type WarumSuggestion,
   type WarumTerm,
@@ -38,6 +40,7 @@ export interface WarumViewCtx {
     whatIfParams?: Record<string, unknown>;
     lookbackAt?: string;
     threadId?: string;
+    help?: boolean;
   }) => void;
   onWhatIf: (threadId: string, overrides: Record<string, number>) => void;
   onResetWhatIf: (threadId: string) => void;
@@ -46,11 +49,64 @@ export interface WarumViewCtx {
 }
 
 function submitCatalogEntry(entry: WarumCatalogEntry, ctx: WarumViewCtx): void {
+  if (entry.help) {
+    ctx.onAsk({ query: ctx.i18n.t("warumHelpTitle"), help: true });
+    return;
+  }
   ctx.onAsk({
     query: entry.haystack.split("\n")[0],
     topic: entry.topic,
     whyNotPhase: entry.whyNotPhase,
   });
+}
+
+function askHelpExample(ex: WarumHelpExample, ctx: WarumViewCtx): void {
+  ctx.onAsk({
+    query: ex.query ?? ex.label,
+    topic: ex.topic,
+    whyNotPhase: ex.whyNotPhase,
+    lookbackAt: ex.lookbackAt,
+  });
+}
+
+function helpCard(item: WarumThreadItem, ctx: WarumViewCtx): TemplateResult {
+  const { t } = ctx.i18n;
+  const examples = warumHelpExamples(t);
+  return html`
+    <article class="warum-card-item warum-help-card" data-id=${item.id}>
+      <header class="warum-card-item-head">
+        <span class="warum-card-query">${item.query ?? t("warumHelpTitle")}</span>
+        <div class="warum-card-actions">
+          <button
+            type="button"
+            class="linkish warum-dismiss"
+            title=${t("warumDismiss")}
+            aria-label=${t("warumDismiss")}
+            @click=${() => ctx.onDismiss(item.id)}
+          >
+            ×
+          </button>
+        </div>
+      </header>
+      <div class="warum-card-body warum-help-body">
+        <h4 class="warum-card-headline">${t("warumHelpTitle")}</h4>
+        <p class="warum-help-intro">${t("warumHelpIntro")}</p>
+        <p class="sub warum-help-tip">${t("warumHelpTipLookback")}</p>
+        <p class="sub warum-help-tip">${t("warumHelpTipWhatIf")}</p>
+        <div class="warum-help-examples">
+          ${examples.map(
+            (ex) => html`<button
+              type="button"
+              class="chip on warum-ask"
+              @click=${() => askHelpExample(ex, ctx)}
+            >
+              ${ex.label}
+            </button>`,
+          )}
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function askSuggestion(s: WarumSuggestion, ctx: WarumViewCtx): void {
@@ -373,6 +429,8 @@ function fallbackBody(
 }
 
 function threadCard(item: WarumThreadItem, ctx: WarumViewCtx): TemplateResult {
+  if (item.kind === "help") return helpCard(item, ctx);
+
   const { t, phase: phaseLabel } = ctx.i18n;
   const payload = item.payload;
   return html`
@@ -468,7 +526,17 @@ export function warumView(ctx: WarumViewCtx): TemplateResult {
   return html`
     <div class="card warum-card warum-chat" id="warum">
       <div class="card-head">
-        <h3>${t("warumTitle")}</h3>
+        <div class="warum-head-title">
+          <h3>${t("warumTitle")}</h3>
+          <button
+            type="button"
+            class="chip warn warum-help-chip"
+            title=${t("warumHelpTitle")}
+            @click=${() => ctx.onAsk({ query: t("warumHelpTitle"), help: true })}
+          >
+            ${t("warumHelpChip")}
+          </button>
+        </div>
         <span class="sub">${t("warumHint")}</span>
       </div>
 

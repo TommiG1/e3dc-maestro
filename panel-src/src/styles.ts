@@ -3167,6 +3167,55 @@ export const styles = css`
   .warum-card-loading {
     min-height: 2.5rem;
   }
+  .warum-head-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .warum-head-title h3 {
+    margin: 0;
+  }
+  .warum-help-chip {
+    cursor: pointer;
+    flex: none;
+  }
+  .warum-help-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .warum-help-intro {
+    margin: 0 0 4px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .warum-help-tip {
+    margin: 0;
+  }
+  .warum-help-examples {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .warum-help-examples .chip {
+    justify-content: flex-start;
+    text-align: left;
+    width: 100%;
+    white-space: normal;
+  }
+  @media (min-width: 520px) {
+    .warum-help-examples {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    .warum-help-examples .chip {
+      width: auto;
+      max-width: 100%;
+    }
+  }
   .warum-answer-bullets {
     list-style: none;
     margin: 0 0 10px;

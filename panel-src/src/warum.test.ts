@@ -9,6 +9,7 @@ import {
   parseWarumIntent,
   settingGroupFor,
   warumCatalog,
+  warumHelpExamples,
   warumSuggestions,
   type WarumPayload,
   type WarumThreadItem,
@@ -75,6 +76,40 @@ describe("parseWarumIntent", () => {
 
   it("returns null for empty query", () => {
     expect(parseWarumIntent("  ", "de")).toBeNull();
+  });
+
+  it("maps hilfe and help to local help", () => {
+    expect(parseWarumIntent("hilfe", "de")).toEqual({ help: true });
+    expect(parseWarumIntent("help", "en")).toEqual({ help: true });
+    expect(parseWarumIntent("Übersicht", "de")).toEqual({ help: true });
+    expect(parseWarumIntent("?", "de")).toEqual({ help: true });
+  });
+
+  it("leaves normal topics untouched by help words inside questions", () => {
+    const r = parseWarumIntent("Warum entlädt der Akku nicht?", "de");
+    expect(r?.help).toBeUndefined();
+    expect(r?.topic).toBe("no_discharge");
+  });
+});
+
+describe("warumHelpExamples", () => {
+  it("returns labeled examples with topics and lookback", () => {
+    const examples = warumHelpExamples((key) => key, new Date("2026-11-09T12:00:00"));
+    expect(examples.some((e) => e.topic === "current")).toBe(true);
+    expect(examples.some((e) => e.topic === "lookback" && e.lookbackAt?.endsWith("T06:30:00"))).toBe(
+      true,
+    );
+  });
+});
+
+describe("warumCatalog help", () => {
+  it("offers hilfe in autocomplete haystack", () => {
+    const catalog = warumCatalog(
+      (id) => id,
+      (key) => (key === "warumSearchHelp" ? "hilfe help übersicht" : key),
+    );
+    const hits = matchingWarumEntries("hilfe", catalog);
+    expect(hits?.some((h) => h.help)).toBe(true);
   });
 });
 

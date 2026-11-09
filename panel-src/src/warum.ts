@@ -158,6 +158,8 @@ export interface WarumThreadItem {
   whatIfPending?: boolean;
   /** Set when a what-if re-fetch failed; the previous answer stays visible. */
   whatIfError?: boolean;
+  /** Local help overview card; no WS payload. */
+  kind?: "help";
 }
 
 export function clampTunableValue(value: number, tunable: WarumTunable): number {
@@ -206,6 +208,79 @@ export interface WarumParsedIntent {
   topic?: WarumTopic;
   whyNotPhase?: string;
   lookbackAt?: string;
+  help?: boolean;
+}
+
+const HELP_QUERY_WORDS = new Set(["hilfe", "help", "?", "übersicht", "uebersicht"]);
+
+function isHelpQuery(query: string): boolean {
+  const q = query.trim().toLowerCase().replace(/[!.]+$/g, "").trim();
+  if (!q) return false;
+  if (/^(hilfe|help|\?|übersicht|uebersicht)$/i.test(q)) return true;
+  const tokens = q.split(/[\s,/|]+/).filter(Boolean);
+  if (!tokens.length) return false;
+  return tokens.every((tok) => HELP_QUERY_WORDS.has(tok.replace(/[!.]+$/g, "")));
+}
+
+export interface WarumHelpExample {
+  label: string;
+  topic?: WarumTopic;
+  whyNotPhase?: string;
+  lookbackAt?: string;
+  query?: string;
+}
+
+/** Example questions for the local help card (no WS). */
+export function warumHelpExamples(t: Translate, now = new Date()): WarumHelpExample[] {
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const lookbackAt = `${y}-${mo}-${d}T06:30:00`;
+  return [
+    {
+      label: t("warumHelpExCurrent"),
+      topic: "current",
+      query: t("warumHelpExCurrent"),
+    },
+    {
+      label: t("warumHelpExNoDischarge"),
+      topic: "no_discharge",
+      whyNotPhase: "force_discharge",
+      query: t("warumHelpExNoDischarge"),
+    },
+    {
+      label: t("warumHelpExNoCharge"),
+      topic: "no_charge",
+      query: t("warumHelpExNoCharge"),
+    },
+    {
+      label: t("warumHelpExNoGridCharge"),
+      topic: "no_grid_charge",
+      whyNotPhase: "grid_charge",
+      query: t("warumHelpExNoGridCharge"),
+    },
+    {
+      label: t("warumHelpExPricePlan"),
+      topic: "price_plan",
+      query: t("warumHelpExPricePlan"),
+    },
+    {
+      label: t("warumHelpExWallbox"),
+      topic: "wallbox",
+      query: t("warumHelpExWallbox"),
+    },
+    {
+      label: t("warumHelpExHeatPump"),
+      topic: "heat_pump",
+      query: t("warumHelpExHeatPump"),
+    },
+    {
+      label: t("warumHelpExLookback"),
+      topic: "lookback",
+      lookbackAt,
+      query: t("warumHelpExLookback"),
+    },
+  ];
 }
 
 const INTENT_RULES: { topic: WarumTopic; whyNotPhase?: string; patterns: RegExp[] }[] = [
@@ -298,6 +373,10 @@ export function parseWarumIntent(
 ): WarumParsedIntent | null {
   const trimmed = query.trim();
   if (!trimmed) return null;
+
+  if (isHelpQuery(trimmed)) {
+    return { help: true };
+  }
 
   const lookbackAt = parseLookbackTime(trimmed);
   if (lookbackAt) {
@@ -407,6 +486,7 @@ export interface WarumCatalogEntry {
   haystack: string;
   topic?: WarumTopic;
   whyNotPhase?: string;
+  help?: boolean;
 }
 
 /** Keyword search against a translated catalog (like matchingSections). */
@@ -424,6 +504,11 @@ export function warumCatalog(
   t: Translate,
 ): WarumCatalogEntry[] {
   const base: WarumCatalogEntry[] = [
+    {
+      id: "hilfe",
+      haystack: `${t("warumHelpTitle")} ${t("warumSearchHelp")}`,
+      help: true,
+    },
     {
       id: "why_current",
       haystack: `${t("warumWhyCurrent")} ${t("warumSearchCurrent")}`,

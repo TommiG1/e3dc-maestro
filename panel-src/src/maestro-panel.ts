@@ -1409,6 +1409,7 @@ class MaestroPanel extends LitElement {
     lookbackAt?: string;
     threadId?: string;
     replaceLatestWhatIf?: boolean;
+    help?: boolean;
   }): Promise<void> {
     const hass = this._hass;
     if (!hass) return;
@@ -1422,15 +1423,33 @@ class MaestroPanel extends LitElement {
     let topic = opts.topic;
     let whyNotPhase = opts.whyNotPhase;
     let lookbackAt = opts.lookbackAt;
+    let help = Boolean(opts.help);
     const existing = patchId ? this._warumThread.find((x) => x.id === patchId) : undefined;
 
     if (opts.query) {
       const intent = parseWarumIntent(opts.query, lang);
       if (intent) {
+        if (intent.help) help = true;
         topic = intent.topic ?? topic;
         whyNotPhase = intent.whyNotPhase ?? whyNotPhase;
         lookbackAt = intent.lookbackAt ?? lookbackAt;
       }
+    }
+
+    if (!isPatch && help) {
+      const cardId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `warum-${Date.now()}`;
+      this._warumThread = appendWarumThread(this._warumThread, {
+        id: cardId,
+        query: opts.query ?? i18n.t("warumHelpTitle"),
+        kind: "help",
+      });
+      this._warumQuery = "";
+      this._warumError = undefined;
+      this.requestUpdate();
+      return;
     }
 
     if (existing) {

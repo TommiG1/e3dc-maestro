@@ -223,6 +223,7 @@ export interface Ctx {
     whatIfParams?: Record<string, unknown>;
     lookbackAt?: string;
     threadId?: string;
+    help?: boolean;
   }) => void;
   onWarumWhatIf: (threadId: string, overrides: Record<string, number>) => void;
   onWarumResetWhatIf: (threadId: string) => void;
