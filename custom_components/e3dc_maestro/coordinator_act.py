@@ -272,6 +272,34 @@ class CoordinatorActMixin:
                 # damit identische Folge-Ticks (gleicher Grund) nicht spammen.
                 _last_hist = self._action_history[0] if self._action_history else None
                 if _action_history_changed(_last_hist, decision.phase, decision.reason):
+                    # Compact Warum snapshot so "Warum war es um HH:MM so?" works
+                    # without replaying decide() against lost live state.
+                    _trace = getattr(decision, "trace", None)
+                    _snap: dict[str, Any] = {
+                        "winning_gate": getattr(_trace, "winning_gate", None),
+                    }
+                    if _trace is not None:
+                        # Gate names + pass/fail only — keeps the ring buffer small.
+                        _snap["path"] = [
+                            {"name": g.name, "result": g.result}
+                            for g in _trace.gates
+                        ]
+                        if _trace.winning_gate:
+                            _won = next(
+                                (g for g in _trace.gates if g.name == _trace.winning_gate),
+                                None,
+                            )
+                            if _won is not None:
+                                _snap["terms"] = [
+                                    {
+                                        "name": t.name,
+                                        "actual": t.actual,
+                                        "expected": t.expected,
+                                        "setting_key": t.setting_key,
+                                        "passed": t.passed,
+                                    }
+                                    for t in _won.terms
+                                ]
                     self._action_history.appendleft(
                         {
                             "phase": decision.phase,
@@ -280,6 +308,7 @@ class CoordinatorActMixin:
                             "charge_power_limit": _charge_limit,
                             "timestamp": _now_local.isoformat(timespec="seconds"),
                             "timestamp_display": _now_local.strftime("%d.%m.%Y %H:%M:%S"),
+                            "warum_snapshot": _snap,
                         }
                     )
 

@@ -152,6 +152,14 @@ import { debugDumpFilename, downloadJson } from "./csv";
 import { batteryControlOverlay, decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 import { helpAnchor, type HelpAction } from "./help-content";
 import { helpOverlay } from "./help-view";
+import {
+  appendWarumThread,
+  buildWhatIfParamsFromOverrides,
+  parseWarumIntent,
+  type WarumPayload,
+  type WarumThreadItem,
+  type WarumTopic,
+} from "./warum";
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
@@ -289,6 +297,14 @@ class MaestroPanel extends LitElement {
   private _pulseState: "idle" | "loading" | "ready" | "error" = "idle";
   private _debugOpen = false;
   private _debugDownloadPending = false;
+  private _warum?: WarumPayload;
+  private _warumThread: WarumThreadItem[] = [];
+  private _warumLoading = false;
+  private _warumError?: string;
+  private _warumQuery = "";
+  private _warumSuggestIndex = 0;
+  private _warumWhatIfOverrides: Record<string, Record<string, number>> = {};
+  private _warumWhatIfTimers: Record<string, number> = {};
   private _debugDownloadError?: string;
   private _picking = false;
   private _pickQuery = "";
@@ -1385,6 +1401,187 @@ class MaestroPanel extends LitElement {
     }
   }
 
+  private async _askWarum(opts: {
+    query?: string;
+    topic?: WarumTopic;
+    whyNotPhase?: string;
+    whatIfParams?: Record<string, unknown>;
+    lookbackAt?: string;
+    threadId?: string;
+    replaceLatestWhatIf?: boolean;
+  }): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+
+    const patchId = opts.threadId;
+    const isPatch = Boolean(patchId);
+    if (!isPatch && this._warumLoading) return;
+
+    const i18n = makeI18n(hass.language);
+    const lang: "de" | "en" = hass.language?.startsWith("en") ? "en" : "de";
+    let topic = opts.topic;
+    let whyNotPhase = opts.whyNotPhase;
+    let lookbackAt = opts.lookbackAt;
+    const existing = patchId ? this._warumThread.find((x) => x.id === patchId) : undefined;
+
+    if (opts.query) {
+      const intent = parseWarumIntent(opts.query, lang);
+      if (intent) {
+        topic = intent.topic ?? topic;
+        whyNotPhase = intent.whyNotPhase ?? whyNotPhase;
+        lookbackAt = intent.lookbackAt ?? lookbackAt;
+      }
+    }
+
+    if (existing) {
+      topic = topic ?? existing.topic ?? (existing.payload?.answer?.topic as WarumTopic | undefined);
+      whyNotPhase = whyNotPhase ?? existing.whyNotPhase;
+      lookbackAt = lookbackAt ?? existing.lookbackAt;
+    }
+
+    if (!topic && lookbackAt) topic = "lookback";
+    if (!isPatch && !topic && !whyNotPhase && !lookbackAt && !opts.whatIfParams) return;
+    if (isPatch && !existing) return;
+
+    let cardId = patchId;
+    if (!cardId) {
+      cardId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `warum-${Date.now()}`;
+      const pending: WarumThreadItem = {
+        id: cardId,
+        query: opts.query,
+        topic,
+        whyNotPhase,
+        lookbackAt,
+        pending: true,
+      };
+      this._warumThread = appendWarumThread(this._warumThread, pending);
+      this._warumLoading = true;
+      this._warumError = undefined;
+    } else if (existing) {
+      this._warumThread = this._warumThread.map((item) =>
+        item.id === cardId
+          ? {
+              ...item,
+              whatIfPending: Boolean(opts.whatIfParams),
+              whatIfError: false,
+              error: undefined,
+            }
+          : item,
+      );
+    }
+
+    this.requestUpdate();
+
+    try {
+      const msg: Record<string, unknown> = {
+        type: "e3dc_maestro/warum",
+        lang,
+        topic: topic ?? "current",
+      };
+      if (whyNotPhase) msg.why_not_phase = whyNotPhase;
+      if (opts.whatIfParams && Object.keys(opts.whatIfParams).length) {
+        msg.what_if_params = opts.whatIfParams;
+      }
+      if (lookbackAt) msg.lookback_at = lookbackAt;
+      const payload = await hass.callWS<WarumPayload>(msg);
+      if (!isPatch) {
+        this._warum = payload;
+      }
+      this._warumThread = this._warumThread.map((item) =>
+        item.id === cardId
+          ? {
+              ...item,
+              pending: false,
+              whatIfPending: false,
+              payload,
+            }
+          : item,
+      );
+      if (isPatch) {
+        this._warum = this._warumThread[0]?.payload ?? payload;
+      }
+    } catch {
+      const err = i18n.t("warumLoadFailed");
+      if (!isPatch) {
+        this._warumError = err;
+      }
+      this._warumThread = this._warumThread.map((item) =>
+        item.id === cardId
+          ? {
+              ...item,
+              pending: false,
+              whatIfPending: false,
+              whatIfError: isPatch,
+              error: isPatch ? item.error : err,
+            }
+          : item,
+      );
+    } finally {
+      if (!isPatch) {
+        this._warumLoading = false;
+      }
+      this._warum =
+        this._warumThread[0]?.payload ?? this._warumThread.find((x) => x.payload)?.payload;
+      this.requestUpdate();
+    }
+  }
+
+  private _scheduleWarumWhatIf(threadId: string, overrides: Record<string, number>): void {
+    this._warumWhatIfOverrides = { ...this._warumWhatIfOverrides, [threadId]: overrides };
+    const prev = this._warumWhatIfTimers[threadId];
+    if (prev) window.clearTimeout(prev);
+    this._warumWhatIfTimers[threadId] = window.setTimeout(() => {
+      const item = this._warumThread.find((x) => x.id === threadId);
+      const tunables = item?.payload?.answer?.tunables ?? [];
+      const params = buildWhatIfParamsFromOverrides(tunables, overrides);
+      void this._askWarum({
+        threadId,
+        topic: item?.topic ?? (item?.payload?.answer?.topic as WarumTopic | undefined),
+        whyNotPhase: item?.whyNotPhase,
+        lookbackAt: item?.lookbackAt,
+        whatIfParams: params,
+        replaceLatestWhatIf: true,
+      });
+    }, 400);
+    this.requestUpdate();
+  }
+
+  private _resetWarumWhatIf(threadId: string): void {
+    const t = this._warumWhatIfTimers[threadId];
+    if (t) window.clearTimeout(t);
+    const overrides = { ...this._warumWhatIfOverrides };
+    delete overrides[threadId];
+    this._warumWhatIfOverrides = overrides;
+    const item = this._warumThread.find((x) => x.id === threadId);
+    if (!item) {
+      this.requestUpdate();
+      return;
+    }
+    void this._askWarum({
+      threadId,
+      topic: item.topic ?? (item.payload?.answer?.topic as WarumTopic | undefined),
+      whyNotPhase: item.whyNotPhase,
+      lookbackAt: item.lookbackAt,
+    });
+  }
+
+  private _dismissWarumThread(id: string): void {
+    const t = this._warumWhatIfTimers[id];
+    if (t) window.clearTimeout(t);
+    const timers = { ...this._warumWhatIfTimers };
+    delete timers[id];
+    this._warumWhatIfTimers = timers;
+    const overrides = { ...this._warumWhatIfOverrides };
+    delete overrides[id];
+    this._warumWhatIfOverrides = overrides;
+    this._warumThread = this._warumThread.filter((item) => item.id !== id);
+    this._warum = this._warumThread[0]?.payload ?? undefined;
+    this.requestUpdate();
+  }
+
   private _syncPauseClock(until: number | undefined): void {
     const running = until !== undefined && until * 1000 > Date.now();
     if (running && this._pauseClock === undefined) {
@@ -1970,6 +2167,25 @@ class MaestroPanel extends LitElement {
       onThemePreview: (theme) => this._previewTheme(theme),
       themePreviewing: this._themePreview !== undefined && this._themePreview !== this._theme,
       onShowLadder: () => this._showLadder(),
+      warum: this._warum,
+      warumThread: this._warumThread,
+      warumLoading: this._warumLoading,
+      warumError: this._warumError,
+      warumQuery: this._warumQuery,
+      warumSuggestIndex: this._warumSuggestIndex,
+      warumWhatIfOverrides: this._warumWhatIfOverrides,
+      onWarumQuery: (q) => {
+        this._warumQuery = q;
+        this.requestUpdate();
+      },
+      onWarumSuggestIndex: (idx) => {
+        this._warumSuggestIndex = idx;
+        this.requestUpdate();
+      },
+      onWarumDismiss: (id) => this._dismissWarumThread(id),
+      onWarumAsk: (opts) => void this._askWarum(opts),
+      onWarumWhatIf: (threadId, overrides) => this._scheduleWarumWhatIf(threadId, overrides),
+      onWarumResetWhatIf: (threadId) => this._resetWarumWhatIf(threadId),
       flowStyle: this._flowStyle,
       onFlowStyle: (style) => this._setFlowStyle(style),
       density: this._lookPrefs.density,

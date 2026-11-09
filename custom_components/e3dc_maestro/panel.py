@@ -52,6 +52,7 @@ _WS_FLAG = f"{DOMAIN}_panel_ws_registered"
 WS_PANEL_PAUSE = f"{DOMAIN}/pause"
 WS_PANEL_ENTITIES = f"{DOMAIN}/panel_entities"
 WS_DEBUG_DUMP = f"{DOMAIN}/debug_dump"
+WS_WARUM = f"{DOMAIN}/warum"
 WS_NEWS_FEED = f"{DOMAIN}/news_feed"
 WS_ENERGY_PREVIEW = f"{DOMAIN}/energy_dashboard/preview"
 WS_ENERGY_APPLY = f"{DOMAIN}/energy_dashboard/apply"
@@ -623,6 +624,83 @@ def _ws_debug_dump(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) ->
     connection.send_result(msg["id"], build_support_dump(hass, entry, coordinator))
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_WARUM,
+        vol.Optional("why_not_phase"): vol.Any(str, None),
+        vol.Optional("what_if_params"): vol.Any(dict, None),
+        vol.Optional("what_if_state"): vol.Any(dict, None),
+        vol.Optional("lookback_at"): vol.Any(str, None),
+        vol.Optional("topic"): vol.In(
+            [
+                "current", "no_discharge", "no_charge", "no_grid_charge",
+                "feed_in", "price_plan", "wallbox", "heat_pump", "lookback",
+            ]
+        ),
+        vol.Optional("lang", default="de"): vol.In(["de", "en"]),
+    }
+)
+@callback
+def _ws_warum(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
+    """Decision path, why-not-phase-X, and what-if for the Warum panel."""
+    from homeassistant.util import dt as dt_util
+
+    from .explanation import decision_explanation
+    from .warum import (
+        build_warum_payload,
+        decide_kwargs_from_coordinator,
+        price_plan_info_from_snapshot,
+    )
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    entry = next((item for item in entries if item.state == ConfigEntryState.LOADED), None)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Maestro is not loaded")
+        return
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_loaded", "Maestro is not loaded")
+        return
+
+    data = getattr(coordinator, "data", None) or {}
+    state = data.get("state") if isinstance(data, dict) else None
+    params = None
+    try:
+        params = coordinator._active_params  # noqa: SLF001 — panel mirror of control loop
+    except Exception:  # noqa: BLE001
+        params = getattr(coordinator, "_params", None)
+
+    now = dt_util.now()
+    history = list(getattr(coordinator, "_action_history", []) or [])
+    hp_explanation = getattr(coordinator, "_hp_last_explanation", None)
+    hp_history = list(getattr(coordinator, "_hp_history", []) or [])
+    price_plan_info = price_plan_info_from_snapshot(
+        getattr(coordinator, "price_plan", None),
+        params,
+    )
+
+    short = decision_explanation(coordinator)
+    payload = build_warum_payload(
+        decision=getattr(coordinator, "last_decision", None),
+        state=state,
+        params=params,
+        now=now,
+        decide_kwargs=decide_kwargs_from_coordinator(coordinator),
+        short_explanation=short,
+        why_not_phase=msg.get("why_not_phase"),
+        what_if_params=msg.get("what_if_params"),
+        what_if_state=msg.get("what_if_state"),
+        hp_explanation=hp_explanation if isinstance(hp_explanation, str) else None,
+        hp_history=hp_history,
+        price_plan_info=price_plan_info,
+        lookback_at=msg.get("lookback_at"),
+        action_history=history,
+        topic=msg.get("topic"),
+        lang=msg.get("lang", "de"),
+    )
+    connection.send_result(msg["id"], payload)
+
+
 @websocket_api.websocket_command({vol.Required("type"): WS_NEWS_FEED})
 @websocket_api.async_response
 async def _ws_news_feed(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
@@ -795,6 +873,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         websocket_api.async_register_command(hass, _ws_panel_options_set)
         websocket_api.async_register_command(hass, _ws_panel_pause)
         websocket_api.async_register_command(hass, _ws_debug_dump)
+        websocket_api.async_register_command(hass, _ws_warum)
         websocket_api.async_register_command(hass, _ws_news_feed)
         websocket_api.async_register_command(hass, _ws_energy_preview)
         websocket_api.async_register_command(hass, _ws_energy_apply)

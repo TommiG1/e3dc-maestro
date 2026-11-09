@@ -132,3 +132,14 @@ def test_explanation_prefers_hp_when_space_is_tight() -> None:
     assert text.endswith(hp) or text == hp
     assert "Wärmepumpe" in text
     assert len(text) <= 255
+
+
+def test_limit_summary_free_vs_blocked():
+    from custom_components.e3dc_maestro.control_engine import MaestroDecision
+    from custom_components.e3dc_maestro.explanation import limit_summary
+
+    free = MaestroDecision(phase="idle", reason="x")
+    assert "Keine Limits" in limit_summary(free)
+    blocked = MaestroDecision(phase="idle", reason="x", charge_power_limit=0.0)
+    s = limit_summary(blocked)
+    assert "Laden auf 0 W gesperrt" in s and "Entladen frei" in s

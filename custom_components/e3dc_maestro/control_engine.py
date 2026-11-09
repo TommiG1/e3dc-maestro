@@ -22,6 +22,22 @@ from .control_tariff import (  # noqa: F401
     current_tariff_class,
     tariff_schedule_from_params,
 )
+from .gate_trace import (
+    GateTrace,
+    eq,
+    eval_gate,
+    ge,
+    gt,
+    is_false,
+    is_true,
+    le,
+    lt,
+    not_ge,
+    not_gt,
+    not_le,
+    not_lt,
+    term,
+)
 from .grid_charge_need import grid_charge_jit_due, low_slot_hours_left
 
 _LOGGER = logging.getLogger(__name__)
@@ -302,6 +318,9 @@ class MaestroDecision:
     # Ganztags-Flags ``low_yield_day_active``, damit der Anlauf-Bypass nur im
     # tatsächlich aktiven Prioritäts-Zweig gilt.
     battery_priority: bool = False
+    # Gate-Protokoll (Warum-Feature): welche Gates geprüft wurden und welches
+    # gewonnen hat. None, solange der Abschnitt noch nicht verdrahtet ist.
+    trace: GateTrace | None = None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -883,7 +902,8 @@ def _curtailment_floor_w(state: MaestroState, params: MaestroParams) -> float:
 
 
 def _corridor_pause_decision(
-    reason: str, *, block_charge: bool, params: MaestroParams, target: float
+    reason: str, *, block_charge: bool, params: MaestroParams, target: float,
+    trace: GateTrace | None = None,
 ) -> MaestroDecision:
     """Korridor-Pause (§7b/§7e).
 
@@ -900,6 +920,7 @@ def _corridor_pause_decision(
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=0.0,
             target_soc=target,
+            trace=trace,
         )
     return MaestroDecision(
         phase=PHASE_IDLE,
@@ -907,6 +928,7 @@ def _corridor_pause_decision(
         power_mode=POWER_MODE_NORMAL,
         charge_power_limit=params.max_charge_power,
         target_soc=target,
+        trace=trace,
     )
 
 
@@ -925,6 +947,7 @@ def _apply_house_ceiling(
     *,
     tariff_class: str | None = None,
     use_instant_surplus: bool = False,
+    trace: GateTrace | None = None,
 ) -> float:
     """Cap charge power to available PV surplus to avoid drawing from grid.
 
@@ -944,7 +967,14 @@ def _apply_house_ceiling(
     if tariff_class == TARIFF_LOW and tariff_mode == "dynamic":
         return charge_power
     surplus = _pv_surplus_w(state, instant=use_instant_surplus)
-    return min(charge_power, surplus) if surplus > 0 else 0.0
+    capped = min(charge_power, surplus) if surplus > 0 else 0.0
+    if trace is not None and capped != charge_power:
+        # Modifier, not a phase winner: append without touching ``winning_gate``.
+        trace.gates.append(eval_gate(
+            "house_ceiling.cap",
+            term("pv_surplus_w", surplus, op=lt, expected=charge_power),
+        ))
+    return capped
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1021,6 +1051,7 @@ def _morning_discharge_decision(
     now: datetime,
     target: float,
     current_price: float | None,
+    trace: GateTrace | None = None,
 ) -> "MaestroDecision | None":
     """Return a PHASE_MORNING_DISCHARGE decision if conditions are met, else None.
 
@@ -1044,6 +1075,15 @@ def _morning_discharge_decision(
 
     mode = params.morning_discharge_mode
     if mode == MORNING_DISCHARGE_OFF:
+        # Failed gate only: mode is off, so this section did not win.
+        if trace is not None:
+            trace.gates.append(eval_gate(
+                "6.5.morning_discharge",
+                term(
+                    "morning_discharge_mode", mode, op=eq,
+                    expected=MORNING_DISCHARGE_ACTIVE_HOUSE,
+                ),
+            ))
         return None
 
     # Tibber-Auto-Override: upgrade or downgrade mode based on price
@@ -1053,29 +1093,40 @@ def _morning_discharge_decision(
         elif current_price <= params.cheap_threshold and mode == MORNING_DISCHARGE_ACTIVE_GRID:
             mode = MORNING_DISCHARGE_ACTIVE_HOUSE  # downgrade if buying is cheap
 
-    # Condition 2: SoC high enough to warrant unloading
-    if state.soc < params.morning_unload_start_soc:
-        return None
-    # Condition 3: Still above the unload target floor
-    if state.soc <= params.morning_unload_soc:
-        return None
-
     # Condition 4: Time window – must be before (charge_end_h - offset)
     charge_end_h = seasonal_charge_end_hour(now, params)
     charge_begin_h = charge_end_h - params.pre_discharge_offset_h
     hour_now = now.hour + now.minute / 60
-    if hour_now >= charge_begin_h:
-        return None
 
-    # Condition 5: PV forecast gating
+    # Conditions 2–5 as one gate (all must pass; pure inputs, order irrelevant):
+    # SoC high enough to unload, still above the unload floor, before the
+    # charge-begin time, and the PV forecast covers the refill (if gated).
+    _md_terms = [
+        term(
+            "soc", state.soc, op=not_lt, expected=params.morning_unload_start_soc,
+            setting_key="morning_unload_start_soc",
+        ),
+        term(
+            "soc_above_floor", state.soc, op=not_le, expected=params.morning_unload_soc,
+            setting_key="morning_unload_soc",
+        ),
+        term("hour_now", hour_now, op=not_ge, expected=charge_begin_h),
+    ]
     if params.pv_forecast_enabled and state.pv_forecast_remaining_kwh is not None:
         needed_kwh = (
             (params.charge_target - params.morning_unload_soc) / 100.0
             * params.battery_capacity_kwh
         )
         min_forecast = needed_kwh * params.pre_discharge_safety_factor
-        if state.pv_forecast_remaining_kwh < min_forecast:
-            return None  # Not enough sun expected – skip pre-discharge
+        _md_terms.append(term(
+            "pv_forecast_remaining_kwh", state.pv_forecast_remaining_kwh,
+            op=not_lt, expected=min_forecast,
+        ))
+    gate = eval_gate("6.5.morning_discharge", *_md_terms)
+    if trace is not None:
+        trace.record(gate)
+    if not gate.result:
+        return None
 
     # Calculate discharge rate
     delta_soc = state.soc - params.morning_unload_soc
@@ -1098,6 +1149,7 @@ def _morning_discharge_decision(
             power_mode=POWER_MODE_IDLE,
             charge_power_limit=0.0,
             target_soc=target,
+            trace=trace,
         )
     else:
         # active_house or active_grid: actively discharge
@@ -1111,6 +1163,7 @@ def _morning_discharge_decision(
             charge_power_limit=None,
             discharge_power_limit=rate_w,
             target_soc=target,
+            trace=trace,
         )
 
 
@@ -1171,8 +1224,22 @@ def _apply_wallbox_discharge_guard(
     if decision.discharge_power_limit is not None and decision.discharge_power_limit >= open_w:
         return decision
 
+    # Modifier, not a phase winner: append the gate without touching
+    # ``winning_gate`` (the phase gate that fired stays the winner).
+    guard_trace = decision.trace if decision.trace is not None else GateTrace()
+    guard_trace.gates.append(eval_gate(
+        "post.wallbox_discharge_guard",
+        term("wallbox_discharge_guard_enabled", params.wallbox_discharge_guard_enabled, op=is_true),
+        term(
+            "wallbox_power", state.wallbox_power, op=gt,
+            expected=params.wallbox_discharge_guard_threshold_w,
+            setting_key="wallbox_discharge_guard_threshold_w",
+        ),
+        term("phase_exempt", decision.phase in _exempt, op=is_false),
+    ))
     return replace(
         decision,
+        trace=guard_trace,
         discharge_power_limit=open_w,
         reason=(
             decision.reason
@@ -1315,6 +1382,7 @@ def _decide_core(
         POWER_MODE_NORMAL,
     )
 
+    trace = GateTrace()
     target = target_soc_for_time(now, params)
 
     # Resolve active tariff class once (Phase C).
@@ -1411,7 +1479,9 @@ def _decide_core(
     _spread_on = params.spreading_enabled and not _battery_priority
 
     # ── 1. Master switch off ────────────────────────────────────────────────
-    if not regelung_aktiv:
+    gate = eval_gate("1.off", term("regelung_aktiv", regelung_aktiv, op=is_false))
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_OFF,
             reason="Regelung deaktiviert",
@@ -1419,19 +1489,30 @@ def _decide_core(
             discharge_power_limit=None,
             power_mode=POWER_MODE_NORMAL,
             target_soc=target,
+            trace=trace,
         )
 
     # ── 1.5 Manuelle Entladung (Dashboard-Schalter) ─────────────────────────
     # Höchste Priorität nach dem Master-Switch: erzwingt aktive Entladung des
     # Akkus bis zur Notstromreserve / Ladeschwelle.
-    if force_discharge:
+    gate = eval_gate(
+        "1.5.force_discharge",
+        term("force_discharge", force_discharge, op=is_true),
+    )
+    trace.record(gate)
+    if gate.result:
         floor_soc = float(params.charge_threshold)
         manual_reserve = manual_reserve_soc(params)
         if manual_reserve is not None:
             floor_soc = max(floor_soc, manual_reserve)
         elif params.seasonal_reserve_enabled:
             floor_soc = max(floor_soc, seasonal_reserve_soc(now, params))
-        if state.soc > floor_soc:
+        gate = eval_gate(
+            "1.5.force_discharge.active",
+            term("soc", state.soc, op=gt, expected=floor_soc, setting_key="charge_threshold"),
+        )
+        trace.record(gate)
+        if gate.result:
             rate_w = max(100.0, min(params.force_discharge_power_w, params.max_charge_power))
             return MaestroDecision(
                 phase=PHASE_FORCE_DISCHARGE,
@@ -1443,7 +1524,13 @@ def _decide_core(
                 charge_power_limit=None,
                 discharge_power_limit=rate_w,
                 target_soc=target,
+                trace=trace,
             )
+        gate = eval_gate(
+            "1.5.force_discharge.pause",
+            term("soc", state.soc, op=not_gt, expected=floor_soc, setting_key="charge_threshold"),
+        )
+        trace.record(gate)
         return MaestroDecision(
             phase=PHASE_FORCE_DISCHARGE,
             reason=(
@@ -1452,12 +1539,15 @@ def _decide_core(
             ),
             power_mode=POWER_MODE_IDLE,
             target_soc=target,
+            trace=trace,
         )
 
     # ── 1.6 Manuelle Entladesperre (Dashboard-Schalter) ─────────────────────
     # NORMAL + Entlade-Cap: PV darf laden, Entladung nur bis zur eingestellten
     # Leistung (0 W = voll sperren). Gegenstück zur erzwungenen Entladung.
-    if discharge_lock:
+    gate = eval_gate("1.6.discharge_lock", term("discharge_lock", discharge_lock, op=is_true))
+    trace.record(gate)
+    if gate.result:
         limit_w = max(0.0, min(float(params.discharge_lock_power_w), params.max_charge_power))
         return MaestroDecision(
             phase=PHASE_DISCHARGE_LOCK,
@@ -1470,12 +1560,21 @@ def _decide_core(
             charge_power_limit=None,
             discharge_power_limit=limit_w,
             target_soc=target,
+            trace=trace,
         )
 
     feed_in_limit = _feed_in_limit_w(params)
 
     # ── 2. Emergency charge ─────────────────────────────────────────────────
-    if state.soc < params.charge_threshold:
+    gate = eval_gate(
+        "2.emergency",
+        term(
+            "soc", state.soc, op=lt, expected=params.charge_threshold,
+            setting_key="charge_threshold",
+        ),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_EMERGENCY,
             reason=f"SoC {state.soc:.0f}% unter Ladeschwelle {params.charge_threshold:.0f}%",
@@ -1483,6 +1582,7 @@ def _decide_core(
             charge_power_limit=params.max_charge_power,
             target_soc=target,
             target_charge_power=params.max_charge_power,
+            trace=trace,
         )
 
     # ── 3. Feed-in limit ────────────────────────────────────────────────────
@@ -1497,13 +1597,31 @@ def _decide_core(
     # solange die übrige Kaskade ihn nicht selbst aufnimmt.
     _feed_in_excess = state.grid_power - feed_in_limit
     _feed_in_needed = state.battery_power + _feed_in_excess
-    _feed_in_active = not skip_feed_in and _feed_in_excess >= FEED_IN_TRIGGER_EXCESS_W
-    if (
-        not skip_feed_in
-        and not _feed_in_active
-        and previous_phase == PHASE_FEED_IN_LIMIT
-        and _feed_in_needed > FEED_IN_RELEASE_EXCESS_W
-    ):
+    gate = eval_gate(
+        "3.feed_in.trigger",
+        term("skip_feed_in", skip_feed_in, op=is_false),
+        term(
+            "feed_in_excess_w", _feed_in_excess, op=ge,
+            expected=FEED_IN_TRIGGER_EXCESS_W,
+        ),
+    )
+    trace.record(gate)
+    _feed_in_active = gate.result
+    gate = eval_gate(
+        "3.feed_in.hold",
+        term("skip_feed_in", skip_feed_in, op=is_false),
+        term("feed_in_active", _feed_in_active, op=is_false),
+        term("previous_phase", previous_phase, op=eq, expected=PHASE_FEED_IN_LIMIT),
+        term(
+            "feed_in_needed_w", _feed_in_needed, op=gt,
+            expected=FEED_IN_RELEASE_EXCESS_W,
+        ),
+    )
+    if not _feed_in_active:
+        trace.record(gate)
+    if gate.result:
+        # The recursive call builds its own trace from the remaining ladder; if it
+        # absorbs the excess it is returned as-is (with that trace).
         fallback = _decide_core(
             state,
             params,
@@ -1528,13 +1646,23 @@ def _decide_core(
             absorbs = fallback.charge_power_limit >= _feed_in_needed
         if absorbs:
             return fallback
+        # Modifier, not a phase winner: append without touching ``winning_gate``.
+        trace.gates.append(eval_gate(
+            "3.feed_in.hold.not_absorbed",
+            term("fallback_absorbs", absorbs, op=is_false),
+        ))
         _feed_in_active = True
     if _feed_in_active:
         # Akku-voll-Schutz: bei (nahezu) vollem Akku kann eine zusätzliche
         # Ladeanforderung den Überschuss nicht aufnehmen → Wechselrichter
         # regelt PV von selbst ab. Statt einen wirkungslosen Ladebefehl zu
         # senden, geben wir IDLE zurück und lassen die Limits frei.
-        if state.soc >= BATTERY_FULL_SOC_CEILING:
+        gate = eval_gate(
+            "3.feed_in.battery_full",
+            term("soc", state.soc, op=ge, expected=BATTERY_FULL_SOC_CEILING),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_IDLE,
                 reason=(
@@ -1545,9 +1673,15 @@ def _decide_core(
                 power_mode=POWER_MODE_NORMAL,
                 charge_power_limit=None,
                 target_soc=target,
+                trace=trace,
             )
         excess = _feed_in_excess
         boost = min(_feed_in_needed, params.max_charge_power)
+        if trace.winning_gate not in ("3.feed_in.trigger", "3.feed_in.hold"):
+            trace.record(eval_gate(
+                "3.feed_in.hold",
+                term("feed_in_active", _feed_in_active, op=is_true),
+            ))
         return MaestroDecision(
             phase=PHASE_FEED_IN_LIMIT,
             reason=(
@@ -1559,6 +1693,7 @@ def _decide_core(
             target_soc=target,
             target_charge_power=boost,
             feed_in_excess_w=excess,
+            trace=trace,
         )
 
     # ── 4. Seasonal reserve protection (B1) ───────────────────────────────────────────────
@@ -1574,19 +1709,30 @@ def _decide_core(
     # Ohne anstehende Netzladung (Ziel 0 oder erreicht, Grenze erschöpft)
     # bleibt die Reserve geschützt.
     manual_reserve = manual_reserve_soc(params)
-    if manual_reserve is not None and state.soc < manual_reserve:
-        return MaestroDecision(
-            phase=PHASE_RESERVE_PROTECTION,
-            reason=(
-                f"Notstromreserve {manual_reserve:.0f}% (fest) > SoC {state.soc:.0f}% – "
-                f"Netzladung bis zur Reserve, {params.max_charge_power:.0f} W"
+    if manual_reserve is not None:
+        gate = eval_gate(
+            "4.reserve.manual_charge",
+            term("manual_reserve_set", True, op=is_true),
+            term(
+                "soc", state.soc, op=lt, expected=manual_reserve,
+                setting_key="fixed_reserve_soc",
             ),
-            power_mode=POWER_MODE_CHARGE,
-            charge_power_limit=params.max_charge_power,
-            discharge_power_limit=0.0,
-            target_soc=manual_reserve,
-            target_charge_power=params.max_charge_power,
         )
+        trace.record(gate)
+        if gate.result:
+            return MaestroDecision(
+                phase=PHASE_RESERVE_PROTECTION,
+                reason=(
+                    f"Notstromreserve {manual_reserve:.0f}% (fest) > SoC {state.soc:.0f}% – "
+                    f"Netzladung bis zur Reserve, {params.max_charge_power:.0f} W"
+                ),
+                power_mode=POWER_MODE_CHARGE,
+                charge_power_limit=params.max_charge_power,
+                discharge_power_limit=0.0,
+                target_soc=manual_reserve,
+                target_charge_power=params.max_charge_power,
+                trace=trace,
+            )
     if manual_reserve is not None or params.seasonal_reserve_enabled:
         if manual_reserve is not None:
             reserve_soc = manual_reserve
@@ -1595,7 +1741,14 @@ def _decide_core(
             adaptive_pct = adaptive_emergency_reserve_soc(state, params)
             reserve_soc = adaptive_pct if adaptive_pct is not None else seasonal_reserve_soc(now, params)
             source = "verbrauchsadaptiv" if adaptive_pct is not None else "saisonal"
-        if state.soc <= reserve_soc and not _plan_charge and not _grid_charge_pending:
+        gate = eval_gate(
+            "4.reserve.protection",
+            term("soc", state.soc, op=le, expected=reserve_soc),
+            term("plan_charge", _plan_charge, op=is_false),
+            term("grid_charge_pending", _grid_charge_pending, op=is_false),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_RESERVE_PROTECTION,
                 reason=(
@@ -1606,13 +1759,32 @@ def _decide_core(
                 charge_power_limit=None,
                 discharge_power_limit=0.0,
                 target_soc=target,
+                trace=trace,
             )
 
     # ── 5. EVCC Now-mode pause (D1) ───────────────────────────────────────────────────────
-    if params.evcc_enabled and state.evcc_charging and state.evcc_mode == params.evcc_now_value:
+    gate = eval_gate(
+        "5.evcc_pause",
+        term("evcc_enabled", params.evcc_enabled, op=is_true),
+        term("evcc_charging", state.evcc_charging, op=is_true),
+        term("evcc_mode", state.evcc_mode, op=eq, expected=params.evcc_now_value),
+    )
+    trace.record(gate)
+    if gate.result:
         limit_w = params.evcc_discharge_limit_w
         if limit_w <= 0:
             # Entladung vollständig sperren
+            gate = eval_gate(
+                "5.evcc_pause.lock",
+                term(
+                    "evcc_discharge_limit_w",
+                    limit_w,
+                    op=le,
+                    expected=0,
+                    setting_key="evcc_discharge_limit_w",
+                ),
+            )
+            trace.record(gate)
             return MaestroDecision(
                 phase=PHASE_EVCC_PAUSE,
                 reason=f"EVCC lädt im Now-Modus ({params.evcc_now_value!r}) – Entladung gesperrt",
@@ -1620,9 +1792,21 @@ def _decide_core(
                 charge_power_limit=None,
                 discharge_power_limit=0.0,
                 target_soc=target,
+                trace=trace,
             )
         else:
             # Entladung auf Grundlastwert begrenzen
+            gate = eval_gate(
+                "5.evcc_pause.limit",
+                term(
+                    "evcc_discharge_limit_w",
+                    limit_w,
+                    op=not_le,
+                    expected=0,
+                    setting_key="evcc_discharge_limit_w",
+                ),
+            )
+            trace.record(gate)
             return MaestroDecision(
                 phase=PHASE_EVCC_PAUSE,
                 reason=f"EVCC lädt im Now-Modus ({params.evcc_now_value!r}) – Entladung auf {limit_w:.0f} W begrenzt",
@@ -1630,12 +1814,18 @@ def _decide_core(
                 charge_power_limit=None,
                 discharge_power_limit=limit_w,
                 target_soc=target,
+                trace=trace,
             )
 
     # ── 5.5 Preisplan (aktiv) ────────────────────────────────────────────────────────────
     # Netzladung in günstigen Slots bzw. Entladung sperren, um Akku-Energie für
     # teurere Slots aufzusparen. Notfall/Einspeisebegrenzung/EVCC stehen davor.
-    if _plan_charge:
+    gate = eval_gate(
+        "5.5.price_plan_charge",
+        term("plan_charge", _plan_charge, op=is_true),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_GRID_CHARGE,
             reason=(
@@ -1646,8 +1836,14 @@ def _decide_core(
             charge_power_limit=params.max_charge_power,
             target_soc=price_plan.target_soc,
             target_charge_power=params.max_charge_power,
+            trace=trace,
         )
-    if _plan_hold:
+    gate = eval_gate(
+        "5.5.price_plan_hold",
+        term("plan_hold", _plan_hold, op=is_true),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_GRID_HOLD,
             reason=(
@@ -1658,6 +1854,7 @@ def _decide_core(
             charge_power_limit=1 if _hard_cap_reached else None,
             discharge_power_limit=0.0,
             target_soc=target,
+            trace=trace,
         )
 
     # ── 6. HT protection ─────────────────────────────────────────────────────────────────────
@@ -1692,7 +1889,13 @@ def _decide_core(
         # POWER_MODE_IDLE nicht verwenden: RSCP-Modus "1" sperrt auch die Ladung
         # (siehe §4 Notstromreserve). Discussion #37: PV-Überschuss unter der
         # HT-Reserve muss weiter in den Akku dürfen.
-        if state.soc <= ht_min:
+        gate = eval_gate(
+            "6.ht_protection",
+            term("tariff_class", tariff_class, op=eq, expected=TARIFF_HIGH),
+            term("soc", state.soc, op=le, expected=ht_min),
+        )
+        trace.record(gate)
+        if gate.result:
             slot_start = active_slot.start_h if active_slot else 0.0
             slot_end = active_slot.end_h if active_slot else 24.0
             return MaestroDecision(
@@ -1706,6 +1909,7 @@ def _decide_core(
                 charge_power_limit=None,
                 discharge_power_limit=0.0,
                 target_soc=target,
+                trace=trace,
             )
     # ── 6.4 Low-Slot-Halten: Netzlade-Ziel erreicht → Entladung sperren ───────────────
     # Ohne diese Sperre entlädt das Haus den Akku unter das Ziel, die aktive
@@ -1713,14 +1917,26 @@ def _decide_core(
     # im Minutentakt (Issue #15). Solange der günstige Slot läuft und das Ziel
     # erreicht ist, versorgt das Netz das Haus; der Akku bleibt auf Ziel-SoC.
     # PV-Überschuss darf weiter laden, außer der harte Max-SoC-Deckel greift.
-    if (
-        params.low_slot_grid_charge_enabled
-        and params.low_slot_hold_discharge
-        and tariff_class == TARIFF_LOW
-        and not curtailment_guard_active
-    ):
+    gate = eval_gate(
+        "6.4.low_slot_hold.entry",
+        term(
+            "low_slot_grid_charge_enabled", params.low_slot_grid_charge_enabled,
+            op=is_true,
+        ),
+        term("low_slot_hold_discharge", params.low_slot_hold_discharge, op=is_true),
+        term("tariff_class", tariff_class, op=eq, expected=TARIFF_LOW),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         _hold_target = _gc_target
-        if _hold_target > 0 and state.soc >= _hold_target:
+        gate = eval_gate(
+            "6.4.low_slot_hold",
+            term("hold_target", _hold_target, op=gt, expected=0),
+            term("soc", state.soc, op=ge, expected=_hold_target),
+        )
+        trace.record(gate)
+        if gate.result:
             _hold_cap = (
                 1
                 if params.hard_soc_limit_enabled and state.soc >= params.hard_soc_limit
@@ -1737,11 +1953,12 @@ def _decide_core(
                 charge_power_limit=_hold_cap,
                 discharge_power_limit=0.0,
                 target_soc=_hold_target,
+                trace=trace,
             )
 
     # ── 6.5 Morning Pre-Discharge ──────────────────────────────────────────────────────
     _md_decision = _morning_discharge_decision(
-        state, params, now, target, current_price
+        state, params, now, target, current_price, trace=trace
     )
     if _md_decision is not None:
         return _md_decision
@@ -1765,14 +1982,35 @@ def _decide_core(
     # remaining forecast cannot fill the battery even on non-latched days.
     # (``_low_yield or _forecast_insufficient`` == ``_battery_priority or _low_yield``.)
     _morning_cap_yields = _low_yield or _forecast_insufficient
-    if (
-        params.morning_cap_enabled
-        and not curtailment_guard_active
-        and not _morning_cap_yields
-        and not _grid_charge_pending
-    ):
+    gate = eval_gate(
+        "6.7.morning_cap",
+        term("morning_cap_enabled", params.morning_cap_enabled, op=is_true),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term("morning_cap_yields", _morning_cap_yields, op=is_false),
+        term("grid_charge_pending", _grid_charge_pending, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         hour_now = now.hour + now.minute / 60
-        if hour_now < params.morning_cap_until_h and state.soc >= params.morning_cap_soc:
+        gate = eval_gate(
+            "6.7.morning_cap.active",
+            term(
+                "hour_now",
+                hour_now,
+                op=lt,
+                expected=params.morning_cap_until_h,
+                setting_key="morning_cap_until_h",
+            ),
+            term(
+                "soc",
+                state.soc,
+                op=ge,
+                expected=params.morning_cap_soc,
+                setting_key="morning_cap_soc",
+            ),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_MORNING_CAP,
                 reason=(
@@ -1783,21 +2021,43 @@ def _decide_core(
                 power_mode=POWER_MODE_NORMAL,
                 charge_power_limit=1,  # 1 W = effektiv keine Ladung, Entladen frei
                 target_soc=target,
+                trace=trace,
             )
 
     # ── 6.75 Astro-Wait: Ladestart-Sperre bis Sonnenaufgang + Offset ────────────────
     # NORMAL + 1 W: blockt Laden, lässt Entladung zur Hausabdeckung zu (sonst würde
     # der Akku nachts unnötig auf 100 % bleiben oder gar Netzbezug verursachen).
-    if (
-        params.astro_enabled
-        and state.soc < params.charge_target
-        and not _grid_charge_pending
-    ):
+    gate = eval_gate(
+        "6.75.astro_wait",
+        term("astro_enabled", params.astro_enabled, op=is_true),
+        term(
+            "soc",
+            state.soc,
+            op=lt,
+            expected=params.charge_target,
+            setting_key="charge_target",
+        ),
+        term("grid_charge_pending", _grid_charge_pending, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         sunrise_h, _ = astro_sunrise_sunset(now, params)
         charge_start_gate_h = sunrise_h + params.charge_start_sunrise_offset_h
         hour_now = now.hour + now.minute / 60
         # delay_min_soc: Floor unterhalb dem astro_wait nicht blockieren darf.
-        if hour_now < charge_start_gate_h and state.soc >= params.delay_min_soc:
+        gate = eval_gate(
+            "6.75.astro_wait.active",
+            term("hour_now", hour_now, op=lt, expected=charge_start_gate_h),
+            term(
+                "soc",
+                state.soc,
+                op=ge,
+                expected=params.delay_min_soc,
+                setting_key="delay_min_soc",
+            ),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_ASTRO_WAIT,
                 reason=(
@@ -1808,17 +2068,27 @@ def _decide_core(
                 power_mode=POWER_MODE_NORMAL,
                 charge_power_limit=1,  # 1 W = effektiv keine Ladung, Entladen frei
                 target_soc=target,
+                trace=trace,
             )
 
     # ── 6.9 Hard SoC Limit (G0): aktiver Lade-Stop oberhalb des Deckels ─────────────
     # Sobald SoC ≥ hard_soc_limit greift ein 1 W-Lade-Limit (Entladung bleibt
     # frei). Der Curtailment Guard ist absichtlich ausgenommen, damit sonst
     # abgeregelte PV-Leistung weiter in den Akku gepuffert werden kann.
-    if (
-        params.hard_soc_limit_enabled
-        and not curtailment_guard_active
-        and state.soc >= params.hard_soc_limit
-    ):
+    gate = eval_gate(
+        "6.9.hard_soc_limit",
+        term("hard_soc_limit_enabled", params.hard_soc_limit_enabled, op=is_true),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term(
+            "soc",
+            state.soc,
+            op=ge,
+            expected=params.hard_soc_limit,
+            setting_key="hard_soc_limit",
+        ),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_HARD_SOC_LIMIT,
             reason=(
@@ -1829,18 +2099,28 @@ def _decide_core(
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=1,  # 1 W = effektiv keine Ladung
             target_soc=target,
+            trace=trace,
         )
 
     # ── 6.95 Schnelllade-Boden ───────────────────────────────────────────
     # Solange SoC < fast_charge_floor_soc: kein Korridor-Cap,
     # charge_power_limit = max_charge_power → E3DC nutzt vollen PV-Überschuss.
     # Curtailment Guard hat höhere Priorität (bereits vorab aktiv, falls nötig).
-    if (
-        params.fast_charge_floor_enabled
-        and state.soc < params.fast_charge_floor_soc
-        and not curtailment_guard_active
-        and not _grid_charge_pending
-    ):
+    gate = eval_gate(
+        "6.95.fast_floor",
+        term("fast_charge_floor_enabled", params.fast_charge_floor_enabled, op=is_true),
+        term(
+            "soc",
+            state.soc,
+            op=lt,
+            expected=params.fast_charge_floor_soc,
+            setting_key="fast_charge_floor_soc",
+        ),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term("grid_charge_pending", _grid_charge_pending, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_FAST_FLOOR,
             reason=(
@@ -1851,6 +2131,7 @@ def _decide_core(
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=params.max_charge_power,
             target_soc=params.fast_charge_floor_soc,
+            trace=trace,
         )
 
     # ── 6.96 Akku-Priorität: PV-Überschuss-Priorität (wie Korridor 7d) ───
@@ -1861,18 +2142,29 @@ def _decide_core(
     # bewusster Nutzerwunsch (explizit zum Überbrücken schwacher PV-Tage
     # gedacht) Vorrang vor dieser Heuristik – sonst verhindert schon minimale
     # Resteinstrahlung (_pv_now > 0) dauerhaft die gewünschte Netzladung tagsüber.
-    if (
-        _battery_priority
-        and state.soc < params.charge_target
-        and not curtailment_guard_active
-        and not _grid_charge_pending
-    ):
+    gate = eval_gate(
+        "6.96.battery_priority.entry",
+        term("battery_priority", _battery_priority, op=is_true),
+        term(
+            "soc", state.soc, op=lt, expected=params.charge_target,
+            setting_key="charge_target",
+        ),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term("grid_charge_pending", _grid_charge_pending, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         _pv_now = (
             state.pv_power_instant
             if state.pv_power_instant is not None
             else state.pv_power
         ) or 0.0
-        if _pv_now > 0:
+        gate = eval_gate(
+            "6.96.battery_priority",
+            term("pv_now_w", _pv_now, op=gt, expected=0),
+        )
+        trace.record(gate)
+        if gate.result:
             _prio_note = (
                 "Schwacher-PV-Tag"
                 if (_low_yield and not _low_yield_released)
@@ -1909,6 +2201,7 @@ def _decide_core(
                 target_soc=params.charge_target,
                 target_charge_power=params.max_charge_power,
                 battery_priority=True,
+                trace=trace,
             )
 
     # ── 6.97 Aktive Netzladung im low-Slot (NT-Fenster) ──────────────────
@@ -1918,7 +2211,20 @@ def _decide_core(
     # überbrücken. Unabhängig vom tariff_mode, weil hier ein bewusster
     # Nutzerwunsch vorliegt. Die Sicherheitsgrenze max_grid_charge_kwh stoppt
     # nur im Fehlerfall; Curtailment-Guard hat weiterhin Vorrang.
-    if _grid_charge_pending:
+    gate = eval_gate(
+        "6.97.grid_charge",
+        term(
+            "low_slot_grid_charge_enabled", params.low_slot_grid_charge_enabled,
+            op=is_true,
+        ),
+        term("tariff_class", tariff_class, op=eq, expected=TARIFF_LOW),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term("soc", state.soc, op=lt, expected=_gc_target),
+        term("budget_left_kwh", _budget_left_kwh, op=gt, expected=0),
+        term("jit_due", _gc_jit_due, op=is_true),
+    )
+    trace.record(gate)
+    if gate.result:
         if not params.low_slot_forecast_based:
             target_src = "fest"
         elif state.low_slot_need_kwh is None:
@@ -1945,18 +2251,35 @@ def _decide_core(
             charge_power_limit=params.max_charge_power,
             target_soc=_gc_target,
             target_charge_power=params.max_charge_power,
+            trace=trace,
         )
 
     charge_power = desired_charge_power(state.soc, target, params, now)
-    if charge_power > 0 and state.soc < params.charge_target:
+    gate = eval_gate(
+        "7.corridor.entry",
+        term("charge_power", charge_power, op=gt, expected=0),
+        term(
+            "soc", state.soc, op=lt, expected=params.charge_target,
+            setting_key="charge_target",
+        ),
+    )
+    trace.record(gate)
+    if gate.result:
         # 7a. PV forecast → delay charging if enough sun expected today
         # Aber NICHT bei aktivem Abregelschutz: dort muss Ladung als Senke
         # für überschüssige PV einspringen, sonst wird Strom abgeregelt.
-        if (
-            params.pv_forecast_enabled
-            and state.pv_forecast_remaining_kwh is not None
-            and not curtailment_guard_active
-        ):
+        gate = eval_gate(
+            "7a.pv_delay.entry",
+            term("pv_forecast_enabled", params.pv_forecast_enabled, op=is_true),
+            term(
+                "pv_forecast_available",
+                state.pv_forecast_remaining_kwh is not None,
+                op=is_true,
+            ),
+            term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        )
+        trace.record(gate)
+        if gate.result:
             required_kwh = max(
                 0.0,
                 (target - state.soc) / 100.0 * params.battery_capacity_kwh,
@@ -1986,17 +2309,29 @@ def _decide_core(
             _spreading_blocks_pv_delay = (
                 _spread_on and state.soc < BATTERY_FULL_SOC_CEILING
             )
-            _pv_delay_gate_ok = (
-                state.pv_forecast_remaining_kwh >= min_required
-                and hour_now < charge_end_h
-                and state.soc >= params.delay_min_soc
-                and _pv_delay_cooldown_ok
-                and not _spreading_blocks_pv_delay
-                # Gelatchter Schwacher-PV-Tag: nicht auf spätere Sonne warten
-                # (analog Morning-Cap), auch wenn die Restprognose-Deckung die
-                # Akku-Priorität gerade freigegeben hat.
-                and not _low_yield
+            # Gelatchter Schwacher-PV-Tag: nicht auf spätere Sonne warten
+            # (analog Morning-Cap), auch wenn die Restprognose-Deckung die
+            # Akku-Priorität gerade freigegeben hat.
+            gate = eval_gate(
+                "7a.pv_delay",
+                term(
+                    "pv_forecast_remaining_kwh", state.pv_forecast_remaining_kwh,
+                    op=ge, expected=min_required,
+                ),
+                term("hour_now", hour_now, op=lt, expected=charge_end_h),
+                term(
+                    "soc", state.soc, op=ge, expected=params.delay_min_soc,
+                    setting_key="delay_min_soc",
+                ),
+                term("cooldown_ok", _pv_delay_cooldown_ok, op=is_true),
+                term(
+                    "spreading_blocks_pv_delay", _spreading_blocks_pv_delay,
+                    op=is_false,
+                ),
+                term("low_yield", _low_yield, op=is_false),
             )
+            trace.record(gate)
+            _pv_delay_gate_ok = gate.result
             if _LOGGER.isEnabledFor(logging.DEBUG):
                 _LOGGER.debug(
                     "[pv_delay-gate] would_trigger=%s pv_remain=%.1fkWh "
@@ -2037,6 +2372,7 @@ def _decide_core(
                     power_mode=POWER_MODE_NORMAL,
                     charge_power_limit=0.0,
                     target_soc=target,
+                    trace=trace,
                 )
         # 7b. Lower-corridor pause: if charge power too low and no curtailment → idle
         # ABER: bei aktivem Spreading hat die zeitbasierte Spreading-Rate
@@ -2045,20 +2381,35 @@ def _decide_core(
         # → IDLE → Pause → Lücke wächst → CORRIDOR feuert hart → Pause …
         # Mit spreading_enabled fällt der Code stattdessen durch zur
         # Spreading-Phase und produziert eine glatte Ladekurve.
-        if (
-            params.lower_corridor_pause_enabled
-            and charge_power < params.lower_corridor
-            and not curtailment_guard_active
-            and not _battery_priority
-            and not _low_yield  # gelatchter Schwacher-PV-Tag: keine Korridor-Pause
-            and not (_spread_on and state.soc < BATTERY_FULL_SOC_CEILING)
-        ):
+        gate = eval_gate(
+            "7b.lower_corridor_pause",
+            term(
+                "lower_corridor_pause_enabled", params.lower_corridor_pause_enabled,
+                op=is_true,
+            ),
+            term(
+                "charge_power", charge_power, op=lt, expected=params.lower_corridor,
+                setting_key="lower_corridor",
+            ),
+            term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+            term("battery_priority", _battery_priority, op=is_false),
+            # gelatchter Schwacher-PV-Tag: keine Korridor-Pause
+            term("low_yield", _low_yield, op=is_false),
+            term(
+                "spreading_smooths",
+                _spread_on and state.soc < BATTERY_FULL_SOC_CEILING,
+                op=is_false,
+            ),
+        )
+        trace.record(gate)
+        if gate.result:
             return _corridor_pause_decision(
                 f"Korridor-Pause: Soll-Ladeleistung {charge_power:.0f} W "
                 f"< unterer Korridor {params.lower_corridor:.0f} W",
                 block_charge=_spread_on,
                 params=params,
                 target=target,
+                trace=trace,
             )
         # 7c. Spreading-Cap auf Korridor: Wenn Spreading aktiv ist, begrenzt
         # die zeitbasierte Spreading-Rate (kWh bis Ladeende / Restzeit) zusätzlich
@@ -2068,42 +2419,51 @@ def _decide_core(
         # Spreading-Obergrenze bleibt das Spreading-Ziel (typ. 100 %), damit
         # die Rate konsistent ist mit der Phase nach Erreichen von charge_target.
         smoothing_note = ""
-        if (
-            _spread_on
-            and state.soc < BATTERY_FULL_SOC_CEILING
-        ):
-            _cap_upper_soc = (
-                params.charge_target_late
-                if params.two_tier_enabled
-                else params.spreading_target_soc
+        _cap_upper_soc = (
+            params.charge_target_late
+            if params.two_tier_enabled
+            else params.spreading_target_soc
+        )
+        gate = eval_gate(
+            "7c.spreading_cap",
+            term("spread_on", _spread_on, op=is_true),
+            term("soc", state.soc, op=lt, expected=BATTERY_FULL_SOC_CEILING),
+            term("soc_below_target", state.soc, op=lt, expected=_cap_upper_soc),
+        )
+        trace.record(gate)
+        if gate.result:
+            _charge_end_h = seasonal_charge_end_hour(now, params)
+            _hour_now = now.hour + now.minute / 60
+            _cap_end_h = (
+                params.late_charge_end_h
+                if params.two_tier_enabled and _hour_now >= _charge_end_h
+                else _charge_end_h
             )
-            if state.soc < _cap_upper_soc:
-                _charge_end_h = seasonal_charge_end_hour(now, params)
-                _hour_now = now.hour + now.minute / 60
-                _cap_end_h = (
-                    params.late_charge_end_h
-                    if params.two_tier_enabled and _hour_now >= _charge_end_h
-                    else _charge_end_h
+            _remaining_hours = _cap_end_h - _hour_now
+            if _remaining_hours > 0:
+                _remaining_kwh = (
+                    (_cap_upper_soc - state.soc) / 100.0
+                    * params.battery_capacity_kwh
                 )
-                _remaining_hours = _cap_end_h - _hour_now
-                if _remaining_hours > 0:
-                    _remaining_kwh = (
-                        (_cap_upper_soc - state.soc) / 100.0
-                        * params.battery_capacity_kwh
+                _smooth_rate_w = _remaining_kwh * 1000.0 / _remaining_hours
+                # Cap nicht unter min_charge_power drücken – sonst Anlauf-
+                # Probleme. Auf max_charge_power clampen für Konsistenz.
+                _smooth_rate_w = max(
+                    params.min_charge_power,
+                    min(params.max_charge_power, _smooth_rate_w),
+                )
+                # Modifier, not a phase winner: append without touching winning_gate.
+                smooth_gate = eval_gate(
+                    "7c.spreading_cap.smoothing",
+                    term("smooth_rate_w", _smooth_rate_w, op=lt, expected=charge_power),
+                )
+                if smooth_gate.result:
+                    trace.gates.append(smooth_gate)
+                    smoothing_note = (
+                        f", Glättung {_smooth_rate_w:.0f}W "
+                        f"({_remaining_kwh:.1f}kWh/{_remaining_hours:.1f}h)"
                     )
-                    _smooth_rate_w = _remaining_kwh * 1000.0 / _remaining_hours
-                    # Cap nicht unter min_charge_power drücken – sonst Anlauf-
-                    # Probleme. Auf max_charge_power clampen für Konsistenz.
-                    _smooth_rate_w = max(
-                        params.min_charge_power,
-                        min(params.max_charge_power, _smooth_rate_w),
-                    )
-                    if _smooth_rate_w < charge_power:
-                        smoothing_note = (
-                            f", Glättung {_smooth_rate_w:.0f}W "
-                            f"({_remaining_kwh:.1f}kWh/{_remaining_hours:.1f}h)"
-                        )
-                        charge_power = _smooth_rate_w
+                    charge_power = _smooth_rate_w
         # 7d. Nach Erreichen von charge_end_h und solange Ziel-SoC nicht erreicht:
         # Maestro entfernt das harte Power-Cap und gibt der E3DC-Hardware
         # max_charge_power frei. Andernfalls cappt _apply_house_ceiling auf
@@ -2111,11 +2471,14 @@ def _decide_core(
         # dem realen Surplus → unnötige Einspeisung obwohl Akku noch Platz hat.
         _charge_end_h_late = seasonal_charge_end_hour(now, params)
         _hour_now_late = now.hour + now.minute / 60
-        if (
-            _hour_now_late >= _charge_end_h_late
-            and state.soc < target
-            and state.pv_power > 0
-        ):
+        gate = eval_gate(
+            "7d.post_charge_end",
+            term("hour_now", _hour_now_late, op=ge, expected=_charge_end_h_late),
+            term("soc", state.soc, op=lt, expected=target),
+            term("pv_power", state.pv_power, op=gt, expected=0),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_CORRIDOR,
                 reason=(
@@ -2127,10 +2490,11 @@ def _decide_core(
                 charge_power_limit=params.max_charge_power,
                 target_soc=target,
                 target_charge_power=params.max_charge_power,
+                trace=trace,
             )
         effective_charge = _apply_house_ceiling(
             charge_power, state, params, PHASE_CORRIDOR, current_price,
-            tariff_class=tariff_class,
+            tariff_class=tariff_class, trace=trace,
         )
         # 7e. Post-ceiling corridor pause: if the house-ceiling reduced effective
         # charge below lower_corridor, don't send a tiny limit to the E3DC —
@@ -2147,13 +2511,23 @@ def _decide_core(
         # AFTER _apply_house_ceiling so that it catches the case where
         # charge_power itself was above lower_corridor (no pause in 7b) but the
         # available surplus is too small to justify a cap at all.
-        if (
-            params.lower_corridor_pause_enabled
-            and effective_charge < params.lower_corridor
-            and not curtailment_guard_active
-            and not _battery_priority
-            and not _low_yield  # gelatchter Schwacher-PV-Tag: keine Korridor-Pause
-        ):
+        gate = eval_gate(
+            "7e.post_ceiling_pause",
+            term(
+                "lower_corridor_pause_enabled", params.lower_corridor_pause_enabled,
+                op=is_true,
+            ),
+            term(
+                "effective_charge", effective_charge, op=lt,
+                expected=params.lower_corridor, setting_key="lower_corridor",
+            ),
+            term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+            term("battery_priority", _battery_priority, op=is_false),
+            # gelatchter Schwacher-PV-Tag: keine Korridor-Pause
+            term("low_yield", _low_yield, op=is_false),
+        )
+        trace.record(gate)
+        if gate.result:
             return _corridor_pause_decision(
                 f"Korridor-Pause (nach Surplus-Cap): nutzbarer Überschuss "
                 f"{effective_charge:.0f} W < unterer Korridor "
@@ -2161,17 +2535,24 @@ def _decide_core(
                 block_charge=_spread_on,
                 params=params,
                 target=target,
+                trace=trace,
             )
+        trace.record(eval_gate("7.corridor", term("corridor", True, op=is_true)))
         return MaestroDecision(
             phase=PHASE_CORRIDOR,
             reason=(
                 f"Ladekorridor: SoC {state.soc:.0f}% → Ziel {target:.0f}%, "
-                f"Leistung {effective_charge:.0f}W{smoothing_note}"
+                + (
+                    f"Ladelimit {effective_charge:.0f}W{smoothing_note}"
+                    if effective_charge > 0
+                    else f"kein Ladelimit (alle Limits frei){smoothing_note}"
+                )
             ),
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=effective_charge if effective_charge > 0 else None,
             target_soc=target,
             target_charge_power=effective_charge,
+            trace=trace,
         )
 
     # ── 8. Spreading: limit charge rate to spread remaining capacity to charge-end ──
@@ -2186,13 +2567,17 @@ def _decide_core(
     # Außerdem: Bei aktivem Abregelschutz hat dieser Vorrang, damit sonst
     # abgeregelte PV-Leistung als Senke in den Akku darf (sonst würde
     # Spreading mit ~1–2 kW limitieren und der Rest würde abgeregelt).
-    if state.soc >= BATTERY_FULL_SOC_CEILING or curtailment_guard_active:
-        _spread_active = False
-    else:
-        # Schwacher-PV-Tag: Spreading komplett überspringen, damit der
-        # Überschuss direkt in den Akku geht (Akku-Priorität statt Glättung).
-        _spread_active = _spread_on and state.soc < _spread_upper_soc
-    if _spread_active:
+    # Schwacher-PV-Tag: Spreading komplett überspringen, damit der
+    # Überschuss direkt in den Akku geht (Akku-Priorität statt Glättung).
+    gate = eval_gate(
+        "8.spreading.entry",
+        term("soc", state.soc, op=lt, expected=BATTERY_FULL_SOC_CEILING),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+        term("spread_on", _spread_on, op=is_true),
+        term("soc_below_target", state.soc, op=lt, expected=_spread_upper_soc),
+    )
+    trace.record(gate)
+    if gate.result:
         charge_end_h = seasonal_charge_end_hour(now, params)
         hour_now = now.hour + now.minute / 60
         # Determine the end of the spreading window
@@ -2209,7 +2594,12 @@ def _decide_core(
         # PV-Überschuss tagsüber ins Netz gehen kann"). Die Spreading-Rate
         # selbst (remaining_kwh / remaining_hours) limitiert die Ladung
         # bereits sanft – ein zusätzliches Skip ist nicht nötig.
-        if hour_now < _spread_end_h:
+        gate = eval_gate(
+            "8.spreading.window",
+            term("hour_now", hour_now, op=lt, expected=_spread_end_h),
+        )
+        trace.record(gate)
+        if gate.result:
             remaining_hours = _spread_end_h - hour_now
             remaining_soc = _spread_upper_soc - state.soc
             remaining_kwh = remaining_soc / 100.0 * params.battery_capacity_kwh
@@ -2222,9 +2612,18 @@ def _decide_core(
                 # House-ceiling: don't draw from grid unless bypass condition
                 spreading_rate_w = _apply_house_ceiling(
                     spreading_rate_w, state, params, PHASE_SPREADING, current_price,
-                    tariff_class=tariff_class,
+                    tariff_class=tariff_class, trace=trace,
                 )
-                if spreading_rate_w < params.min_charge_power:
+                gate = eval_gate(
+                    "8.spreading.pause",
+                    term(
+                        "spreading_rate_w", spreading_rate_w, op=lt,
+                        expected=params.min_charge_power,
+                        setting_key="min_charge_power",
+                    ),
+                )
+                trace.record(gate)
+                if gate.result:
                     # charge_power_limit=0.0 statt None: blockiert Ladung,
                     # Entladung bleibt frei (Haus darf aus Akku ziehen).
                     return MaestroDecision(
@@ -2237,7 +2636,16 @@ def _decide_core(
                         power_mode=POWER_MODE_NORMAL,
                         charge_power_limit=0.0,
                         target_soc=target,
+                        trace=trace,
                     )
+                trace.record(eval_gate(
+                    "8.spreading",
+                    term(
+                        "spreading_rate_w", spreading_rate_w, op=not_lt,
+                        expected=params.min_charge_power,
+                        setting_key="min_charge_power",
+                    ),
+                ))
                 return MaestroDecision(
                     phase=PHASE_SPREADING,
                     reason=(
@@ -2250,6 +2658,7 @@ def _decide_core(
                     charge_power_limit=spreading_rate_w,
                     target_soc=target,
                     target_charge_power=spreading_rate_w,
+                    trace=trace,
                 )
 
     # ── 8b. Spreading-Ziel erreicht: Ladung aktiv blockieren ────────────────
@@ -2258,12 +2667,15 @@ def _decide_core(
     # die Engine sonst auf Section 10 IDLE fallen → clear_power_limits →
     # Wechselrichter lädt mit vollem PV-Überschuss bis 100 %. Stattdessen
     # setzen wir hier ein hartes Mini-Limit, damit Überschuss ins Netz fließt.
-    if (
-        _spread_on
-        and state.soc >= _spread_upper_soc
-        and state.soc < BATTERY_FULL_SOC_CEILING
-        and not curtailment_guard_active
-    ):
+    gate = eval_gate(
+        "8b.spreading_target_reached",
+        term("spread_on", _spread_on, op=is_true),
+        term("soc", state.soc, op=ge, expected=_spread_upper_soc),
+        term("soc_below_full", state.soc, op=lt, expected=BATTERY_FULL_SOC_CEILING),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+    )
+    trace.record(gate)
+    if gate.result:
         return MaestroDecision(
             phase=PHASE_IDLE,
             reason=(
@@ -2274,13 +2686,26 @@ def _decide_core(
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=1,  # 1 W = effektiv keine Ladung
             target_soc=target,
+            trace=trace,
         )
 
     # ── 9. Curtailment Guard (idle would win – curtailment may still be active) ──
-    if params.curtailment_guard_enabled and curtailment_guard_active:        # Akku-voll-Schutz: gleicher Grund wie in Feed-in-Limit. Wenn der Akku
+    gate = eval_gate(
+        "9.curtailment.entry",
+        term("curtailment_guard_enabled", params.curtailment_guard_enabled, op=is_true),
+        term("curtailment_guard_active", curtailment_guard_active, op=is_true),
+    )
+    trace.record(gate)
+    if gate.result:
+        # Akku-voll-Schutz: gleicher Grund wie in Feed-in-Limit. Wenn der Akku
         # gesättigt ist, kann ein Ladebefehl die Abregelung nicht verhindern;
         # wir lassen den Wechselrichter regulär abregeln.
-        if state.soc >= BATTERY_FULL_SOC_CEILING:
+        gate = eval_gate(
+            "9.curtailment.battery_full",
+            term("soc", state.soc, op=ge, expected=BATTERY_FULL_SOC_CEILING),
+        )
+        trace.record(gate)
+        if gate.result:
             return MaestroDecision(
                 phase=PHASE_IDLE,
                 reason=(
@@ -2290,9 +2715,15 @@ def _decide_core(
                 power_mode=POWER_MODE_NORMAL,
                 charge_power_limit=None,
                 target_soc=target,
+                trace=trace,
             )
         floor_w = _curtailment_floor_w(state, params)
-        if floor_w > 0:
+        gate = eval_gate(
+            "9.curtailment",
+            term("curtailment_floor_w", floor_w, op=gt, expected=0),
+        )
+        trace.record(gate)
+        if gate.result:
             guard_power = min(floor_w, params.max_charge_power)
             return MaestroDecision(
                 phase=PHASE_CURTAILMENT_GUARD,
@@ -2306,6 +2737,7 @@ def _decide_core(
                 charge_power_limit=guard_power,
                 target_soc=target,
                 target_charge_power=guard_power,
+                trace=trace,
             )
 
     # ── 10. Idle ─────────────────────────────────────────────────────────────
@@ -2317,6 +2749,8 @@ def _decide_core(
     # weiterhin aus dem Akku gedeckt werden statt Netzbezug zu erzeugen.
     # Nur Section 9 (Abregelschutz) darf vorher noch laden, falls die
     # Einspeisegrenze überschritten würde – und dann auch nur den Überschuss.
+    gate = eval_gate("10.idle", term("idle", True, op=is_true))
+    trace.record(gate)
     return MaestroDecision(
         phase=PHASE_IDLE,
         reason=(
@@ -2326,6 +2760,7 @@ def _decide_core(
         power_mode=POWER_MODE_NORMAL,
         charge_power_limit=1,  # 1 W = effektiv keine Ladung, Entladen unberührt
         target_soc=target,
+        trace=trace,
     )
 
 

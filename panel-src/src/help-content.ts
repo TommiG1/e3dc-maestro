@@ -165,6 +165,10 @@ export const HELP: readonly HelpChapter[] = [
       section("trouble-entities", "helpTroubleEntities", "helpTroubleEntitiesBody"),
       section("trouble-alerts", "helpTroubleAlerts", "helpTroubleAlertsBody"),
       section("trouble-history", "helpTroubleHistory", "helpTroubleHistoryBody"),
+      section("faq-warum", "helpFaqWarum", "helpFaqWarumBody", {
+        links: [{ id: "decision", label: "helpChDecision" }],
+        actions: [{ label: "helpChDecision", action: { kind: "screen", screen: "decision" } }],
+      }),
       section("faq-nogrid", "helpFaqNoGrid", "helpFaqNoGridBody", {
         links: [{ id: "why-grid", label: "helpWhyGrid" }],
       }),

@@ -32,6 +32,7 @@ import { FLOW_STYLES, type FlowStyleId } from "./flow-style";
 import { sliderField } from "./slider-field";
 import { memo } from "./memo";
 import { ladderView } from "./ladder";
+import { warumView } from "./warum-view";
 import type { CornersId, DensityId } from "./look-prefs";
 import { flowNeedsOutline, type ThemeId } from "./theme";
 import type { Fmt } from "./format";
@@ -204,6 +205,27 @@ export interface Ctx {
   debugDownloadError?: string;
   /** Scroll to the control ladder on this screen (decision). */
   onShowLadder: () => void;
+  /** Latest Warum payload (newest thread card). */
+  warum?: import("./warum").WarumPayload;
+  warumThread: import("./warum").WarumThreadItem[];
+  warumLoading: boolean;
+  warumError?: string;
+  warumQuery: string;
+  warumSuggestIndex: number;
+  onWarumQuery: (q: string) => void;
+  onWarumSuggestIndex: (idx: number) => void;
+  onWarumDismiss: (id: string) => void;
+  warumWhatIfOverrides: Record<string, Record<string, number>>;
+  onWarumAsk: (opts: {
+    query?: string;
+    topic?: import("./warum").WarumTopic;
+    whyNotPhase?: string;
+    whatIfParams?: Record<string, unknown>;
+    lookbackAt?: string;
+    threadId?: string;
+  }) => void;
+  onWarumWhatIf: (threadId: string, overrides: Record<string, number>) => void;
+  onWarumResetWhatIf: (threadId: string) => void;
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
   /** Temporary look while hovering a theme swatch; undefined clears. */
@@ -1674,6 +1696,25 @@ export function decisionView(c: Ctx): TemplateResult {
       isOn(st(c, E.batteryPriority)),
       c.onOpenGroup,
     )}
+    ${warumView({
+      i18n: c.i18n,
+      phase: d.phase,
+      soc: soc ?? undefined,
+      chargeTarget: targetSoc,
+      thread: c.warumThread,
+      loading: c.warumLoading,
+      error: c.warumError,
+      query: c.warumQuery,
+      suggestIndex: c.warumSuggestIndex,
+      whatIfOverrides: c.warumWhatIfOverrides,
+      onQuery: c.onWarumQuery,
+      onSuggestIndex: c.onWarumSuggestIndex,
+      onAsk: c.onWarumAsk,
+      onWhatIf: c.onWarumWhatIf,
+      onResetWhatIf: c.onWarumResetWhatIf,
+      onDismiss: c.onWarumDismiss,
+      onOpenGroup: c.onOpenGroup,
+    })}
     <div class="card tl-card">
       <div class="card-head">
         <h3>${t("timelineTitle")}</h3>
@@ -1709,13 +1750,25 @@ export function decisionView(c: Ctx): TemplateResult {
         : nothing}
       ${list.length
         ? html`<div class="timeline">
-            ${list.map(
-              (h) => html`<div class="tl-item">
+            ${list.map((h) => {
+              const lookbackIso = new Date(h.ts).toISOString();
+              return html`<button
+                type="button"
+                class="tl-item tl-item-btn"
+                title=${t("warumLookbackFromTimeline")}
+                @click=${() => {
+                  c.onWarumAsk({
+                    query: c.i18n.t("warumLookbackFromTimeline"),
+                    topic: "lookback",
+                    lookbackAt: lookbackIso,
+                  });
+                }}
+              >
                 <div class="tl-time">${c.fmt.dayTime(h.ts)}</div>
                 <div class="tl-phase"><i class="tl-dot" style="background:${phaseColor(h.phase)}"></i>${phase(h.phase)}</div>
                 <div class="tl-reason">${h.reason}</div>
-              </div>`,
-            )}
+              </button>`;
+            })}
           </div>`
         : html`<p class="empty">${c.timeline ? t("timelineEmpty") : t("loading")}</p>`}
     </div>

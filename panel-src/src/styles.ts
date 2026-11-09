@@ -3061,6 +3061,353 @@ export const styles = css`
   .tl-card {
     margin-top: 18px;
   }
+  .warum-card {
+    margin-top: 18px;
+  }
+  .warum-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .warum-ask-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 10px 0 8px;
+  }
+  .warum-ask-input {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #333);
+    background: var(--card, #1a1a1a);
+    color: var(--text, #eee);
+    font-size: 14px;
+  }
+  .warum-suggest-list {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--card, #1a1a1a);
+  }
+  .warum-suggest-list li {
+    margin: 0;
+    border-bottom: 1px solid var(--border, #333);
+  }
+  .warum-suggest-list li:last-child {
+    border-bottom: none;
+  }
+  .warum-suggest-list button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text, #eee);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .warum-suggest-list button.active,
+  .warum-suggest-list button:hover {
+    background: var(--chip-bg, rgba(255, 255, 255, 0.06));
+  }
+  .warum-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .warum-card-item {
+    border: 1px solid var(--border, #333);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--card2, rgba(0, 0, 0, 0.15));
+  }
+  .warum-card-item-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--muted, #888);
+  }
+  .warum-card-query {
+    font-weight: 600;
+    color: var(--text, #eee);
+    flex: 1 1 auto;
+  }
+  .warum-card-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .warum-dismiss {
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .warum-card-headline {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .warum-card-item.is-pending {
+    opacity: 0.92;
+  }
+  .warum-card-loading {
+    min-height: 2.5rem;
+  }
+  .warum-answer-bullets {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+    font-size: 13px;
+  }
+  .warum-answer-bullets li {
+    overflow-wrap: anywhere;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+    margin: 6px 0;
+  }
+  .warum-answer-bullets li.ok .warum-check {
+    color: var(--ok, #3d9);
+  }
+  .warum-answer-bullets li.fail .warum-check {
+    color: var(--warn, #e85);
+  }
+  .warum-follow-ups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .warum-tunables {
+    margin: 10px 0 12px;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border, #333);
+  }
+  .warum-tunables-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .warum-tunables-head h5 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .warum-tunable-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px 10px;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  @media (min-width: 400px) {
+    .warum-tunable-row {
+      grid-template-columns: minmax(120px, 1fr) 1fr auto;
+      align-items: center;
+    }
+  }
+  .warum-tunable-label {
+    color: var(--text, #eee);
+  }
+  .warum-tunable-range {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--accent, #5af);
+  }
+  .warum-tunable-val {
+    color: var(--muted, #888);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .warum-diff {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .warum-diff.changed {
+    color: var(--warn, #e85);
+  }
+  .warum-whatif-pending {
+    margin: 6px 0 0;
+  }
+  .warum-details {
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .warum-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--muted, #888);
+  }
+  .warum-details-inner {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .warum-details-block h5 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted, #888);
+  }
+  .warum-path-compact {
+    gap: 4px;
+  }
+  .warum-gate-flat {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 12px;
+  }
+  @media (max-width: 520px) {
+    .warum-ask-row .btn {
+      width: 100%;
+    }
+    .warum-ask-input,
+    .warum-ask-row .btn {
+      min-height: 44px;
+      font-size: 16px;
+    }
+    .warum-suggest-list button {
+      padding: 12px 10px;
+    }
+    .warum-card-item {
+      padding: 10px;
+      overflow-wrap: anywhere;
+    }
+    .warum-suggestions .chip,
+    .warum-follow-ups .chip,
+    .warum-card-actions .linkish {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .warum-tunable-range {
+      min-height: 32px;
+    }
+  }
+  .warum-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 14px;
+  }
+  .warum-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+  .warum-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted, #888);
+  }
+  .warum-field select,
+  .warum-field input {
+    min-width: 160px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #333);
+    background: var(--card, #1a1a1a);
+    color: var(--text, #eee);
+  }
+  .warum-search {
+    flex: 1 1 180px;
+  }
+  .warum-hits {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+  }
+  .warum-hits li {
+    margin: 4px 0;
+  }
+  .warum-answer h4 {
+    margin: 14px 0 6px;
+    font-size: 13px;
+  }
+  .warum-phase {
+    font-weight: 600;
+  }
+  .warum-path {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .warum-gate summary {
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .warum-gate-won {
+    color: var(--ok, #3d9);
+  }
+  .warum-gate-miss {
+    opacity: 0.75;
+  }
+  .warum-terms {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0 0 0 8px;
+  }
+  .warum-term {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin: 4px 0;
+    font-size: 12px;
+  }
+  .warum-term.ok .warum-check {
+    color: var(--ok, #3d9);
+  }
+  .warum-term.fail .warum-check {
+    color: var(--warn, #e85);
+  }
+  .warum-term-vals {
+    opacity: 0.7;
+    margin-left: 6px;
+  }
+  .warum-balance {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    font-size: 12px;
+  }
+  .warum-context {
+    list-style: disc;
+    margin: 0 0 12px;
+    padding-left: 18px;
+  }
+  .warum-context li {
+    margin: 4px 0;
+  }
+  .warum-lookback-field input {
+    min-width: 190px;
+  }
   .phase-gantt {
     margin: 4px 0 18px;
   }
@@ -3142,6 +3489,21 @@ export const styles = css`
   .tl-item {
     position: relative;
     padding: 10px 0 18px;
+  }
+  button.tl-item-btn {
+    display: block;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  button.tl-item-btn:hover .tl-phase,
+  button.tl-item-btn:focus-visible .tl-phase {
+    text-decoration: underline;
   }
   .tl-item::before {
     content: "";

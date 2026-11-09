@@ -19,6 +19,25 @@ def _f(value: Any, fmt: str = "{:.0f}", fallback: str = "—") -> str:
         return fallback
 
 
+def _one_limit(label: str, value: float | None) -> str:
+    """None = no limit set (free); <= 1 W = hard block; else a real cap."""
+    if value is None:
+        return f"{label} frei"
+    if value <= 1:
+        return f"{label} auf {value:.0f} W gesperrt"
+    return f"{label} max. {value:.0f} W"
+
+
+def limit_summary(dec) -> str:
+    """One short sentence: which limits are free and which are blocked at 0 W."""
+    if dec.power_mode not in (None, "normal"):
+        return ""
+    ch, dis = dec.charge_power_limit, dec.discharge_power_limit
+    if ch is None and dis is None:
+        return "Keine Limits gesetzt, Laden und Entladen sind frei."
+    return f"{_one_limit('Laden', ch)}, {_one_limit('Entladen', dis)}."
+
+
 def decision_explanation(coord) -> str:
     """Build a German full-sentence explanation for the current control phase.
 
@@ -202,10 +221,16 @@ def decision_explanation(coord) -> str:
                 f"Akku-Priorität aktiv, max_charge {cpl} W – voller "
                 "PV-Überschuss in den Akku statt Einspeisung."
             )
+        elif dec.charge_power_limit is None:
+            text = (
+                f"Saisonaler Ladekorridor: Ziel-SoC {target}% – aktuell wird "
+                "kein Ladelimit gesetzt, der E3DC lädt frei mit dem PV-Überschuss."
+            )
         else:
             text = (
                 f"Saisonaler Ladekorridor: Ziel-SoC {target}% – Ladeleistung wird "
-                f"auf {cpl} W dosiert, um den Korridor planmäßig zu erreichen."
+                f"auf höchstens {_f(dec.charge_power_limit)} W begrenzt, um den "
+                "Korridor planmäßig zu erreichen."
             )
     elif phase == "pv_delay":
         rem = _f(getattr(state, "pv_forecast_remaining_kwh", None), "{:.1f}")
@@ -228,6 +253,14 @@ def decision_explanation(coord) -> str:
         )
     else:
         text = f"Phase {phase}: {dec.reason}"
+
+    # Make explicit whether limits are free (None) or really blocked (0/1 W).
+    # Skipped where the phase text already names its own limit.
+    if phase not in ("corridor", "emergency", "reserve_protection", "force_discharge",
+                     "feed_in_limit", "curtailment_guard", "spreading", "off"):
+        summary = limit_summary(dec)
+        if summary:
+            text = f"{text} {summary}"
 
     hp = getattr(coord, "_hp_last_explanation", None)
     if hp:
