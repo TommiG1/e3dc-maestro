@@ -11,6 +11,28 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.8] – Warum?, Wallbox-Bilanz, Modulkapazität und Panel-Fixes (2026-11-09)
+
+Stabiles Release. Enthält 0.5.8-beta.1 bis beta.6 sowie Warum v2 und die Hilfe-Übersicht. Ausführlich: [docs/release-notes/v0.5.8.md](docs/release-notes/v0.5.8.md).
+
+### Neu
+- **Warum?** Chat mit Themen, Klartext, Rückblick, Hilfe-Chip und Was-wäre-wenn-Reglern ohne Übernehmen.
+- **Wallbox-Energie-Sensor** gemeinsam für Loads, Sizing und Energy-Dashboard, mit Autodetect.
+- **Anlage → Akku:** „Nutzbar (netto)“ und Kapazität aus den Modulen (Farm, S10X).
+- **Solcast Tag 3** optional für den 48-Stunden-Chart (nur Anzeige).
+
+### Behoben
+- **Wallbox-Bilanz:** Tagesenergie bevorzugt aus kWh-Zähler; Freeze-Schutz bei hängender Leistung.
+- **Modul-SOH** auch ohne Gerätemeldung (Fallback auf berechneten hacs-e3dc-Wert).
+- **Prognose-Zoom**, **Sidebar-Titel**, **Tablet-Menü** und **Energiefluss-Beschriftung**.
+- **Einrichtung** bricht nicht mehr an `config_entry_id` in der RSCP-Reparatur ab.
+- **Schonladung** als Leistungsdeckel statt Faktor auf das aktuelle Limit (Discussion #42).
+
+### Hinweise
+- Falsche Wallbox-Langzeitstatistik vor dem Zähler-Fix heilt das Update nicht automatisch.
+
+---
+
 ## [0.5.8-beta.6] – Tablet Querformat und Energiefluss im Hochformat (2026-11-08)
 
 Beta nach 0.5.8-beta.5. Ausführlich: [docs/release-notes/v0.5.8-beta.6.md](docs/release-notes/v0.5.8-beta.6.md).
