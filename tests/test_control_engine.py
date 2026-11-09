@@ -2257,6 +2257,37 @@ class TestLowSlotGridCharge:
         d = decide(self._state(soc=60), p, _now(1, 15, 2))
         assert d.phase == PHASE_FAST_FLOOR
 
+    def test_ramp_off_charges_full_surplus_above_ramp(self):
+        """Rampe aus: SoC über dem Rampenziel lädt weiter mit vollem Überschuss."""
+        p = self._params(
+            low_slot_grid_charge_enabled=False,
+            charge_ramp_disabled=True,
+            charge_target=100.0,
+        )
+        d = decide(self._state(soc=88), p, _now(1, 10, 0))
+        assert d.phase == PHASE_FAST_FLOOR
+        assert d.charge_power_limit == p.max_charge_power
+        assert d.target_soc == 100.0
+
+    def test_ramp_on_blocks_above_ramp(self):
+        """Gegenprobe: ohne Schalter bleibt es beim Idle über dem Rampenziel."""
+        p = self._params(
+            low_slot_grid_charge_enabled=False,
+            charge_ramp_disabled=False,
+            spreading_enabled=False,
+        )
+        d = decide(self._state(soc=88), p, _now(1, 7, 0))
+        assert d.phase != PHASE_FAST_FLOOR
+
+    def test_ramp_off_stops_at_charge_target(self):
+        p = self._params(
+            low_slot_grid_charge_enabled=False,
+            charge_ramp_disabled=True,
+            charge_target=90.0,
+        )
+        d = decide(self._state(soc=92), p, _now(1, 10, 0))
+        assert d.phase != PHASE_FAST_FLOOR
+
     def test_astro_wait_yields_while_grid_charge_pending(self):
         # Low-Fenster 6–8 Uhr, Test 07:00 → Restzeit 1 h, JIT fällig.
         low = TariffSlot(

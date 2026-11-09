@@ -11,6 +11,16 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.1] – Tagesrampe aus und Korrektur Wallbox-Netzschutz (2026-11-09)
+
+Beta nach 0.5.8. Ausführlich: [docs/release-notes/v0.5.9-beta.1.md](docs/release-notes/v0.5.9-beta.1.md).
+
+### Neu
+- **Tagesrampe aus** (Einstellungen › PV-Laden › Ladeform): schaltet die Steuerung der Akkuladung ab. Der Akku nimmt bis zum Ladeende-Ziel den vollen PV-Überschuss auf, ohne Tagesrampe und ohne Ladeverteilung (Discussion #50).
+
+### Korrekturen
+- **Wallbox-Netzschutz:** Info-Text und Hilfe beschreiben jetzt, was der Schalter tut. Er gibt die Akku-Entladung frei, solange das Auto lädt, und stoppt die Wallbox nicht.
+
 ## [0.5.8] – Warum?, Wallbox-Bilanz, Modulkapazität und Panel-Fixes (2026-11-09)
 
 Stabiles Release. Enthält 0.5.8-beta.1 bis beta.6 sowie Warum v2 und die Hilfe-Übersicht. Ausführlich: [docs/release-notes/v0.5.8.md](docs/release-notes/v0.5.8.md).

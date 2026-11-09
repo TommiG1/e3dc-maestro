@@ -15,6 +15,7 @@ from .const import (
     CONF_ADVANCED_CORRIDOR,
     CONF_CURTAILMENT_GUARD_ENABLED,
     CONF_EVCC_ENABLED,
+    CONF_CHARGE_RAMP_DISABLED,
     CONF_FAST_CHARGE_FLOOR_ENABLED,
     CONF_HP_ENABLED,
     CONF_HP_SHADOW,
@@ -226,6 +227,15 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         param_key=CONF_FAST_CHARGE_FLOOR_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_FAST_CHARGE_FLOOR_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_FAST_CHARGE_FLOOR_ENABLED, False),
+    ),
+    # Rampe aus: keine Tagesrampe, voller PV-Überschuss in den Akku bis Ladeende-Ziel
+    MaestroSwitchDescription(
+        key=CONF_CHARGE_RAMP_DISABLED,
+        name="Tagesrampe aus",
+        icon="mdi:chart-line-variant",
+        param_key=CONF_CHARGE_RAMP_DISABLED,
+        on_fn=lambda coord: coord.update_param(CONF_CHARGE_RAMP_DISABLED, True),
+        off_fn=lambda coord: coord.update_param(CONF_CHARGE_RAMP_DISABLED, False),
     ),
     # Phase 4: Two-Tier Ladeende
     MaestroSwitchDescription(

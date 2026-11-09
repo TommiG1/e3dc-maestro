@@ -64,6 +64,10 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "SoC, der mit dem harten Deckel nicht überschritten wird.",
     en: "SoC the hard cap will not go past.",
   },
+  charge_ramp_disabled: {
+    de: "Schaltet die Steuerung der Akkuladung ab: keine Tagesrampe, keine Ladeverteilung. Der Akku nimmt bis zum Ladeende-Ziel den vollen PV-Überschuss auf und ist im Sommer früh voll.",
+    en: "Turns off battery charge control: no daily ramp, no spreading. The battery takes the full PV surplus up to the charge-end target and is full early in summer.",
+  },
   fast_charge_floor_enabled: {
     de: "Unter dem Boden lädt Maestro mit voller Leistung, unabhängig vom Korridor.",
     en: "Below the floor Maestro charges at full power, ignoring the corridor.",
@@ -337,12 +341,12 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Surplus from which the wallbox may charge.",
   },
   wallbox_discharge_guard_enabled: {
-    de: "Stoppt die Wallbox, wenn der Akku dafür zu stark entladen würde.",
-    en: "Stops the wallbox when it would discharge the battery too hard.",
+    de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt.",
+    en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped.",
   },
   wallbox_discharge_guard_threshold_w: {
-    de: "Ab dieser Akku-Entladung greift der Netzschutz der Wallbox.",
-    en: "Wallbox grid protection starts at this battery discharge.",
+    de: "Ab dieser Wallbox-Leistung gibt der Netzschutz die Akku-Entladung frei.",
+    en: "Above this wallbox power the grid protection opens battery discharge.",
   },
   hp_enabled: {
     de: "Gibt die Wärmepumpe nur bei Überschuss und passendem Preis frei.",

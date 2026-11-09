@@ -110,6 +110,7 @@ CONF_LOWER_CORRIDOR = "lower_corridor"                # W
 CONF_UPPER_CORRIDOR = "upper_corridor"                # W
 CONF_FAST_CHARGE_FLOOR_ENABLED = "fast_charge_floor_enabled"  # bool
 CONF_FAST_CHARGE_FLOOR_SOC = "fast_charge_floor_soc"          # % SoC – Schnelllade-Boden
+CONF_CHARGE_RAMP_DISABLED = "charge_ramp_disabled"            # bool – Rampe aus
 
 # Config entry keys – HT/NT peak protection (Step 4)
 CONF_HT_ENABLED = "ht_enabled"

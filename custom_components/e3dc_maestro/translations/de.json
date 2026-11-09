@@ -833,6 +833,9 @@
       "fast_charge_floor_enabled": {
         "name": "Schnelllade-Boden"
       },
+      "charge_ramp_disabled": {
+        "name": "Tagesrampe aus"
+      },
       "hp_subtract_battery": {
         "name": "WP Überschuss ohne Akkuladung"
       },

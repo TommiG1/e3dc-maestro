@@ -159,6 +159,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         "secShape",
         "secShapeHint",
         [
+          "charge_ramp_disabled",
           "fast_charge_floor_enabled",
           "fast_charge_floor_soc",
           "spreading_enabled",

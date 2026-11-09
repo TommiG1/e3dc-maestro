@@ -260,6 +260,9 @@ class MaestroParams:
     # danach startet die Tagesrampe vom Floor aus statt von 20 %.
     fast_charge_floor_enabled: bool = False
     fast_charge_floor_soc: float = 40.0  # % SoC – Schnelllade-Boden
+    # Tagesrampe aus: keine Tagesrampe, kein Spreading-Cap. Der Akku nimmt bis zum
+    # Ladeende-Ziel den vollen PV-Überschuss auf (wie ein Boden auf charge_target).
+    charge_ramp_disabled: bool = False
     # F1+: Forward-Looking (vorausschauende Ladung)
     forward_looking_enabled: bool = False
     forward_looking_max_soc: float = 100.0
@@ -404,7 +407,7 @@ def target_soc_for_time(dt: datetime, params: MaestroParams) -> float:
         return params.charge_target + (params.charge_target_late - params.charge_target) * fraction
 
     # Before or at charge-end: standard linear ramp
-    if hour_now >= charge_end_h:
+    if hour_now >= charge_end_h or params.charge_ramp_disabled:
         return params.charge_target
     morning_anchor = max(20.0, params.charge_threshold)
     # Schnelllade-Boden: Rampe startet vom Floor-SoC statt von 20 %
@@ -2106,31 +2109,40 @@ def _decide_core(
     # Solange SoC < fast_charge_floor_soc: kein Korridor-Cap,
     # charge_power_limit = max_charge_power → E3DC nutzt vollen PV-Überschuss.
     # Curtailment Guard hat höhere Priorität (bereits vorab aktiv, falls nötig).
+    # Tagesrampe aus wirkt wie ein Boden auf Ladeende-Ziel: voller Überschuss bis dahin.
+    _ramp_off = params.charge_ramp_disabled
+    _floor_on = params.fast_charge_floor_enabled or _ramp_off
+    _floor_soc = (
+        max(params.charge_target, params.fast_charge_floor_soc)
+        if _ramp_off
+        else params.fast_charge_floor_soc
+    )
     gate = eval_gate(
         "6.95.fast_floor",
-        term("fast_charge_floor_enabled", params.fast_charge_floor_enabled, op=is_true),
+        term("fast_charge_floor_enabled", _floor_on, op=is_true),
         term(
             "soc",
             state.soc,
             op=lt,
-            expected=params.fast_charge_floor_soc,
-            setting_key="fast_charge_floor_soc",
+            expected=_floor_soc,
+            setting_key="charge_target" if _ramp_off else "fast_charge_floor_soc",
         ),
         term("curtailment_guard_active", curtailment_guard_active, op=is_false),
         term("grid_charge_pending", _grid_charge_pending, op=is_false),
     )
     trace.record(gate)
     if gate.result:
+        _floor_label = "Tagesrampe aus" if _ramp_off else "Schnelllade-Boden"
         return MaestroDecision(
             phase=PHASE_FAST_FLOOR,
             reason=(
-                f"Schnelllade-Boden: SoC {state.soc:.0f}\u202f% < "
-                f"Floor {params.fast_charge_floor_soc:.0f}\u202f% "
+                f"{_floor_label}: SoC {state.soc:.0f}\u202f% < "
+                f"Ziel {_floor_soc:.0f}\u202f% "
                 f"\u2192 voller PV-\u00dcberschuss"
             ),
             power_mode=POWER_MODE_NORMAL,
             charge_power_limit=params.max_charge_power,
-            target_soc=params.fast_charge_floor_soc,
+            target_soc=_floor_soc,
             trace=trace,
         )
 

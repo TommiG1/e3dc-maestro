@@ -833,6 +833,9 @@
       "fast_charge_floor_enabled": {
         "name": "Fast charge floor"
       },
+      "charge_ramp_disabled": {
+        "name": "Daily ramp off"
+      },
       "hp_subtract_battery": {
         "name": "HP surplus without battery charging"
       },

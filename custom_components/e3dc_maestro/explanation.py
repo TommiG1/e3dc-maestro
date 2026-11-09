@@ -196,10 +196,16 @@ def decision_explanation(coord) -> str:
         )
     elif phase == "fast_floor":
         floor = _f(getattr(p, "fast_charge_floor_soc", None))
-        text = (
-            f"Schnelllade-Boden aktiv: Unter {floor}% SoC wird mit vollem "
-            "PV-Überschuss geladen, um schnell die Mindestreserve aufzubauen."
-        )
+        if getattr(p, "charge_ramp_disabled", False):
+            text = (
+                f"Tagesrampe aus: Maestro bremst die Akkuladung nicht. Bis {_f(dec.target_soc)}% SoC "
+                "nimmt der Akku den vollen PV-Überschuss auf."
+            )
+        else:
+            text = (
+                f"Schnelllade-Boden aktiv: Unter {floor}% SoC wird mit vollem "
+                "PV-Überschuss geladen, um schnell die Mindestreserve aufzubauen."
+            )
     elif phase == "corridor":
         target = _f(dec.target_soc)
         cpl = _f(dec.target_charge_power)
