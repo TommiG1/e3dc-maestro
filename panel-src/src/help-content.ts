@@ -204,6 +204,15 @@ export const HELP: readonly HelpChapter[] = [
           { id: "set-tariff", label: "helpSetTariff" },
         ],
       }),
+      section("faq-plan-sensors", "helpFaqPlanSensors", "helpFaqPlanSensorsBody", {
+        links: [
+          { id: "faq-plan-pv", label: "helpFaqPlanPv" },
+          { id: "set-tariff", label: "helpSetTariff" },
+        ],
+      }),
+      section("faq-idle", "helpFaqIdle", "helpFaqIdleBody", {
+        links: [{ id: "faq-plan-sensors", label: "helpFaqPlanSensors" }],
+      }),
       section("faq-old", "helpFaqOld", "helpFaqOldBody"),
       section("faq-balance-stats", "helpFaqBalanceStats", "helpFaqBalanceStatsBody", {
         links: [{ id: "trouble-history", label: "helpTroubleHistory" }],
