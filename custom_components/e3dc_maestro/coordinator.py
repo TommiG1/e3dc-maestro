@@ -73,6 +73,12 @@ from .const import (
     STAT_WALLBOX_ENERGY_TODAY,
 )
 from .cost_accounting import buy_prices_for_stats
+from .energy_day_guard import (
+    PV_NATIVE_RESET_EPS_KWH,
+    PV_NATIVE_RESET_GRACE,
+    clamp_wallbox_today_kwh,
+    pv_main_has_reset,
+)
 from .grid_charge_justify import JUSTIFIED_GRID_CHARGE_PHASES
 from .consumption_stats import ConsumptionStats
 from .soh_forecast import SohForecastResult, SohForecastService
@@ -131,6 +137,16 @@ __all__ = [
 ]
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _optional_float(value: Any) -> float | None:
+    """Parse a stored numeric value; return None when missing or invalid."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def regelung_aktiv_from_options(options: Mapping[str, Any]) -> bool:
@@ -225,6 +241,11 @@ class E3DCMaestroCoordinator(
         self._last_stats_date: str | None = None
         # Per-entity midnight bases for additional lifetime energy totals.
         self._additional_bases: dict[str, float] = {}
+        # Main PV day-counter end-of-day value; used to hold PV-today at 0 after
+        # midnight until the native meter resets (avoids LTS double-count).
+        self._pv_main_last_kwh: float | None = None
+        self._pv_main_end_kwh: float | None = None
+        self._pv_hold_deadline: datetime | None = None
         # Persistence: store stats in HA's .storage so a restart preserves
         # daily counters until the next midnight reset.
         self._stats_store: Store = Store(
@@ -628,13 +649,7 @@ class E3DCMaestroCoordinator(
         # Reset daily statistics at midnight
         today_str = now.strftime("%Y-%m-%d")
         if self._last_stats_date != today_str:
-            self.stats = {k: 0.0 for k in self.stats}
-            self._additional_bases = {}
-            self._wallbox_energy_last_power = None
-            self._wallbox_energy_power_changed_at = None
-            self._last_stats_date = today_str
-            self._watchdog_notified = False
-            self._stats_dirty = True
+            self._reset_daily_stats(now, today_str)
 
         # Read sensor values
         try:
@@ -920,9 +935,16 @@ class E3DCMaestroCoordinator(
             if state_data.house_power_instant is not None
             else state_data.house_power
         )
-        if main_pv_native is not None:
+        if self._should_hold_pv_zero(now, main_pv_native):
+            # Publish 0 until the native main day meter resets; avoids a
+            # total_increasing LTS bump from main+extra → main → 0.
+            self.stats[STAT_PV_PRODUCTION_TODAY] = 0.0
+            self.stats[STAT_PV_ADDITIONAL_TODAY] = 0.0
+            self.stats[STAT_PV_ADDITIONAL_INTEGRATED] = 0.0
+        elif main_pv_native is not None:
             add_today = await self._async_additional_today_kwh(opts, interval_h, additional_w)
             self.stats[STAT_PV_PRODUCTION_TODAY] = main_pv_native + add_today
+            self._pv_main_last_kwh = main_pv_native
         elif interval_h is not None and pv_w > 0:
             # Kein Haupt-Tageszähler: Gesamt-PV (inkl. Zusatz) aus Leistung integrieren.
             self.stats[STAT_PV_PRODUCTION_TODAY] += pv_w / 1000 * interval_h
@@ -1053,6 +1075,38 @@ class E3DCMaestroCoordinator(
             return 0.0
         return rounded
 
+    def _reset_daily_stats(self, now: datetime, today_str: str) -> None:
+        """Zero day counters and arm the PV hold until the native meter resets."""
+        main_end = self._pv_main_last_kwh
+        self.stats = {k: 0.0 for k in self.stats}
+        self._additional_bases = {}
+        self._wallbox_energy_last_power = None
+        self._wallbox_energy_power_changed_at = None
+        self._pv_main_end_kwh = main_end
+        if main_end is not None and main_end > PV_NATIVE_RESET_EPS_KWH:
+            self._pv_hold_deadline = now + PV_NATIVE_RESET_GRACE
+        else:
+            self._pv_hold_deadline = None
+            self._pv_main_end_kwh = None
+        self._last_stats_date = today_str
+        self._watchdog_notified = False
+        self._stats_dirty = True
+
+    def _should_hold_pv_zero(self, now: datetime, main_pv_native: float | None) -> bool:
+        """Hold PV-today at 0 after midnight until the main day meter resets."""
+        if self._pv_hold_deadline is None:
+            return False
+        if pv_main_has_reset(main_pv_native, self._pv_main_end_kwh):
+            self._pv_hold_deadline = None
+            self._pv_main_end_kwh = None
+            return False
+        if now >= self._pv_hold_deadline:
+            # Stuck/missing reset: unblock rather than freeze the day at 0.
+            self._pv_hold_deadline = None
+            self._pv_main_end_kwh = None
+            return False
+        return True
+
     async def _async_update_wallbox_energy_today(
         self,
         opts: Mapping[str, Any],
@@ -1076,9 +1130,19 @@ class E3DCMaestroCoordinator(
                     self._additional_bases[energy_eid] = total_now - float(
                         self.stats.get(STAT_WALLBOX_ENERGY_TODAY, 0.0) or 0.0
                     )
-                self.stats[STAT_WALLBOX_ENERGY_TODAY] = max(
-                    0.0, total_now - self._additional_bases[energy_eid]
-                )
+                prev = float(self.stats.get(STAT_WALLBOX_ENERGY_TODAY, 0.0) or 0.0)
+                new = max(0.0, total_now - self._additional_bases[energy_eid])
+                clamped = clamp_wallbox_today_kwh(prev, new)
+                if clamped != new:
+                    # Impossible jump (lost base): re-anchor so today stays put.
+                    self._additional_bases[energy_eid] = total_now - clamped
+                    _LOGGER.warning(
+                        "Wallbox-Tageszähler Sprung %.1f→%.1f kWh verworfen (%s)",
+                        prev,
+                        new,
+                        energy_eid,
+                    )
+                self.stats[STAT_WALLBOX_ENERGY_TODAY] = clamped
                 return
         if interval_h is None:
             return
@@ -1182,9 +1246,17 @@ class E3DCMaestroCoordinator(
             return
         stored_date = data.get("date")
         today_str = dt_util.now().strftime("%Y-%m-%d")
+        main_last = _optional_float(data.get("pv_main_last_kwh"))
+        main_end = _optional_float(data.get("pv_main_end_kwh"))
+        if main_last is not None:
+            self._pv_main_last_kwh = main_last
         if stored_date != today_str:
-            # Stale data from a previous day → ignore so the midnight reset
-            # path stays authoritative
+            # Stale day counters → ignore; keep yesterday's main end so the
+            # midnight hold can arm on the first refresh of the new day.
+            if main_end is not None:
+                self._pv_main_last_kwh = main_end
+            elif main_last is not None:
+                self._pv_main_last_kwh = main_last
             return
         stored_stats = data.get("stats")
         if isinstance(stored_stats, dict):
@@ -1204,6 +1276,14 @@ class E3DCMaestroCoordinator(
                 except (TypeError, ValueError):
                     continue
             self._additional_bases = cleaned
+        if main_end is not None:
+            self._pv_main_end_kwh = main_end
+        deadline_raw = data.get("pv_hold_deadline")
+        if isinstance(deadline_raw, str) and deadline_raw:
+            try:
+                self._pv_hold_deadline = datetime.fromisoformat(deadline_raw)
+            except ValueError:
+                self._pv_hold_deadline = None
 
     def _bootstrap_justified_grid_charge(self, stored_stats: dict[str, Any]) -> None:
         """One-shot: credit pre-tracking Netz→Akku to justified when reserve is on.
@@ -1234,6 +1314,13 @@ class E3DCMaestroCoordinator(
                     "date": self._last_stats_date,
                     "stats": dict(self.stats),
                     "additional_bases": dict(self._additional_bases),
+                    "pv_main_last_kwh": self._pv_main_last_kwh,
+                    "pv_main_end_kwh": self._pv_main_end_kwh,
+                    "pv_hold_deadline": (
+                        self._pv_hold_deadline.isoformat()
+                        if self._pv_hold_deadline is not None
+                        else None
+                    ),
                 }
             )
             self._stats_dirty = False
