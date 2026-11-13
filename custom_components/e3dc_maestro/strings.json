@@ -514,7 +514,7 @@
         "data_description": {
           "wallbox_min_surplus": "Maestro only starts the wallbox once this PV surplus is consistently available (hysteresis prevents cycling).",
           "wallbox_min_current": "Minimum charging current per IEC 61851 (normally 6 A). Below this, Maestro prefers to switch the wallbox off.",
-          "wallbox_included_in_house": "Enable for openWB on the utility meter or if the house consumption sensor already counts the wallbox. Prevents double counting."
+          "wallbox_included_in_house": "Enable only if the house consumption sensor already counts the wallbox (e.g. openWB on the utility meter). Leave it off for an original E3DC wallbox, its own power meter is not part of the house consumption. Prevents double counting."
         }
       },
       "evcc": {

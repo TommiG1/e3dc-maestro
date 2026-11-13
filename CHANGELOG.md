@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Support-Dump mit Preisplan.** Der Debug-Download enthält jetzt den Preisplan mit allen Planzeilen (Preis, PV, Verbrauch, Netzbezug, SoC je Slot), Boden, Obergrenze, Faktoren und der Angabe, ob Maestro ein PV-Profil für heute und morgen lesen konnte (Discussion #50).
+
+### Korrekturen
+- **Hinweis zu „In der Hauslast enthalten“.** Info-Text, Hilfe und Übersetzungen sagen jetzt, dass der Haken bei einer originalen E3DC-Wallbox aus bleibt, weil ihr eigener Leistungsmesser nicht im Hausverbrauch steckt.
+
 ---
 
 ## [0.5.9-beta.2] – Anlauf-Rampe nach „Akku halten“, Restprognose-Gate, PV-Tageszähler (2026-11-13)

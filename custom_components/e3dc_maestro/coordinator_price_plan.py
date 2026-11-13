@@ -50,6 +50,7 @@ class CoordinatorPricePlanMixin:
     _energyforecast_zone: str | None = None
     _energyforecast_warned: bool = False
     _price_provider_until: datetime | None = None
+    _price_plan_pv_sources: dict[str, bool] | None = None
 
     def _reset_price_plan(self) -> None:
         self.price_plan = None
@@ -160,6 +161,11 @@ class CoordinatorPricePlanMixin:
             pv_hist = list(pv_stats.hourly_profile_w) if pv_stats is not None else None
             pv_today = self._read_pv_forecast_profile(now, days_ahead=0, ignore_enabled=True)
             pv_tomorrow = self._read_pv_forecast_profile(now, days_ahead=1, ignore_enabled=True)
+            self._price_plan_pv_sources = {
+                "today": pv_today is not None,
+                "tomorrow": pv_tomorrow is not None,
+                "history": pv_hist is not None,
+            }
 
             cap = max(float(params.battery_capacity_kwh), 0.1)
             tuning = plan_tuning(params)

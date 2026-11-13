@@ -328,6 +328,10 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Welche Wallbox Maestro anspricht. Die Leistungswerte hängen davon ab.",
     en: "Which wallbox Maestro talks to. The power figures depend on it.",
   },
+  wallbox_included_in_house: {
+    de: "Nur anschalten, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen: Ihr eigener Leistungsmesser steckt nicht im Hausverbrauch.",
+    en: "Turn on only if the house consumption sensor already counts the wallbox (e.g. openWB at the utility meter). Leave it off for an original E3DC wallbox: its own power meter is not part of the house consumption.",
+  },
   wallbox_min_current: {
     de: "Niedrigster Ladestrom. Darunter schaltet Maestro die Wallbox aus.",
     en: "Lowest charge current. Below it Maestro switches the wallbox off.",

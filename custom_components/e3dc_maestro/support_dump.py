@@ -21,6 +21,34 @@ def redact_options(options: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+def price_plan_dump(snapshot: Any | None, pv_sources: dict[str, bool] | None) -> dict[str, Any] | None:
+    """Preisplan für den Support-Dump: Eckwerte, PV-Quellen und alle Planzeilen."""
+    if snapshot is None:
+        return None
+
+    def _iso(value: Any) -> str | None:
+        return value.isoformat() if value is not None else None
+
+    return {
+        "status": snapshot.status,
+        "message": snapshot.message,
+        "computed_at": _iso(snapshot.computed_at),
+        "known_until": _iso(snapshot.known_until),
+        "provider_until": _iso(snapshot.provider_until),
+        "floor_pct": snapshot.floor_pct,
+        "ceiling_pct": snapshot.ceiling_pct,
+        "efficiency": snapshot.efficiency,
+        "min_spread": snapshot.min_spread,
+        "wear_eur_per_kwh": snapshot.wear_eur_per_kwh,
+        "safety_factor": snapshot.safety_factor,
+        "terminal_need_kwh": snapshot.terminal_need_kwh,
+        "terminal_price": snapshot.terminal_price,
+        # Welche PV-Profile der Plan lesen konnte (False = historische Kurve).
+        "pv_profile_found": pv_sources,
+        "rows": list(snapshot.rows),
+    }
+
+
 def build_support_dump(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -92,6 +120,10 @@ def build_support_dump(
         "price_plan_active": bool(getattr(params, "price_plan_active", False)) if params else None,
         "price_plan_enabled": bool(getattr(params, "price_plan_enabled", False)) if params else None,
     }
+    data["price_plan"] = price_plan_dump(
+        getattr(coordinator, "price_plan", None),
+        getattr(coordinator, "_price_plan_pv_sources", None),
+    )
     data["debug_log"] = list(getattr(coordinator, "debug_log", []) or [])
     data["last_action"] = dict(getattr(coordinator, "last_action_info", {}) or {})
     data["hp_history"] = list(getattr(coordinator, "_hp_history", []) or [])

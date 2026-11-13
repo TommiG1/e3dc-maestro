@@ -518,7 +518,7 @@
         "data_description": {
           "wallbox_min_surplus": "Maestro startet die Wallbox erst, wenn dieser PV-Überschuss dauerhaft verfügbar ist (Hysterese verhindert Takten).",
           "wallbox_min_current": "Mindestladestrom nach IEC 61851 (normalerweise 6 A). Darunter schaltet Maestro die Wallbox lieber ab.",
-          "wallbox_included_in_house": "Aktivieren bei openWB am EVU-Zähler oder wenn der Hausverbrauchssensor die Wallbox mitzählt. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan)."
+          "wallbox_included_in_house": "Nur aktivieren, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen, ihr eigener Leistungsmesser steckt nicht im Hausverbrauch. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan)."
         }
       },
       "evcc": {

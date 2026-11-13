@@ -75,3 +75,24 @@ def test_build_support_dump_includes_debug_log() -> None:
     assert dump["debug_log"] == ["line-a", "line-b"]
     assert dump["coordinator"]["last_decision"]["phase"] == "corridor"
     assert dump["action_history"] == [{"phase": "idle"}]
+
+
+def test_price_plan_dump_has_rows_and_pv_sources() -> None:
+    from datetime import datetime, timezone
+
+    from custom_components.e3dc_maestro.price_plan_runner import PricePlanSnapshot
+    from custom_components.e3dc_maestro.support_dump import price_plan_dump
+
+    assert price_plan_dump(None, None) is None
+    now = datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc)
+    snap = PricePlanSnapshot(
+        "ok", "Preisplan: 5.0 kWh Netzladung geplant", computed_at=now,
+        rows=[{"start_local": "12:00", "pv_kwh": 0.2, "consumption_kwh": 0.3}],
+        floor_pct=0.0, ceiling_pct=95.0, safety_factor=1.15,
+    )
+    out = price_plan_dump(snap, {"today": False, "tomorrow": False, "history": True})
+    assert out["computed_at"] == now.isoformat()
+    assert out["known_until"] is None
+    assert out["pv_profile_found"] == {"today": False, "tomorrow": False, "history": True}
+    assert out["rows"][0]["pv_kwh"] == 0.2
+    assert out["ceiling_pct"] == 95.0
