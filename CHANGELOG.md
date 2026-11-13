@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.2] – Anlauf-Rampe nach „Akku halten“, Restprognose-Gate, PV-Tageszähler (2026-11-13)
+
+Beta nach 0.5.9-beta.1. Ausführlich: [docs/release-notes/v0.5.9-beta.2.md](docs/release-notes/v0.5.9-beta.2.md).
+
+### Korrekturen
+- **Anlauf-Rampe nach „Akku halten“.** Nach einer Phase ohne Lade-Cap startete die Rampe bei 0 W, obwohl die E3DC offen lud. Der PV-Überschuss ging in der Anlaufzeit teilweise ins Netz statt in den Akku (Discussion #50).
+- **Restprognose-Gate** rechnet gegen das Ladeende-Ziel statt gegen die Tagesrampe.
+- **PV-Tageszähler** nach Mitternacht nicht mehr doppelt in der Langzeitstatistik; unmögliche Wallbox-Tagessprünge werden verworfen.
+
 ## [0.5.9-beta.1] – Tagesrampe aus und Korrektur Wallbox-Netzschutz (2026-11-09)
 
 Beta nach 0.5.8. Ausführlich: [docs/release-notes/v0.5.9-beta.1.md](docs/release-notes/v0.5.9-beta.1.md).
