@@ -249,6 +249,16 @@ def _apply_gentle_charge(
     )
 
 
+def _open_cap_ramp_reference_w(max_charge_w: float) -> int:
+    """Rampen-Bezug, wenn kein Lade-Cap gesendet wird (E3DC lädt offen).
+
+    Vorher stand hier 0. Nach „Akku halten“ ramped die Anlauf-Rampe dann von
+    0 W hoch, obwohl das Lade-Cap auf der E3DC offen war, und PV-Überschuss
+    ging in der Anlaufzeit ins Netz.
+    """
+    return max(0, int(max_charge_w))
+
+
 def _ramp_bypass_due_to_resync(
     target_w: int,
     last_sent_w: int | None,

@@ -21,6 +21,7 @@ from custom_components.e3dc_maestro.coordinator import (
     _build_power_mode_data,
     _effective_discharge_limit_w,
     _limits_changed_vs_sent_values,
+    _open_cap_ramp_reference_w,
     _ramp_bypass_due_to_resync,
     _ramp_bypass_for_phase,
 )
@@ -95,6 +96,19 @@ def test_ramp_bypass_resync_skipped_without_last_sent():
 def test_ramp_bypass_resync_triggers_on_large_gap():
     """Nach Korridor-Dip (51 W gesendet) und Soll 2 kW: Rampe überspringen."""
     assert _ramp_bypass_due_to_resync(2000, 51, 200) is True
+
+
+def test_open_cap_ramp_reference_is_max_charge_not_zero():
+    """Nach „Akku halten“ (kein Lade-Cap) startet die Anlauf-Rampe nicht bei 0 W.
+
+    Mit Bezug 0 hätte ein folgender Korridor mit Ziel 4500 W nur 200 W
+    gesendet, obwohl das Cap auf der E3DC offen war (Discussion #50).
+    """
+    ref = _open_cap_ramp_reference_w(4500.0)
+    assert ref == 4500
+    ramp = 200
+    assert not (4500 > ref + ramp)  # keine Rampe für das volle Ziel
+    assert _open_cap_ramp_reference_w(-5.0) == 0
 
 
 def test_ramp_bypass_resync_respects_min_threshold():

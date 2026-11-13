@@ -106,6 +106,7 @@ from .coordinator_helpers import (
     _ewma_update,
     _limits_changed_vs_sent_values,
     _params_from_options,
+    _open_cap_ramp_reference_w,
     _ramp_bypass_due_to_resync,
     _ramp_bypass_for_phase,
     _run_optimizer_sync,
@@ -129,6 +130,7 @@ __all__ = [
     "_effective_discharge_limit_w",
     "_limits_changed_vs_sent_values",
     "_params_from_options",
+    "_open_cap_ramp_reference_w",
     "_ramp_bypass_due_to_resync",
     "_ramp_bypass_for_phase",
     "_run_optimizer_sync",
@@ -859,7 +861,11 @@ class E3DCMaestroCoordinator(
             else:
                 self._last_applied_charge_power = target_p
         else:
-            self._last_applied_charge_power = 0
+            # Kein Lade-Cap (z. B. Akku halten): die E3DC lädt offen. Die Rampe
+            # startet danach nicht bei 0, sonst bremst sie die nächste Phase.
+            self._last_applied_charge_power = _open_cap_ramp_reference_w(
+                active.max_charge_power
+            )
 
         # F0: Gentle-Charge (nicht bei Vollleistung und Akku-Priorität)
         decision = _apply_gentle_charge(
