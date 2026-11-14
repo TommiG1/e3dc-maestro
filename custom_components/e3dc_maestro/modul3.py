@@ -6,7 +6,7 @@ Preiskurve, optionale Tarif-Slots aus den Fenstern.
 from __future__ import annotations
 
 import datetime as _dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
 
 from .control_tariff import TARIFF_HIGH, TARIFF_LOW, TariffSlot, quarter_of
@@ -181,6 +181,40 @@ def derived_tariff_slots(profile: Modul3Profile) -> tuple[TariffSlot, ...]:
                 )
             )
     return tuple(out)
+
+
+def gate_stored_modul3_slots(
+    slots: list[TariffSlot], profile: Modul3Profile
+) -> list[TariffSlot]:
+    """Gespeicherte Slots im NT/HT-Fenster nur in ``profile.quarters`` aktiv.
+
+    Kopien aus „Slots füllen“ tragen kein Quartal. Ohne dieses Gate würden sie
+    nach einer Quartalsbeschränkung im Sommer weiter Netzladung auslösen. Das
+    Gate schaltet nur ab, nie zu: Ein Slot mit gleichem Fenster wie NT/HT gilt
+    höchstens in den Modul-3-Quartalen.
+    """
+    if not profile.enabled or profile.quarters == ALL_QUARTERS:
+        return slots
+    windows = {
+        class_: [(w.start_h, w.end_h) for w in z.windows]
+        for zone, class_ in ((ZONE_NT, TARIFF_LOW), (ZONE_HT, TARIFF_HIGH))
+        if (z := profile.zones.get(zone)) is not None
+    }
+    out: list[TariffSlot] = []
+    for slot in slots:
+        match = any(
+            abs(slot.start_h - start) < 1e-6 and abs(slot.end_h - end) < 1e-6
+            for start, end in windows.get(slot.class_, ())
+        )
+        if match:
+            quarters = (
+                profile.quarters
+                if slot.quarters is None
+                else slot.quarters & profile.quarters
+            )
+            slot = replace(slot, quarters=quarters)
+        out.append(slot)
+    return out
 
 
 def modul3_runtime_status(profile: Modul3Profile, now: _dt.datetime) -> dict[str, Any]:

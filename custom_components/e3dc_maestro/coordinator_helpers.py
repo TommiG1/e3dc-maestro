@@ -407,6 +407,9 @@ def _tariff_schedule_from_stored(options: dict[str, Any]) -> TariffSchedule | No
         )
     if not slots:
         return None
+    from .modul3 import gate_stored_modul3_slots, parse_modul3_profile
+
+    slots = gate_stored_modul3_slots(slots, parse_modul3_profile(options))
     threshold = (
         float(options["cheap_threshold"])
         if options.get(CONF_DYNAMIC_TARIFF_ENABLED)

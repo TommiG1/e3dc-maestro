@@ -525,6 +525,11 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
             "tariff_slots" in soft or any(key.startswith("modul3_") for key in soft)
         ):
             options = dict(entry.options)
+            for key, value in soft.items():
+                if value is None:
+                    options.pop(key, None)
+                else:
+                    options[key] = value
             for params in (
                 getattr(coordinator, "_params", None),
                 getattr(coordinator, "_auto_params", None),

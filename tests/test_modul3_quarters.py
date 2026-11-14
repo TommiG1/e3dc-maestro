@@ -346,3 +346,53 @@ def _mutate(options: dict, index: int, **changes) -> dict:
 )
 def test_migration_leaves_non_copies_untouched(options):
     assert migrate_copied_modul3_slots(options) is None
+
+
+# ── Gespeicherte Kopien folgen den Quartalen (nicht migriert) ───────────────
+
+
+def _copies_with_quarters(live: bool, base: dict | None = None) -> dict:
+    options = dict(base if base is not None else _filled_options())
+    options["modul3_quarters"] = [1, 4]
+    if live:
+        options["modul3_tariff_slots"] = True
+    return options
+
+
+@pytest.mark.parametrize("live", [False, True])
+@pytest.mark.parametrize(
+    "base",
+    [
+        pytest.param(None, id="plain-copies"),
+        pytest.param(_mutate(_filled_options(), 0, weekdays=[0, 1, 2, 3, 4]), id="edited-weekdays"),
+        pytest.param(_mutate(_filled_options(), 0, min_reserve_soc=30.0), id="reserve-on-copy"),
+    ],
+)
+def test_stored_copies_never_low_outside_quarters(live, base):
+    options = _copies_with_quarters(live, base)
+    schedule = tariff_schedule_from_params(_params_from_options(options))
+    low_seen = 0
+    for when in _year_local(step_min=30):
+        cls = current_tariff_class(when, schedule)
+        if _quarter(when) not in (1, 4):
+            assert cls != TARIFF_LOW, when
+            assert cls != TARIFF_HIGH, when
+        elif cls == TARIFF_LOW:
+            low_seen += 1
+    assert low_seen > 500
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_decide_with_stored_copies_no_summer_grid_charge(live):
+    params = _night_params(_copies_with_quarters(live))
+    summer = decide(_night_state(), params, dt.datetime(2026, 7, 14, 23, 0, tzinfo=BERLIN))
+    assert summer.phase != PHASE_GRID_CHARGE
+    winter = decide(_night_state(), params, dt.datetime(2026, 1, 14, 23, 0, tzinfo=BERLIN))
+    assert winter.phase == PHASE_GRID_CHARGE
+
+
+def test_own_slots_outside_modul3_windows_stay_year_round():
+    options = _copies_with_quarters(False, _filled_options(extra_slots=(_USER_SLOT,)))
+    schedule = tariff_schedule_from_params(_params_from_options(options))
+    july_tuesday = dt.datetime(2026, 7, 14, 21, 30, tzinfo=BERLIN)
+    assert current_tariff_class(july_tuesday, schedule) == TARIFF_LOW
