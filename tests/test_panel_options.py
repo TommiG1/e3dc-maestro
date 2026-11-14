@@ -131,6 +131,30 @@ def test_modul3_zones_and_price_sensor_are_soft_options():
     assert entry.options["modul3_zones"]["nt"]["price_ct_kwh"] == 2.0
 
 
+def test_modul3_quarters_and_tariff_slots_are_soft_options():
+    params = SimpleNamespace(tariff_schedule=None)
+    hass, entry, written, _ = _hass({}, set(), params)
+    result = apply_panel_options(
+        hass,
+        {
+            "modul3_quarters": [4, 1, 1],
+            "modul3_tariff_slots": True,
+        },
+    )
+    assert result["reloaded"] is False
+    assert written == []
+    assert entry.options["modul3_quarters"] == [1, 4]
+    assert entry.options["modul3_tariff_slots"] is True
+
+
+def test_modul3_quarters_rejects_fewer_than_two():
+    params = SimpleNamespace(tariff_schedule=None)
+    hass, _, _, _ = _hass({}, set(), params)
+    with pytest.raises(PanelOptionsError) as err:
+        apply_panel_options(hass, {"modul3_quarters": [1]})
+    assert err.value.errors["modul3_quarters"] == "modul3_quarters_min2"
+
+
 def test_additional_producers_accept_list_and_legacy_string():
     params = SimpleNamespace()
     states = {"sensor.a", "sensor.b"}

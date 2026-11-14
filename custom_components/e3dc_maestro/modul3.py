@@ -246,3 +246,28 @@ def clean_modul3_zones(value: Any) -> tuple[dict[str, Any] | None, str | None]:
             ],
         }
     return cleaned, None
+
+
+def clean_modul3_quarters(value: Any) -> tuple[list[int] | None, str | None]:
+    """Validiert ``modul3_quarters``: Liste aus 1–4, mind. zwei, sortiert und dedupliziert.
+
+    BNetzA: Modul 3 muss in mindestens zwei Quartalen eines Jahres gelten.
+    Fehlende Option (nicht gesetzt) bedeutet später in ``parse_modul3_profile``
+    alle vier Quartale; hier wird nur ein gelieferter Wert geprüft.
+    """
+    if not isinstance(value, list):
+        return None, "modul3_quarters"
+    cleaned: list[int] = []
+    for item in value:
+        try:
+            quarter = int(item)
+        except (TypeError, ValueError):
+            return None, "modul3_quarters"
+        if quarter not in (1, 2, 3, 4):
+            return None, "modul3_quarters"
+        if quarter not in cleaned:
+            cleaned.append(quarter)
+    cleaned.sort()
+    if len(cleaned) < 2:
+        return None, "modul3_quarters_min2"
+    return cleaned, None

@@ -118,6 +118,8 @@ _SPECS: dict[str, _Spec] = {
     "modul3_vat": ("select", ("off", "de", "custom")),
     "modul3_vat_percent": _n(0, 100),
     "modul3_zones": ("modul3_zones",),
+    "modul3_quarters": ("modul3_quarters",),
+    "modul3_tariff_slots": ("bool",),
     "cheap_threshold": _n(0, 1),
     "max_grid_charge_kwh": _n(0, 150),
     "low_slot_grid_charge_enabled": ("bool",),
@@ -236,6 +238,8 @@ _SOFT_OPTIONS = frozenset({
     "modul3_vat",
     "modul3_vat_percent",
     "modul3_zones",
+    "modul3_quarters",
+    "modul3_tariff_slots",
     "tariff_slots",
 })
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
@@ -365,6 +369,9 @@ def _check(spec: _Spec, value: Any, known) -> str | None:
     if kind == "modul3_zones":
         # Validated in validate_panel_options (needs cleaned payload).
         return None
+    if kind == "modul3_quarters":
+        # Validated in validate_panel_options (needs cleaned payload).
+        return None
     return "type"
 
 
@@ -381,7 +388,10 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             errors[key] = "unknown"
             continue
         if value is None:
-            clearable = spec[0] in {"entity", "entities", "action", "text", "slots", "modul3_zones"}
+            clearable = spec[0] in {
+                "entity", "entities", "action", "text", "slots",
+                "modul3_zones", "modul3_quarters",
+            }
             if not clearable or (spec[0] == "entity" and spec[1]):
                 errors[key] = "required"
             else:
@@ -403,6 +413,15 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             from .modul3 import clean_modul3_zones
 
             parsed, reason = clean_modul3_zones(value)
+            if reason:
+                errors[key] = reason
+            else:
+                cleaned[key] = parsed
+            continue
+        if spec[0] == "modul3_quarters":
+            from .modul3 import clean_modul3_quarters
+
+            parsed, reason = clean_modul3_quarters(value)
             if reason:
                 errors[key] = reason
             else:

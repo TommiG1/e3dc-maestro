@@ -11,6 +11,7 @@ from custom_components.e3dc_maestro.modul3 import (
     Modul3Window,
     Modul3Zone,
     add_modul3_to_horizon,
+    clean_modul3_quarters,
     clean_modul3_zones,
     parse_modul3_profile,
     tariff_slots_from_modul3,
@@ -134,3 +135,16 @@ def test_parse_and_clean_zones():
     cleaned, err = clean_modul3_zones(options["modul3_zones"])
     assert err is None and cleaned is not None
     assert cleaned["nt"]["windows"][0]["end_h"] == 5.0
+
+
+def test_clean_modul3_quarters_ok():
+    cleaned, err = clean_modul3_quarters([4, 1, 1, "4"])
+    assert err is None and cleaned == [1, 4]
+
+
+def test_clean_modul3_quarters_rejects_short_and_invalid():
+    assert clean_modul3_quarters([1])[1] == "modul3_quarters_min2"
+    assert clean_modul3_quarters([])[1] == "modul3_quarters_min2"
+    assert clean_modul3_quarters([1, 5])[1] == "modul3_quarters"
+    assert clean_modul3_quarters("1,4")[1] == "modul3_quarters"
+    assert clean_modul3_quarters([1, 2, 3, 4])[0] == [1, 2, 3, 4]

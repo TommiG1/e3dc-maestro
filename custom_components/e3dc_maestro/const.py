@@ -175,6 +175,8 @@ CONF_MODUL3_VAT = "modul3_vat"                        # off|de|at|ch|custom
 CONF_MODUL3_VAT_PERCENT = "modul3_vat_percent"        # % bei custom (0–100)
 CONF_MODUL3_APPLY_VAT = "modul3_apply_vat"            # legacy bool → de/off
 CONF_MODUL3_ZONES = "modul3_zones"                    # {nt|st|ht: {price_ct_kwh, windows}}
+CONF_MODUL3_QUARTERS = "modul3_quarters"              # [1..4], mind. 2; fehlend = alle vier
+CONF_MODUL3_TARIFF_SLOTS = "modul3_tariff_slots"      # bool: NT/HT live als Tarif-Slots
 CONF_CHEAP_THRESHOLD = "cheap_threshold"              # €/kWh
 CONF_MAX_GRID_CHARGE_KWH = "max_grid_charge_kwh"      # Sicherheitsgrenze pro Tag, 0 = keine
 # Aktive Netzladung im low-Slot (NT-Fenster). Unabhängig vom tariff_mode:
@@ -483,6 +485,8 @@ DEFAULT_ENERGYFORECAST_MARKET_ZONE = "DE-LU"
 DEFAULT_MODUL3_ENABLED = False
 DEFAULT_MODUL3_ADD_TO_CURVE = True
 DEFAULT_MODUL3_APPLY_VAT = False
+DEFAULT_MODUL3_QUARTERS = (1, 2, 3, 4)
+DEFAULT_MODUL3_TARIFF_SLOTS = False
 DEFAULT_MAX_GRID_CHARGE_KWH = 0.0
 DEFAULT_LOW_SLOT_GRID_CHARGE_ENABLED = False
 DEFAULT_LOW_SLOT_TARGET_SOC = 60.0
