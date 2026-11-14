@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.9-beta.4] – Modul 3 nach Quartalen (2026-11-14)
+
+Beta nach 0.5.9-beta.3. Ausführlich: [docs/release-notes/v0.5.9-beta.4.md](docs/release-notes/v0.5.9-beta.4.md).
+
 ### Neu
 - **Modul 3 nach Quartalen.** NT und HT gelten nur in den gewählten Quartalen (mindestens zwei), außerhalb ist alles Standardlast, wie im Preisblatt der Netzbetreiber. Zeiten gibst du als Uhrzeit in Viertelstunden ein. Mit „Tarif-Slots aus Modul 3 ableiten“ entstehen die Niedrig- und Hoch-Slots live aus Modul 3 und werden nicht mehr in die Slot-Liste kopiert (Discussion #56).
 
