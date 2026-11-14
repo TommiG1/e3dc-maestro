@@ -22,6 +22,7 @@ from .const import (
     RSCP_SUFFIX_ADDITIONAL_PRODUCTION,
     RSCP_SUFFIX_ADDITIONAL_TOTAL,
     as_entity_list,
+    rscp_select,
     CONF_ADVANCED_CORRIDOR,
     CONF_BATTERY_CHARGED_TODAY_SENSOR,
     CONF_BATTERY_DISCHARGED_TODAY_SENSOR,
@@ -716,17 +717,17 @@ def _autodetect_wallbox_plug(hass, entry_ids: set[str] | None = None) -> str | N
     )
 
 
-def _rscp_sensor_rows(hass, entry_ids: set[str]) -> list[tuple[str, str]]:
-    """RSCP sensor entity_id + config_entry_id pairs (farm controllers first)."""
+def _rscp_sensor_rows(hass, entry_ids: set[str]) -> list[tuple[str, str, str | None]]:
+    """RSCP sensor (entity_id, config_entry_id, translation_key), farm controllers first."""
     farm_ids = farm_controller_entry_ids(hass)
     registry = er.async_get(hass)
-    farm: list[tuple[str, str]] = []
-    other: list[tuple[str, str]] = []
+    farm: list[tuple[str, str, str | None]] = []
+    other: list[tuple[str, str, str | None]] = []
     for ent in registry.entities.values():
         entry_id = ent.config_entry_id
         if entry_id not in entry_ids or not ent.entity_id.startswith("sensor."):
             continue
-        row = (ent.entity_id, entry_id)
+        row = (ent.entity_id, entry_id, getattr(ent, "translation_key", None))
         (farm if entry_id in farm_ids else other).append(row)
     return farm + other
 
@@ -745,25 +746,28 @@ def _autodetect_rscp_sources(hass) -> dict[str, Any]:
     if rscp_entries:
         entry_ids = {e.entry_id for e in rscp_entries}
         rows = _rscp_sensor_rows(hass, entry_ids)
-        rscp_sensor_ids = [eid for eid, _ in rows]
+        keyed = [(eid, tkey) for eid, _, tkey in rows]
         for key, suffix in _RSCP_SUFFIX_MAP.items():
-            match = next((eid for eid in rscp_sensor_ids if eid.endswith(suffix)), None)
+            match = next(iter(rscp_select(keyed, suffix)), None)
             if match:
                 out[key] = match
         farm_ids = farm_controller_entry_ids(hass)
         for key, suffix in _RSCP_MULTI_SUFFIX_MAP.items():
-            matches = sorted(eid for eid in rscp_sensor_ids if eid.endswith(suffix))
+            matches = sorted(rscp_select(keyed, suffix))
             if farm_ids:
                 farm_matches = sorted(
-                    eid for eid, entry_id in rows if eid.endswith(suffix) and entry_id in farm_ids
+                    rscp_select(
+                        [(eid, tkey) for eid, entry_id, tkey in rows if entry_id in farm_ids],
+                        suffix,
+                    )
                 )
                 if farm_matches:
                     matches = farm_matches
             if matches:
                 out[key] = matches[:MAX_ADDITIONAL_PRODUCERS]
-    # _transfer_to_from_grid liefert positiv = Bezug → Vorzeichen automatisch invertieren.
-    grid = out.get(CONF_GRID_POWER_SENSOR, "")
-    if isinstance(grid, str) and grid.endswith("_transfer_to_from_grid"):
+    # Der RSCP-Netzsensor (grid-netchange) liefert positiv = Bezug → Vorzeichen
+    # automatisch invertieren. Er ist die einzige Quelle für diesen Schlüssel.
+    if out.get(CONF_GRID_POWER_SENSOR):
         out[CONF_GRID_POWER_INVERT] = True
     # Wallbox automatisch konfigurieren, wenn der RSCP-Sensor existiert.
     # E3DC-Wallbox hat einen eigenen Powermeter → NICHT im Hausverbrauch enthalten.
@@ -842,10 +846,10 @@ def _autodetect_rscp_system_params(hass) -> dict[str, Any]:
     if not rscp_entries:
         return {}
     entry_ids = {e.entry_id for e in rscp_entries}
-    rscp_sensor_ids = [eid for eid, _ in _rscp_sensor_rows(hass, entry_ids)]
+    keyed = [(eid, tkey) for eid, _, tkey in _rscp_sensor_rows(hass, entry_ids)]
     out: dict[str, Any] = {}
     for key, (suffix, mult) in _RSCP_SYSTEM_PARAM_MAP.items():
-        eid = next((s for s in rscp_sensor_ids if s.endswith(suffix)), None)
+        eid = next(iter(rscp_select(keyed, suffix)), None)
         if not eid:
             continue
         state = hass.states.get(eid)
@@ -1347,7 +1351,7 @@ async def _autodetect_sizing_sensors(hass) -> dict[str, Any]:
     rscp_entries = hass.config_entries.async_entries(E3DC_RSCP_DOMAIN)
     if rscp_entries:
         entry_ids = {e.entry_id for e in rscp_entries}
-        sensor_ids = [eid for eid, _ in _rscp_sensor_rows(hass, entry_ids)]
+        sensor_ids = [eid for eid, _, _ in _rscp_sensor_rows(hass, entry_ids)]
         for key, suffix in _RSCP_ENERGY_SUFFIX_MAP.items():
             match = next((eid for eid in sensor_ids if eid.endswith(suffix)), None)
             if match:

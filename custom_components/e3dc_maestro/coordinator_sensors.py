@@ -34,6 +34,7 @@ from .const import (
     RSCP_SUFFIX_ADDITIONAL_TOTAL,
     RSCP_SUFFIX_HOUSE_CONSUMPTION_TODAY,
     RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY,
+    rscp_select,
     STAT_PV_ADDITIONAL_TODAY,
     STAT_PV_PRODUCTION_TODAY,
     as_entity_list,
@@ -218,12 +219,12 @@ class CoordinatorSensorsMixin:
         if rscp_entries:
             entry_ids = {e.entry_id for e in rscp_entries}
             registry = er.async_get(self.hass)
-            for ent in registry.entities.values():
-                if ent.config_entry_id not in entry_ids:
-                    continue
-                if ent.entity_id.startswith("sensor.") and ent.entity_id.endswith(suffix):
-                    found = ent.entity_id
-                    break
+            rows = [
+                (ent.entity_id, getattr(ent, "translation_key", None))
+                for ent in registry.entities.values()
+                if ent.config_entry_id in entry_ids and ent.entity_id.startswith("sensor.")
+            ]
+            found = next(iter(rscp_select(rows, suffix)), "")
         cache[suffix] = found
         return found or None
 

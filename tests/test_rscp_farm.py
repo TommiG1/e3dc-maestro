@@ -104,3 +104,34 @@ def test_autodetect_system_params_prefers_farm_controller(monkeypatch):
     detected = config_flow._autodetect_rscp_system_params(hass)
 
     assert detected[CONF_MAX_CHARGE_POWER] == 9000
+
+
+def test_autodetect_uses_translation_key_for_renamed_and_german_ids(monkeypatch):
+    """Renamed or localized entity_ids are found via translation_key; grid is inverted."""
+    def ent(eid, key):
+        return SimpleNamespace(entity_id=eid, config_entry_id="e1", translation_key=key)
+
+    entities = [
+        ent("sensor.s10_ladezustand", "soc"),
+        ent("sensor.batterie_laden_wallbox_ladezustand", "wallbox-soc"),
+        ent("sensor.s10_netzaustausch", "grid-netchange"),
+        ent("sensor.s10_batterie_nettoaenderung", "battery-netchange"),
+        ent("sensor.s10_solarerzeugung", "solar-production"),
+        ent("sensor.s10_solarerzeugung_heute", "db-day-solar-production"),
+        ent("sensor.s10_zusaetzlich_gesamt", "additional-1-total"),
+        ent("sensor.s10_zusaetzliche_erzeugung", "additional-production"),
+        ent("sensor.s10_ac_leistung", "system-ac-maxpower"),
+    ]
+    hass = _hass([SimpleNamespace(entry_id="e1", data={})], entities)
+    monkeypatch.setattr(config_flow.er, "async_get", lambda _hass: hass._registry)
+
+    detected = config_flow._autodetect_rscp_sources(hass)
+
+    assert detected[CONF_SOC_SENSOR] == "sensor.s10_ladezustand"
+    assert detected[CONF_BATTERY_POWER_SENSOR] == "sensor.s10_batterie_nettoaenderung"
+    assert detected[config_flow.CONF_GRID_POWER_SENSOR] == "sensor.s10_netzaustausch"
+    assert detected[config_flow.CONF_GRID_POWER_INVERT] is True
+    assert detected[config_flow.CONF_PV_POWER_SENSOR] == "sensor.s10_solarerzeugung"
+    assert detected[config_flow.CONF_PV_PRODUCTION_TODAY_SENSOR] == "sensor.s10_solarerzeugung_heute"
+    assert detected[config_flow.CONF_ADDITIONAL_ENERGY_TOTAL_SENSOR] == ["sensor.s10_zusaetzlich_gesamt"]
+    assert detected[config_flow.CONF_ADDITIONAL_GENERATION_SENSOR] == ["sensor.s10_zusaetzliche_erzeugung"]

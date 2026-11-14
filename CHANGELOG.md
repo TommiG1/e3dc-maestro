@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Geändert
+- Die Auto-Erkennung der E3DC-Sensoren (Quellen, Tageszähler, Zusatzerzeugung, Systemparameter) nutzt jetzt den `translation_key` von hacs-e3dc und fällt erst dann auf das Ende der Entity-ID zurück. Damit werden auch umbenannte oder übersetzte Entity-IDs gefunden, zum Beispiel mit hacs-e3dc 4.1.0-beta.1.
+
 ---
 
 ## [0.5.9-beta.3] – Morgen-Entladung und Schnellboden, Preisplan im Support-Dump (2026-11-14)

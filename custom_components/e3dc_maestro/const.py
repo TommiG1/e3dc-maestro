@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,46 @@ RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY = "_solar_production_today"
 RSCP_SUFFIX_HOUSE_CONSUMPTION_TODAY = "_house_consumption_today"
 RSCP_SUFFIX_ADDITIONAL_TOTAL = "_additional_total"
 RSCP_SUFFIX_ADDITIONAL_PRODUCTION = "_additional_production"
+
+# Every entity_id suffix above and in config_flow maps to a hacs-e3dc
+# translation_key. The key is language and rename proof, so it wins over the
+# suffix; the suffix stays as fallback for entries without a translation_key.
+RSCP_TRANSLATION_BY_SUFFIX: dict[str, str] = {
+    "_state_of_charge": "soc",
+    "_solar_production": "solar-production",
+    "_house_consumption": "house-consumption",
+    "_transfer_to_from_grid": "grid-netchange",
+    "_battery_net_change": "battery-netchange",
+    "_battery_charge_today": "db-day-battery-charge",
+    "_battery_discharge_today": "db-day-battery-discharge",
+    RSCP_SUFFIX_SOLAR_PRODUCTION_TODAY: "db-day-solar-production",
+    RSCP_SUFFIX_HOUSE_CONSUMPTION_TODAY: "db-day-house-consumption",
+    "_wallbox_consumption": "wallbox-consumption",
+    RSCP_SUFFIX_ADDITIONAL_PRODUCTION: "additional-production",
+    RSCP_SUFFIX_ADDITIONAL_TOTAL: r"additional-\d+-total",
+    "_installed_peak_power": "system-battery-installed-peak",
+    "_maximum_ac_power": "system-ac-maxpower",
+    "_system_maximum_charge": "system-battery-charge-max",
+    "_derate_feed_above": "system-derate-percent",
+    "_installed_battery_capacity": "system-battery-installed-capacity",
+}
+
+
+def rscp_select(rows: Any, suffix: str) -> list[str]:
+    """Pick entity_ids for a RSCP suffix from ``(entity_id, translation_key)`` rows.
+
+    Rows matching the translation_key come first; only without such a row does
+    the entity_id suffix decide. Row order is kept.
+    """
+    rows = list(rows)
+    pattern = RSCP_TRANSLATION_BY_SUFFIX.get(suffix)
+    if pattern:
+        by_key = [
+            eid for eid, key in rows if key and re.fullmatch(pattern, key)
+        ]
+        if by_key:
+            return by_key
+    return [eid for eid, _ in rows if eid.endswith(suffix)]
 
 
 def as_entity_list(value: Any, *, max_items: int | None = None) -> list[str]:
