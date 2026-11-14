@@ -9,10 +9,17 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.9-beta.3] – Morgen-Entladung und Schnellboden, Preisplan im Support-Dump (2026-11-14)
+
+Beta nach 0.5.9-beta.2. Ausführlich: [docs/release-notes/v0.5.9-beta.3.md](docs/release-notes/v0.5.9-beta.3.md).
+
 ### Neu
 - **Support-Dump mit Preisplan.** Der Debug-Download enthält jetzt den Preisplan mit allen Planzeilen (Preis, PV, Verbrauch, Netzbezug, SoC je Slot), Boden, Obergrenze, Faktoren und der Angabe, ob Maestro ein PV-Profil für heute und morgen lesen konnte (Discussion #50).
 
 ### Korrekturen
+- **Morgen-Entladung nie unter dem Schnellboden.** Vorentladung und Schnelllade-Boden pendelten gegeneinander (59 % / 61 %). Das Entlade-Ziel ist jetzt mindestens so hoch wie ein aktiver Boden (Discussion #56).
 - **Hinweis zu „In der Hauslast enthalten“.** Info-Text, Hilfe und Übersetzungen sagen jetzt, dass der Haken bei einer originalen E3DC-Wallbox aus bleibt, weil ihr eigener Leistungsmesser nicht im Hausverbrauch steckt.
 
 ---
