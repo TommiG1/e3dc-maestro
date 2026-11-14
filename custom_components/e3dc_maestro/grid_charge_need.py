@@ -56,7 +56,14 @@ def low_slot_hours_left(now: _dt.datetime, slot: TariffSlot | None) -> float | N
         return max(0.0, slot.end_h - hour)
     # Über Mitternacht: aktiv ab start_h oder vor end_h am Folgetag.
     if hour >= slot.start_h:
-        return (24.0 - hour) + slot.end_h
+        left = (24.0 - hour) + slot.end_h
+        # Quartals-Slot (Modul 3): endet um Mitternacht, wenn das nächste
+        # Quartal nicht gewählt ist – sonst plant JIT mit zu viel Restzeit.
+        if slot.quarters is not None:
+            tomorrow = now.date() + _dt.timedelta(days=1)
+            if (tomorrow.month - 1) // 3 + 1 not in slot.quarters:
+                left = 24.0 - hour
+        return left
     if hour < slot.end_h:
         return max(0.0, slot.end_h - hour)
     return None

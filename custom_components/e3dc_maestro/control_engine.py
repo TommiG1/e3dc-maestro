@@ -149,6 +149,8 @@ class MaestroParams:
     # Phase C: explicit tariff slot schedule (optional override).
     # If None, a schedule is derived from the legacy ht_*/cheap_threshold fields.
     tariff_schedule: TariffSchedule | None = None
+    # Modul-3 live slots (runtime only, built from options; never stored).
+    derived_tariff_slots: tuple[TariffSlot, ...] = ()
     # PV forecast (charge delay)
     pv_forecast_enabled: bool = False
     pv_forecast_threshold_kwh: float = 5.0

@@ -9,12 +9,17 @@ import datetime as _dt
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from .control_tariff import TARIFF_HIGH, TARIFF_LOW, TariffSlot, quarter_of
 from .price_curve import PriceHorizon
 
 ZONE_NT = "nt"
 ZONE_ST = "st"
 ZONE_HT = "ht"
 ZONES = (ZONE_NT, ZONE_ST, ZONE_HT)
+ALL_QUARTERS: frozenset[int] = frozenset({1, 2, 3, 4})
+# Stored options written by the v6 migration (copied "fill" slots → live slots).
+TARIFF_SLOTS_BACKUP_KEY = "tariff_slots_backup_modul3"
+SLOTS_MIGRATED_KEY = "modul3_slots_migrated"
 
 # Preset VAT rates (%) for Modul-3 ct from the DE DSO price sheet (net → gross).
 # §14a Modul 3 is Germany-only; AT/CH have no equivalent NT/ST/HT sheet.
@@ -51,6 +56,14 @@ class Modul3Profile:
     vat: str = VAT_OFF
     vat_percent: float = 0.0  # used when vat == custom
     zones: Mapping[str, Modul3Zone] = field(default_factory=dict)
+    # Quartale, in denen NT/HT gelten; sonst überall ST (BNetzA: max. zwei ohne).
+    quarters: frozenset[int] = ALL_QUARTERS
+    # NT/HT live als Tarif-Slots (low/high) in den Zeitplan einspeisen.
+    tariff_slots: bool = False
+
+    def active_in(self, when: _dt.datetime) -> bool:
+        """True wenn NT/HT zum Zeitpunkt gelten (Modul 3 an und Quartal gewählt)."""
+        return self.enabled and quarter_of(when) in self.quarters
 
     def vat_rate_percent(self) -> float:
         if self.vat == VAT_CUSTOM:
@@ -72,8 +85,13 @@ def _window_active(window: Modul3Window, hour: float) -> bool:
 
 
 def zone_at(now: _dt.datetime, profile: Modul3Profile) -> str:
-    """Aktive Zone: HT vor NT vor ST (Rest)."""
-    if not profile.enabled:
+    """Aktive Zone: HT vor NT vor ST (Rest).
+
+    Maßgeblich ist das Quartal von ``now`` selbst, nicht das des Fensterbeginns:
+    Ein NT-Fenster 22:15–06:15 am 31.3. ist am 1.4. um 03:00 schon ST, wenn Q2
+    nicht gewählt ist – so rechnet der Netzbetreiber ab.
+    """
+    if not profile.active_in(now):
         return ZONE_ST
     hour = now.hour + now.minute / 60.0 + now.second / 3600.0
     for zone in (ZONE_HT, ZONE_NT):
@@ -96,10 +114,15 @@ def add_modul3_to_horizon(
         return horizon
     if not horizon.prices:
         return horizon
-    cursor = horizon.start
+    # Aware datetimes add wall-clock time; across a DST switch that shifts
+    # the slot mid by an hour. Step in UTC and convert back to local.
+    tz = horizon.start.tzinfo
+    cursor = horizon.start.astimezone(_dt.timezone.utc) if tz is not None else horizon.start
     prices: list[float] = []
     for hours, price in zip(horizon.slot_hours, horizon.prices):
         mid = cursor + _dt.timedelta(hours=hours / 2.0)
+        if tz is not None:
+            mid = mid.astimezone(tz)
         prices.append(price + profile.fee_eur(zone_at(mid, profile)))
         cursor += _dt.timedelta(hours=hours)
     return PriceHorizon(
@@ -131,6 +154,49 @@ def tariff_slots_from_modul3(profile: Modul3Profile) -> list[dict[str, Any]]:
                 }
             )
     return slots
+
+
+def derived_tariff_slots(profile: Modul3Profile) -> tuple[TariffSlot, ...]:
+    """NT→low, HT→high als Laufzeit-Slots, nur in ``profile.quarters`` aktiv.
+
+    Leer, solange Modul 3 oder der Slot-Schalter aus ist. Die Slots werden nie
+    gespeichert; sie entstehen bei jedem Options-Rebuild neu aus Modul 3.
+    """
+    if not (profile.enabled and profile.tariff_slots):
+        return ()
+    weekdays = frozenset(range(7))
+    out: list[TariffSlot] = []
+    for zone, class_ in ((ZONE_NT, TARIFF_LOW), (ZONE_HT, TARIFF_HIGH)):
+        z = profile.zones.get(zone)
+        if z is None:
+            continue
+        for window in z.windows:
+            out.append(
+                TariffSlot(
+                    weekdays=weekdays,
+                    start_h=float(window.start_h),
+                    end_h=float(window.end_h),
+                    class_=class_,
+                    quarters=profile.quarters,
+                )
+            )
+    return tuple(out)
+
+
+def modul3_runtime_status(profile: Modul3Profile, now: _dt.datetime) -> dict[str, Any]:
+    """Zustand für Panel, Support-Dump und Warum?."""
+    return {
+        "enabled": profile.enabled,
+        "quarter": quarter_of(now),
+        "quarters": sorted(profile.quarters),
+        "active": profile.active_in(now),
+        "zone": zone_at(now, profile),
+        "tariff_slots": profile.tariff_slots,
+        "derived_slots": [
+            {"start_h": s.start_h, "end_h": s.end_h, "class_": s.class_}
+            for s in derived_tariff_slots(profile)
+        ],
+    }
 
 
 def _parse_window(raw: Any) -> Modul3Window | None:
@@ -218,7 +284,28 @@ def parse_modul3_profile(options: Mapping[str, Any]) -> Modul3Profile:
         vat=vat,
         vat_percent=vat_percent,
         zones=zones,
+        quarters=_parse_quarters(options.get("modul3_quarters")),
+        tariff_slots=options.get("modul3_tariff_slots") is True,
     )
+
+
+def _parse_quarters(raw: Any) -> frozenset[int]:
+    """Gespeicherte Quartale. Fehlend oder unbrauchbar → alle vier (bisheriges Verhalten).
+
+    Eine einzelne gültige Angabe wird übernommen statt aufgefüllt: weniger
+    Quartale heißt weniger NT-Zeit, also nie zusätzliche Netzladung.
+    """
+    if not isinstance(raw, (list, tuple)):
+        return ALL_QUARTERS
+    quarters: set[int] = set()
+    for item in raw:
+        try:
+            quarter = int(item)
+        except (TypeError, ValueError):
+            continue
+        if quarter in ALL_QUARTERS:
+            quarters.add(quarter)
+    return frozenset(quarters) if quarters else ALL_QUARTERS
 
 
 def normalize_modul3_vat_options(options: dict[str, Any]) -> dict[str, Any]:
@@ -271,3 +358,60 @@ def clean_modul3_quarters(value: Any) -> tuple[list[int] | None, str | None]:
     if len(cleaned) < 2:
         return None, "modul3_quarters_min2"
     return cleaned, None
+
+
+def _is_copied_slot(stored: Any, derived: Mapping[str, Any]) -> bool:
+    """Gespeicherter Slot ist eine unveränderte Kopie aus „Slots füllen“."""
+    if not isinstance(stored, Mapping):
+        return False
+    if stored.get("min_reserve_soc") is not None:
+        return False
+    try:
+        weekdays = sorted(int(d) for d in stored.get("weekdays", []))
+        start_h = float(stored["start_h"])
+        end_h = float(stored["end_h"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    cls = stored.get("class_") or stored.get("class")
+    return (
+        weekdays == list(range(7))
+        and cls == derived["class_"]
+        and abs(start_h - derived["start_h"]) < 1e-6
+        and abs(end_h - derived["end_h"]) < 1e-6
+    )
+
+
+def migrate_copied_modul3_slots(options: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Kopierte Modul-3-Slots durch Live-Slots ersetzen (Config-Entry v6).
+
+    Greift nur, wenn Modul 3 an ist und **jeder** NT/HT-Slot genau einmal als
+    unveränderte Kopie gespeichert ist. Dann sind alte und neue Konfiguration
+    gleichwertig: Quartale stehen auf allen vier, die Live-Slots liegen vorn im
+    Zeitplan wie die Kopien nach „Slots füllen“. Teilweise kopierte oder
+    bearbeitete Slots bleiben unangetastet. ``None`` = nichts zu tun.
+    """
+    if not options.get("modul3_enabled"):
+        return None
+    if options.get("modul3_tariff_slots") is True:
+        return None
+    stored = options.get("tariff_slots")
+    if not isinstance(stored, list) or not stored:
+        return None
+    profile = parse_modul3_profile(options)
+    if profile.quarters != ALL_QUARTERS:
+        return None
+    derived = tariff_slots_from_modul3(profile)
+    if not derived or len(stored) < len(derived):
+        return None
+    # "Fill" wrote NT then HT at the head of the list. Only that exact head
+    # is migrated, so the live slots take the same place in the schedule and
+    # overlapping slots resolve to the same winner as before.
+    if not all(_is_copied_slot(stored[i], slot) for i, slot in enumerate(derived)):
+        return None
+    remaining = list(stored[len(derived):])
+    out = dict(options)
+    out[TARIFF_SLOTS_BACKUP_KEY] = list(stored)
+    out["tariff_slots"] = remaining
+    out["modul3_tariff_slots"] = True
+    out[SLOTS_MIGRATED_KEY] = True
+    return out

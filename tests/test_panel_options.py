@@ -147,6 +147,31 @@ def test_modul3_quarters_and_tariff_slots_are_soft_options():
     assert entry.options["modul3_tariff_slots"] is True
 
 
+def test_modul3_change_rebuilds_live_slots_on_both_params():
+    """Saving quarters must reach the engine this tick, also the optimizer copy."""
+    zones = {
+        "nt": {"price_ct_kwh": 2.0, "windows": [{"start_h": 22.25, "end_h": 6.25}]},
+        "st": {"price_ct_kwh": 6.0, "windows": []},
+        "ht": {"price_ct_kwh": 13.0, "windows": [{"start_h": 17, "end_h": 20}]},
+    }
+    params = SimpleNamespace(tariff_schedule=None, derived_tariff_slots=())
+    auto = SimpleNamespace(tariff_schedule=None, derived_tariff_slots=())
+    hass, entry, _, _ = _hass(
+        {"modul3_enabled": True, "modul3_zones": zones, "modul3_tariff_slots": True},
+        set(),
+        params,
+    )
+    coordinator = hass.data[DOMAIN]["e1"]
+    coordinator._auto_params = auto
+    apply_panel_options(hass, {"modul3_quarters": [1, 4]})
+    for target in (params, auto):
+        assert [s.class_ for s in target.derived_tariff_slots] == ["low", "high"]
+        assert all(s.quarters == frozenset({1, 4}) for s in target.derived_tariff_slots)
+    apply_panel_options(hass, {"modul3_tariff_slots": False})
+    assert params.derived_tariff_slots == ()
+    assert auto.derived_tariff_slots == ()
+
+
 def test_modul3_quarters_rejects_fewer_than_two():
     params = SimpleNamespace(tariff_schedule=None)
     hass, _, _, _ = _hass({}, set(), params)

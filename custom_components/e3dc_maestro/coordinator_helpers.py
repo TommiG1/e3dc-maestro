@@ -346,7 +346,21 @@ def _params_from_options(options: dict[str, Any]) -> MaestroParams:
     schedule = _tariff_schedule_from_stored(options)
     if schedule is not None:
         p.tariff_schedule = schedule
+    p.derived_tariff_slots = _derived_slots_from_options(options)
     return p
+
+
+def _derived_slots_from_options(options: dict[str, Any]) -> tuple[TariffSlot, ...]:
+    """Modul-3 live slots (NT→low, HT→high, quarter-gated) from options."""
+    from .modul3 import derived_tariff_slots, parse_modul3_profile
+
+    return derived_tariff_slots(parse_modul3_profile(options))
+
+
+def refresh_tariff_runtime(params: Any, options: dict[str, Any]) -> None:
+    """Rebuild stored schedule and Modul-3 live slots on a live params object."""
+    params.tariff_schedule = _tariff_schedule_from_stored(options)
+    params.derived_tariff_slots = _derived_slots_from_options(options)
 
 
 

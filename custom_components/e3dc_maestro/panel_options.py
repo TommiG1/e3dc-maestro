@@ -27,7 +27,7 @@ from .const import (
     as_entity_list,
     sync_wallbox_energy_options,
 )
-from .coordinator_helpers import _tariff_schedule_from_stored
+from .coordinator_helpers import refresh_tariff_runtime
 
 WS_PANEL_OPTIONS = f"{DOMAIN}/panel_options"
 WS_PANEL_OPTIONS_SET = f"{DOMAIN}/panel_options/set"
@@ -516,12 +516,19 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
         if any(key.startswith("modul3_") for key in soft):
             soft = {**soft, "modul3_apply_vat": None}
         _store_options(hass, entry, coordinator, soft, reload=False)
-        # Slot list feeds the live schedule; Modul 3 / price sensor are read
-        # from entry.options on the next price-plan cycle.
-        if coordinator is not None and "tariff_slots" in soft:
-            params = getattr(coordinator, "_params", None)
-            if params is not None:
-                params.tariff_schedule = _tariff_schedule_from_stored(dict(entry.options))
+        # Slot list and Modul 3 (live slots, quarters) feed the schedule the
+        # engine uses this tick; a stale copy would keep charging in old
+        # windows. The optimizer override is a separate params copy.
+        if coordinator is not None and (
+            "tariff_slots" in soft or any(key.startswith("modul3_") for key in soft)
+        ):
+            options = dict(entry.options)
+            for params in (
+                getattr(coordinator, "_params", None),
+                getattr(coordinator, "_auto_params", None),
+            ):
+                if params is not None:
+                    refresh_tariff_runtime(params, options)
     if not live:
         return {
             "entry_id": entry.entry_id,

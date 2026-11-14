@@ -297,6 +297,27 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "E3DC Maestro: Wallbox-Energie-Sensor mit Sizing/Energy-Dashboard abgeglichen"
         )
 
+    if entry.version < 6:
+        # Modul 3: aus Modul 3 kopierte Tarif-Slots („Slots füllen“) werden zu
+        # Live-Slots. Nur bei exakter Kopie, verhaltensgleich (alle Quartale).
+        from .modul3 import TARIFF_SLOTS_BACKUP_KEY, migrate_copied_modul3_slots
+
+        migrated = migrate_copied_modul3_slots(entry.options)
+        new_options = migrated if migrated is not None else dict(entry.options)
+        removed = (
+            len(migrated[TARIFF_SLOTS_BACKUP_KEY]) - len(migrated["tariff_slots"])
+            if migrated is not None
+            else 0
+        )
+        hass.config_entries.async_update_entry(entry, options=new_options, version=6)
+        if removed:
+            _LOGGER.info(
+                "E3DC Maestro: %d aus Modul 3 kopierte Tarif-Slots durch Live-Slots "
+                "ersetzt (Sicherung unter %s)",
+                removed,
+                TARIFF_SLOTS_BACKUP_KEY,
+            )
+
     return True
 
 

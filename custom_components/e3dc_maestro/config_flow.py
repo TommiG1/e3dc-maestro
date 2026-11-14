@@ -1472,7 +1472,7 @@ class _TariffSlotsMixin:
 class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
     """Multi-step config flow for E3DC Maestro."""
 
-    VERSION = 5
+    VERSION = 6
     _data: dict[str, Any] = {}
 
     def _slot_state(self) -> dict[str, Any]:
