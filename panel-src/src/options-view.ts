@@ -13,6 +13,8 @@ import {
   emptySlot,
   entityChoices,
   fieldLabel,
+  modul3QuartersFrom,
+  modul3StatusFrom,
   selectValue,
   timeValue,
   type Modul3ZoneKey,
@@ -22,6 +24,7 @@ import {
   type OptionField,
   type Slot,
 } from "./options";
+import { hoursToTime, timeToHours } from "./time-hours";
 
 export interface OptionCtx {
   hass: Hass;
@@ -42,7 +45,6 @@ export interface OptionCtx {
   onSaveSlots: () => void;
   onModul3Zones: (zones: Modul3Zones) => void;
   onSaveModul3Zones: () => void;
-  onFillSlotsFromModul3: () => void;
   onRunSizing: () => void;
 }
 
@@ -186,12 +188,76 @@ const MODUL3_ZONE_TITLE: Record<Modul3ZoneKey, Key> = {
   ht: "modul3Ht",
 };
 
+const MODUL3_QUARTERS = [1, 2, 3, 4] as const;
+const MODUL3_QUARTER_LABEL: Record<number, Key> = {
+  1: "modul3Q1",
+  2: "modul3Q2",
+  3: "modul3Q3",
+  4: "modul3Q4",
+};
+const MODUL3_ZONE_STATUS: Record<Modul3ZoneKey, Key> = {
+  nt: "modul3StatusNt",
+  st: "modul3StatusSt",
+  ht: "modul3StatusHt",
+};
+
+const _timeDisplay = (hours: number, end = false): string =>
+  hoursToTime(hours) ?? (end && hours === 24 ? "00:00" : "00:00");
+
 function modul3ZonesEditor(c: OptionCtx): TemplateResult {
   const { t } = c.i18n;
   const enabled = c.options.modul3_enabled === true;
+  const locked = !c.isAdmin || !enabled;
+  const quarters = modul3QuartersFrom(c.options.modul3_quarters);
+  const status = modul3StatusFrom(c.options, c.modul3Zones);
+  const liveOn = c.options.modul3_tariff_slots === true;
   const setZone = (key: Modul3ZoneKey, zone: Modul3Zones[Modul3ZoneKey]) =>
     c.onModul3Zones({ ...c.modul3Zones, [key]: zone });
+  const setWindowHours = (
+    key: Modul3ZoneKey,
+    index: number,
+    which: "start_h" | "end_h",
+    raw: string,
+  ) => {
+    const hours = timeToHours(raw, which === "end_h");
+    if (hours === null) return;
+    const zone = c.modul3Zones[key];
+    const other = which === "start_h" ? zone.windows[index].end_h : zone.windows[index].start_h;
+    if (hours === other) return;
+    const windows = zone.windows.map((window, i) =>
+      i === index ? { ...window, [which]: hours } : window,
+    );
+    setZone(key, { ...zone, windows });
+  };
+  const toggleQuarter = (quarter: number) => {
+    const next = quarters.includes(quarter)
+      ? quarters.filter((item) => item !== quarter)
+      : [...quarters, quarter].sort((a, b) => a - b);
+    if (next.length < 2) return;
+    c.onChange("modul3_quarters", next);
+  };
   return html`<div class="modul3-zones">
+    ${c.options.modul3_slots_migrated === true
+      ? html`<p class="hint">
+          ${t("modul3MigratedHint")}
+          <button type="button" class="btn" ?disabled=${!c.isAdmin || c.pending.has("modul3_slots_migrated")}
+            @click=${() => c.onChange("modul3_slots_migrated", false)}
+          >${t("modul3MigratedDismiss")}</button>
+        </p>`
+      : nothing}
+    <h4>${t("modul3QuartersTitle")}</h4>
+    <p class="sub">${t("modul3QuartersHint")}</p>
+    <div class="opt-days" role="group" aria-label=${t("modul3QuartersTitle")}>
+      ${MODUL3_QUARTERS.map(
+        (quarter) => html`<button
+          type="button"
+          class=${quarters.includes(quarter) ? "on" : ""}
+          aria-pressed=${quarters.includes(quarter)}
+          ?disabled=${locked || c.pending.has("modul3_quarters") || (quarters.includes(quarter) && quarters.length <= 2)}
+          @click=${() => toggleQuarter(quarter)}
+        >${t(MODUL3_QUARTER_LABEL[quarter])}</button>`,
+      )}
+    </div>
     <h4>${t("secModul3Zones")}</h4>
     <p class="sub">${t("secModul3ZonesHint")}</p>
     ${!enabled ? html`<p class="hint">${t("modul3OffHint")}</p>` : nothing}
@@ -207,7 +273,7 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
               max="100"
               step="0.01"
               .value=${String(zone.price_ct_kwh)}
-              ?disabled=${!c.isAdmin || !enabled}
+              ?disabled=${locked}
               @change=${(e: Event) =>
                 setZone(key, { ...zone, price_ct_kwh: Number((e.target as HTMLInputElement).value) || 0 })}
             />
@@ -216,28 +282,18 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
             ? html`<p class="hint">${t("modul3StRest")}</p>`
             : html`${zone.windows.map(
                 (window, index) => html`<label>${t("optFrom")}
-                  <input type="number" min="0" max="24" step="0.25" .value=${String(window.start_h)} ?disabled=${!c.isAdmin || !enabled}
-                    @change=${(e: Event) => {
-                      const windows = zone.windows.map((w, i) =>
-                        i === index ? { ...w, start_h: Number((e.target as HTMLInputElement).value) } : w,
-                      );
-                      setZone(key, { ...zone, windows });
-                    }}
+                  <input type="time" step="900" .value=${_timeDisplay(window.start_h)} ?disabled=${locked}
+                    @change=${(e: Event) => setWindowHours(key, index, "start_h", (e.target as HTMLInputElement).value)}
                   /></label>
                   <label>${t("optTo")}
-                  <input type="number" min="0" max="24" step="0.25" .value=${String(window.end_h)} ?disabled=${!c.isAdmin || !enabled}
-                    @change=${(e: Event) => {
-                      const windows = zone.windows.map((w, i) =>
-                        i === index ? { ...w, end_h: Number((e.target as HTMLInputElement).value) } : w,
-                      );
-                      setZone(key, { ...zone, windows });
-                    }}
+                  <input type="time" step="900" .value=${_timeDisplay(window.end_h, true)} ?disabled=${locked}
+                    @change=${(e: Event) => setWindowHours(key, index, "end_h", (e.target as HTMLInputElement).value)}
                   /></label>
-                  <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled}
+                  <button type="button" class="btn" ?disabled=${locked}
                     @click=${() => setZone(key, { ...zone, windows: zone.windows.filter((_, i) => i !== index) })}
                   >${t("optRemove")}</button>`,
               )}
-              <button type="button" class="btn" ?disabled=${!c.isAdmin || !enabled}
+              <button type="button" class="btn" ?disabled=${locked}
                 @click=${() => setZone(key, { ...zone, windows: [...zone.windows, { start_h: 0, end_h: 6 }] })}
               >${t("modul3AddWindow")}</button>`}
         </div>
@@ -245,16 +301,30 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
     })}
     <div class="opt-actions">
       <button type="button" class="btn" ?disabled=${!c.isAdmin || c.pending.has("modul3_zones")} @click=${() => c.onSaveModul3Zones()}>${t("modul3SaveZones")}</button>
-      <button
-        type="button"
-        class="btn"
-        ?disabled=${!c.isAdmin || !enabled || c.pending.has("tariff_slots")}
-        @click=${() => {
-          if (window.confirm(c.i18n.t("modul3FillSlotsConfirm"))) c.onFillSlotsFromModul3();
-        }}
-      >${t("modul3FillSlots")}</button>
     </div>
-    <p class="hint">${t("modul3FillSlotsHint")}</p>
+    ${fieldRow(c, { key: "modul3_tariff_slots", kind: "bool" }, true)}
+    <p class="hint">${t("modul3TariffSlotsHint")}</p>
+    <p class="hint">
+      ${status.active
+        ? t(MODUL3_ZONE_STATUS[status.zone])
+        : t("modul3StatusInactive")}
+      ${` (Q${status.quarter})`}
+    </p>
+    ${liveOn && status.derived_slots.length
+      ? html`<div class="slot-card">
+          <div class="txt"><span class="name"><b>${t("modul3DerivedTitle")}</b></span></div>
+          <p class="hint">${t("modul3DerivedHint").replace(
+            "{quarters}",
+            status.quarters.map((q) => `Q${q}`).join(", "),
+          )}</p>
+          <ul class="hint">
+            ${status.derived_slots.map(
+              (slot) => html`<li>${slot.class_ === "low" ? t("classLow") : t("classHigh")}:
+                ${_timeDisplay(slot.start_h)}–${_timeDisplay(slot.end_h, true)}</li>`,
+            )}
+          </ul>
+        </div>`
+      : nothing}
   </div>`;
 }
 

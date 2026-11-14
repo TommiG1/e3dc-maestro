@@ -261,6 +261,10 @@ const labels: Record<string, { de: string; en: string }> = {
   },
   modul3_vat: { de: "MwSt. auf ct/kWh", en: "VAT on ct/kWh" },
   modul3_vat_percent: { de: "Eigener MwSt.-Satz", en: "Custom VAT rate" },
+  modul3_tariff_slots: {
+    de: "Tarif-Slots aus Modul 3 ableiten",
+    en: "Derive tariff slots from Module 3",
+  },
   pv_forecast_sensor: { de: "Restprognose heute", en: "Remaining forecast today" },
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
   tomorrow_pv_sensor: { de: "Prognose morgen (Tagessumme)", en: "Tomorrow's forecast (daily total)" },
@@ -392,17 +396,63 @@ export function modul3ZonesFrom(value: unknown): Modul3Zones {
   };
 }
 
-/** NT→low, HT→high, alle Wochentage — für Tarif-Slots. */
-export function slotsFromModul3Zones(zones: Modul3Zones): Slot[] {
-  const weekdays = [0, 1, 2, 3, 4, 5, 6];
-  const out: Slot[] = [];
-  for (const window of zones.nt.windows) {
-    out.push({ weekdays: [...weekdays], start_h: window.start_h, end_h: window.end_h, class_: "low" });
+export type Modul3RuntimeStatus = {
+  enabled: boolean;
+  quarter: number;
+  quarters: number[];
+  active: boolean;
+  zone: Modul3ZoneKey;
+  tariff_slots: boolean;
+  derived_slots: { start_h: number; end_h: number; class_: string }[];
+};
+
+/** Quartale aus den Options; fehlend oder leer → alle vier. */
+export function modul3QuartersFrom(value: unknown): number[] {
+  if (!Array.isArray(value)) return [1, 2, 3, 4];
+  const out: number[] = [];
+  for (const item of value) {
+    const quarter = Number(item);
+    if ([1, 2, 3, 4].includes(quarter) && !out.includes(quarter)) out.push(quarter);
   }
-  for (const window of zones.ht.windows) {
-    out.push({ weekdays: [...weekdays], start_h: window.start_h, end_h: window.end_h, class_: "high" });
+  return out.length ? out.sort((a, b) => a - b) : [1, 2, 3, 4];
+}
+
+const _windowActive = (window: Modul3Window, hour: number): boolean =>
+  window.start_h <= window.end_h
+    ? window.start_h <= hour && hour < window.end_h
+    : hour >= window.start_h || hour < window.end_h;
+
+/** Panel-Status aus Options und (ggf. noch ungespeicherten) Zonen. */
+export function modul3StatusFrom(
+  options: Record<string, unknown>,
+  zones: Modul3Zones,
+  now = new Date(),
+): Modul3RuntimeStatus {
+  const enabled = options.modul3_enabled === true;
+  const quarters = modul3QuartersFrom(options.modul3_quarters);
+  const quarter = Math.floor(now.getMonth() / 3) + 1;
+  const active = enabled && quarters.includes(quarter);
+  let zone: Modul3ZoneKey = "st";
+  if (active) {
+    const hour = now.getHours() + now.getMinutes() / 60;
+    for (const key of ["ht", "nt"] as const) {
+      if (zones[key].windows.some((window) => _windowActive(window, hour))) {
+        zone = key;
+        break;
+      }
+    }
   }
-  return out;
+  const tariff_slots = options.modul3_tariff_slots === true;
+  const derived_slots: Modul3RuntimeStatus["derived_slots"] = [];
+  if (enabled && tariff_slots) {
+    for (const window of zones.nt.windows) {
+      derived_slots.push({ start_h: window.start_h, end_h: window.end_h, class_: "low" });
+    }
+    for (const window of zones.ht.windows) {
+      derived_slots.push({ start_h: window.start_h, end_h: window.end_h, class_: "high" });
+    }
+  }
+  return { enabled, quarter, quarters, active, zone, tariff_slots, derived_slots };
 }
 
 export function actionFrom(value: unknown): { service: string; entity: string } {

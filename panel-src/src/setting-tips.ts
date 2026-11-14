@@ -396,6 +396,14 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "SoC, auf den die Vorentladung am Morgen hinuntergeht. Nie unter einem aktiven Schnellboden.",
     en: "SoC the morning pre-discharge goes down to. Never below an active fast-charge floor.",
   },
+  modul3_tariff_slots: {
+    de: "NT als Niedrig und HT als Hoch, nur in den gewählten Quartalen. Keine Kopie in die Slot-Liste.",
+    en: "NT as Low and HT as High, only in the selected quarters. Not copied into the slot list.",
+  },
+  modul3_quarters: {
+    de: "Außerhalb dieser Quartale gilt alles als Standardlast. Mindestens zwei Quartale.",
+    en: "Outside these quarters everything is standard tariff. At least two quarters.",
+  },
   morning_unload_start_soc: {
     de: "Erst oberhalb dieses SoC startet die Vorentladung.",
     en: "Pre-discharge starts only above this SoC.",

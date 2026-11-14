@@ -144,7 +144,7 @@ import {
   type HistoryImportState,
 } from "./history-import";
 import { loadSetupAck, saveSetupAck } from "./onboarding";
-import { modul3ZonesFrom, slotsFrom, slotsFromModul3Zones, type Modul3Zones, type Slot } from "./options";
+import { modul3ZonesFrom, slotsFrom, type Modul3Zones, type Slot } from "./options";
 import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, ENERGY_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
@@ -1954,11 +1954,6 @@ class MaestroPanel extends LitElement {
         this.requestUpdate();
       },
       onSaveModul3Zones: () => void this._setOption("modul3_zones", this._modul3Zones),
-      onFillSlotsFromModul3: () => {
-        this._slots = slotsFromModul3Zones(this._modul3Zones);
-        this._slotsDirty = true;
-        void this._setOption("tariff_slots", this._slots);
-      },
       onRunSizing: () => this._press(E.btnSizing),
     };
     const ctx: Ctx = {

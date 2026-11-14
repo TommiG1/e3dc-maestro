@@ -128,4 +128,14 @@ def build_support_dump(
     data["last_action"] = dict(getattr(coordinator, "last_action_info", {}) or {})
     data["hp_history"] = list(getattr(coordinator, "_hp_history", []) or [])
     data["action_history"] = list(getattr(coordinator, "_action_history", []) or [])
+    try:
+        from homeassistant.util import dt as dt_util
+
+        from .modul3 import modul3_runtime_status, parse_modul3_profile
+
+        data["modul3"] = modul3_runtime_status(
+            parse_modul3_profile(entry.options), dt_util.now()
+        )
+    except Exception:  # noqa: BLE001 — dump must not fail on Modul 3
+        data["modul3"] = None
     return data

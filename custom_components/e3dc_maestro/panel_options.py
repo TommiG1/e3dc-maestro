@@ -120,6 +120,7 @@ _SPECS: dict[str, _Spec] = {
     "modul3_zones": ("modul3_zones",),
     "modul3_quarters": ("modul3_quarters",),
     "modul3_tariff_slots": ("bool",),
+    "modul3_slots_migrated": ("bool",),
     "cheap_threshold": _n(0, 1),
     "max_grid_charge_kwh": _n(0, 150),
     "low_slot_grid_charge_enabled": ("bool",),
@@ -240,6 +241,7 @@ _SOFT_OPTIONS = frozenset({
     "modul3_zones",
     "modul3_quarters",
     "modul3_tariff_slots",
+    "modul3_slots_migrated",
     "tariff_slots",
 })
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
@@ -567,12 +569,20 @@ def panel_options_payload(hass: HomeAssistant) -> dict[str, Any]:
     """Current options of the loaded entry. Unknown to non-setup users as an empty payload."""
     entry = _loaded_entry(hass)
     if entry is None:
-        return {"entry_id": None, "options": {}}
-    from .modul3 import normalize_modul3_vat_options
+        return {"entry_id": None, "options": {}, "modul3": None}
+    from homeassistant.util import dt as dt_util
 
+    from .modul3 import (
+        modul3_runtime_status,
+        normalize_modul3_vat_options,
+        parse_modul3_profile,
+    )
+
+    options = normalize_modul3_vat_options(dict(entry.options))
     return {
         "entry_id": entry.entry_id,
-        "options": normalize_modul3_vat_options(dict(entry.options)),
+        "options": options,
+        "modul3": modul3_runtime_status(parse_modul3_profile(options), dt_util.now()),
     }
 
 

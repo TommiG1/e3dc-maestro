@@ -343,6 +343,8 @@ def _context_notes(
     decision: MaestroDecision | None,
     *,
     hp_explanation: str | None = None,
+    params: MaestroParams | None = None,
+    now: datetime | None = None,
 ) -> list[dict[str, str]]:
     """Extra context for price plan, wallbox guard, heat pump (Stufe 7)."""
     notes: list[dict[str, str]] = []
@@ -375,6 +377,29 @@ def _context_notes(
                 ),
             }
         )
+    if decision.phase == "grid_charge" and params is not None and now is not None:
+        from .control_tariff import TARIFF_LOW, quarter_of
+
+        derived = getattr(params, "derived_tariff_slots", ()) or ()
+        quarter = quarter_of(now)
+        active = [
+            slot
+            for slot in derived
+            if slot.class_ == TARIFF_LOW
+            and slot.quarters is not None
+            and quarter in slot.quarters
+        ]
+        if active:
+            qs = ", ".join(f"Q{q}" for q in sorted(active[0].quarters or ()))
+            notes.append(
+                {
+                    "id": "modul3_low_slot",
+                    "text": (
+                        "Herkunft: Modul-3-Niedriglastfenster (NT). "
+                        f"Die Live-Slots gelten in {qs}."
+                    ),
+                }
+            )
     trace = decision.trace
     if trace is not None and any(g.name == "post.wallbox_discharge_guard" for g in trace.gates):
         notes.append(
@@ -1404,7 +1429,9 @@ def _build_base_payload(
         "why_not": None,
         "energy_balance": energy_balance(state, decision),
         "what_if": None,
-        "context_notes": _context_notes(decision, hp_explanation=hp_explanation),
+        "context_notes": _context_notes(
+            decision, hp_explanation=hp_explanation, params=params, now=now,
+        ),
         "lookback": None,
         "price_plan_info": price_plan_info,
         "hp_explanation": hp_explanation,
