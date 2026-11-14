@@ -1818,6 +1818,28 @@ class TestMorningPreDischarge:
         d = decide(state, p, _now(6, 15, 8))
         assert d.phase != PHASE_MORNING_DISCHARGE
 
+    def test_morning_discharge_not_below_fast_floor(self):
+        """Aktiver Schnellboden ≥ SoC: keine Entladung (sonst Pendeln um den Boden)."""
+        p = self._md_params(
+            fast_charge_floor_enabled=True, fast_charge_floor_soc=60.0,
+            morning_unload_soc=40.0, morning_unload_start_soc=60.0,
+        )
+        state = MaestroState(
+            soc=60.0, pv_power=3000, house_power=1000, grid_power=0, battery_power=0,
+        )
+        d = decide(state, p, _now(6, 15, 8))
+        assert d.phase != PHASE_MORNING_DISCHARGE
+
+    def test_morning_discharge_target_clamped_to_fast_floor(self):
+        """Über dem Boden wird nur bis zum Boden entladen, nicht bis morning_unload_soc."""
+        p = self._md_params(
+            fast_charge_floor_enabled=True, fast_charge_floor_soc=60.0,
+            morning_unload_soc=40.0, morning_unload_start_soc=50.0,
+        )
+        d = decide(self._high_soc_state(), p, _now(6, 15, 8))
+        assert d.phase == PHASE_MORNING_DISCHARGE
+        assert "→ 60%" in d.reason
+
     def test_morning_discharge_after_charge_window_starts(self):
         """After (charge_end_h - offset) → no longer discharge (charging window opened)."""
         p = self._md_params()  # charge_begin = 16 - 4 = 12:00

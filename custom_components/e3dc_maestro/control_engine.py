@@ -1048,6 +1048,17 @@ def astro_sunrise_sunset(dt: datetime, params: MaestroParams) -> tuple[float, fl
 # Phase 6: Morning Pre-Discharge helper
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _fast_floor(params: MaestroParams) -> tuple[bool, float]:
+    """(aktiv, SoC) des Schnelllade-Bodens; Tagesrampe aus wirkt wie ein Boden."""
+    ramp_off = params.charge_ramp_disabled
+    soc = (
+        max(params.charge_target, params.fast_charge_floor_soc)
+        if ramp_off
+        else params.fast_charge_floor_soc
+    )
+    return params.fast_charge_floor_enabled or ramp_off, soc
+
+
 def _morning_discharge_decision(
     state: MaestroState,
     params: MaestroParams,
@@ -1101,6 +1112,11 @@ def _morning_discharge_decision(
     charge_begin_h = charge_end_h - params.pre_discharge_offset_h
     hour_now = now.hour + now.minute / 60
 
+    # Ein aktiver Schnelllade-Boden würde alles wieder auffüllen, was unter ihm
+    # entladen wird (Pendeln um den Boden). Ziel daher nie unter den Boden.
+    floor_on, floor_soc = _fast_floor(params)
+    unload_soc = max(params.morning_unload_soc, floor_soc) if floor_on else params.morning_unload_soc
+
     # Conditions 2–5 as one gate (all must pass; pure inputs, order irrelevant):
     # SoC high enough to unload, still above the unload floor, before the
     # charge-begin time, and the PV forecast covers the refill (if gated).
@@ -1110,14 +1126,14 @@ def _morning_discharge_decision(
             setting_key="morning_unload_start_soc",
         ),
         term(
-            "soc_above_floor", state.soc, op=not_le, expected=params.morning_unload_soc,
+            "soc_above_floor", state.soc, op=not_le, expected=unload_soc,
             setting_key="morning_unload_soc",
         ),
         term("hour_now", hour_now, op=not_ge, expected=charge_begin_h),
     ]
     if params.pv_forecast_enabled and state.pv_forecast_remaining_kwh is not None:
         needed_kwh = (
-            (params.charge_target - params.morning_unload_soc) / 100.0
+            (params.charge_target - unload_soc) / 100.0
             * params.battery_capacity_kwh
         )
         min_forecast = needed_kwh * params.pre_discharge_safety_factor
@@ -1132,7 +1148,7 @@ def _morning_discharge_decision(
         return None
 
     # Calculate discharge rate
-    delta_soc = state.soc - params.morning_unload_soc
+    delta_soc = state.soc - unload_soc
     delta_kwh = delta_soc / 100.0 * params.battery_capacity_kwh
     remaining_h = max(0.001, charge_begin_h - hour_now)
     rate_w = delta_kwh * 1000.0 / remaining_h
@@ -1146,7 +1162,7 @@ def _morning_discharge_decision(
         return MaestroDecision(
             phase=PHASE_MORNING_DISCHARGE,
             reason=(
-                f"Vorentladung passiv: SoC {state.soc:.0f}% → {params.morning_unload_soc:.0f}% "
+                f"Vorentladung passiv: SoC {state.soc:.0f}% → {unload_soc:.0f}% "
                 f"(Ladestart {charge_begin_h:.1f} Uhr)"
             ),
             power_mode=POWER_MODE_IDLE,
@@ -1160,7 +1176,7 @@ def _morning_discharge_decision(
             phase=PHASE_MORNING_DISCHARGE,
             reason=(
                 f"Vorentladung {mode}: {delta_kwh:.2f} kWh in {remaining_h:.1f} h "
-                f"→ {rate_w:.0f} W (SoC {state.soc:.0f}% → {params.morning_unload_soc:.0f}%)"
+                f"→ {rate_w:.0f} W (SoC {state.soc:.0f}% → {unload_soc:.0f}%)"
             ),
             power_mode=POWER_MODE_DISCHARGE,
             charge_power_limit=None,
@@ -2113,12 +2129,7 @@ def _decide_core(
     # Curtailment Guard hat höhere Priorität (bereits vorab aktiv, falls nötig).
     # Tagesrampe aus wirkt wie ein Boden auf Ladeende-Ziel: voller Überschuss bis dahin.
     _ramp_off = params.charge_ramp_disabled
-    _floor_on = params.fast_charge_floor_enabled or _ramp_off
-    _floor_soc = (
-        max(params.charge_target, params.fast_charge_floor_soc)
-        if _ramp_off
-        else params.fast_charge_floor_soc
-    )
+    _floor_on, _floor_soc = _fast_floor(params)
     gate = eval_gate(
         "6.95.fast_floor",
         term("fast_charge_floor_enabled", _floor_on, op=is_true),

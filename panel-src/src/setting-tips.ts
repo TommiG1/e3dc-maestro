@@ -393,8 +393,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "How the battery is emptied before the PV day: off, fixed, or by price.",
   },
   morning_unload_soc: {
-    de: "SoC, auf den die Vorentladung am Morgen hinuntergeht.",
-    en: "SoC the morning pre-discharge goes down to.",
+    de: "SoC, auf den die Vorentladung am Morgen hinuntergeht. Nie unter einem aktiven Schnellboden.",
+    en: "SoC the morning pre-discharge goes down to. Never below an active fast-charge floor.",
   },
   morning_unload_start_soc: {
     de: "Erst oberhalb dieses SoC startet die Vorentladung.",
