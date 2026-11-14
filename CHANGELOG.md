@@ -9,7 +9,11 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Modul 3 nach Quartalen.** NT und HT gelten nur in den gewählten Quartalen (mindestens zwei), außerhalb ist alles Standardlast, wie im Preisblatt der Netzbetreiber. Zeiten gibst du als Uhrzeit in Viertelstunden ein. Mit „Tarif-Slots aus Modul 3 ableiten“ entstehen die Niedrig- und Hoch-Slots live aus Modul 3 und werden nicht mehr in die Slot-Liste kopiert (Discussion #56).
+
 ### Geändert
+- „Slots füllen“ entfällt. Unveränderte Kopien werden beim Update automatisch auf Live-Slots umgestellt, die alte Liste wird gesichert. Gespeicherte Slots, die genau dem NT- oder HT-Fenster entsprechen, gelten nur noch in den gewählten Quartalen, damit im Sommer nicht versehentlich aus dem Netz geladen wird.
 - Die Auto-Erkennung der E3DC-Sensoren (Quellen, Tageszähler, Zusatzerzeugung, Systemparameter) nutzt jetzt den `translation_key` von hacs-e3dc und fällt erst dann auf das Ende der Entity-ID zurück. Damit werden auch umbenannte oder übersetzte Entity-IDs gefunden, zum Beispiel mit hacs-e3dc 4.1.0-beta.1.
 
 ---

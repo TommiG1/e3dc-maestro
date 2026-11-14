@@ -47,6 +47,7 @@
 | **Live energy flow** | PV, grid, house, battery and loads — plus daily balance |
 | **48 h forecast** | Forward-looking charging and SoC trajectory |
 | **Price plan & tariffs** | Dynamic tariffs, windows, grid charging — traceable |
+| **Module 3 (§14a, DE)** | NT/ST/HT from the grid operator price sheet, only in the valid quarters, times in quarter hours. NT charges only through tariff slots and the “Time window” strategy |
 | **Decision explained** | Why this rule phase is active |
 | **Quick controls** | Reserve, pause, overrides in the panel |
 | **Local** | Prioritised phases, curtailment guard, wallbox & heat-pump logic |
