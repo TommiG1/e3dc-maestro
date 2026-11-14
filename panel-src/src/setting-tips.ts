@@ -397,12 +397,12 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "SoC the morning pre-discharge goes down to. Never below an active fast-charge floor.",
   },
   modul3_tariff_slots: {
-    de: "NT als Niedrig und HT als Hoch, nur in den gewählten Quartalen. Keine Kopie in die Slot-Liste.",
-    en: "NT as Low and HT as High, only in the selected quarters. Not copied into the slot list.",
+    de: "NT als Niedrig und HT als Hoch, nur in den gewählten Quartalen, ohne Kopie in die Slot-Liste. Geladen wird nur mit der Netzladung-Strategie „Zeitfenster“. Ersetzt den alten ht_*-Slot.",
+    en: "NT as Low and HT as High, only in the selected quarters, not copied into the slot list. Charging needs the grid charging strategy “Time window”. Replaces the legacy ht_* slot.",
   },
   modul3_quarters: {
-    de: "Außerhalb dieser Quartale gilt alles als Standardlast. Mindestens zwei Quartale.",
-    en: "Outside these quarters everything is standard tariff. At least two quarters.",
+    de: "Außerhalb dieser Quartale gilt alles als Standardlast, auch für Netzladung über Modul-3-Slots und gespeicherte NT/HT-Kopien. Mindestens zwei Quartale.",
+    en: "Outside these quarters everything is standard tariff, including grid charging via Module 3 slots and stored NT/HT copies. At least two quarters.",
   },
   morning_unload_start_soc: {
     de: "Erst oberhalb dieses SoC startet die Vorentladung.",
