@@ -341,8 +341,12 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Highest charge current Maestro gives the wallbox.",
   },
   wallbox_min_surplus: {
-    de: "Überschuss, ab dem die Wallbox laden darf.",
-    en: "Surplus from which the wallbox may charge.",
+    de: "Überschuss, ab dem die Wallbox laden darf. Nie weniger als die Leistung beim Mindeststrom (6 A auf 3 Phasen sind rund 4,1 kW).",
+    en: "Surplus from which the wallbox may charge. Never less than the power at minimum current (6 A on 3 phases is about 4.1 kW).",
+  },
+  wallbox_current_entity: {
+    de: "Nur generische Wallbox: Entität, in die Maestro den Ladestrom in Ampere schreibt.",
+    en: "Generic wallbox only: entity Maestro writes the charge current in amps to.",
   },
   wallbox_priority_enabled: {
     de: "Wartet ein angestecktes Auto auf Solarstrom, bekommt es den Überschuss zuerst. Maestro begrenzt dafür die Akku-Ladung.",
@@ -353,8 +357,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Below this battery level the battery charges first again.",
   },
   wallbox_discharge_guard_enabled: {
-    de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt.",
-    en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped.",
+    de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt. Hält der Preisplan oder der HT-Schutz den Akku für teure Stunden zurück, bleibt die Entladung gesperrt.",
+    en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped. When the price plan or HT protection saves the battery for expensive hours, discharge stays locked.",
   },
   wallbox_discharge_guard_threshold_w: {
     de: "Ab dieser Wallbox-Leistung gibt der Netzschutz die Akku-Entladung frei.",

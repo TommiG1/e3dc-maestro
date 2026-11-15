@@ -53,6 +53,14 @@ def test_opt_in_ignores_battery_discharge():
     assert hp_surplus_w(_state(-1500), _params(hp_subtract_battery=True)) == 3000
 
 
+def test_wallbox_charging_is_not_hp_surplus():
+    s = MaestroState(
+        soc=50, pv_power=4000, house_power=1000, grid_power=0, battery_power=0,
+        wallbox_power=2500,
+    )
+    assert hp_surplus_w(s, _params()) == 500
+
+
 # ── Mindestdauer ──────────────────────────────────────────────────────────
 
 def test_surplus_must_hold_for_delay():

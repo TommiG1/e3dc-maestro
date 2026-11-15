@@ -304,6 +304,13 @@ class E3DCMaestroCoordinator(
 
         # Wallbox current tracking for debounce
         self._last_wallbox_current: float | None = None
+        # E3DC-Wallbox aus dem e3dc_rscp-Registry (Gerät, Lade-Toggle, Abbruch-Status)
+        self._e3dc_wallbox: dict[str, str] | None = None
+        self._wallbox_toggled_at: datetime | None = None
+        self._wallbox_retry_after: datetime | None = None
+        # Panel: Steckerstatus und letzte Wallbox-Ereignisse (neueste zuerst)
+        self._wallbox_plugged: bool | None = None
+        self._wallbox_history: deque[dict[str, Any]] = deque(maxlen=30)
         # Wallbox-Vorrang: seit wann zieht ein angestecktes Auto trotz Überschuss nichts
         self._wallbox_idle_since: datetime | None = None
         # Riemann freeze guard: stuck power must not inflate daily kWh.
@@ -727,6 +734,9 @@ class E3DCMaestroCoordinator(
             _ps = self.hass.states.get(_plug_eid)
             if _ps is not None and _ps.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 _plugged = _ps.state.lower() in ("on", "true", "1", "yes", "connected", "plugged")
+        if _plugged is not None and self._wallbox_plugged is not None and _plugged != self._wallbox_plugged:
+            self._wallbox_record("plug" if _plugged else "unplug")
+        self._wallbox_plugged = _plugged
         _waiting, self._wallbox_idle_since = wallbox_waiting_state(
             plugged=_plugged,
             wallbox_power=state_data.wallbox_power,

@@ -27,7 +27,7 @@ import {
   type FlowConsumer,
 } from "./consumers";
 import { controlsSheet } from "./controls";
-import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, showHaMenu, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
+import { applyEntityMap, applyPlantMap, applySettingsMap, DEFAULT_IDS, E, isOn, num, plant, S, showHaMenu, watched, type EntityKey, type EntityMap, type Hass } from "./entities";
 import {
   loadExpectedSocHidden,
   loadForecastHidden,
@@ -54,6 +54,7 @@ import {
   loadIst,
   loadPowerSeries,
   loadPowerSeriesMany,
+  loadWallboxDays,
   loadPowerSeriesSum,
   loadRangeSums,
   loadSparks,
@@ -148,6 +149,7 @@ import { modul3ZonesFrom, slotsFrom, type Modul3Zones, type Slot } from "./optio
 import type { OptionCtx } from "./options-view";
 import { CLASSIC_DASHBOARD, ENERGY_DASHBOARD, loadExpert, loadPlanTuneOpen, loadPvOpen, resolveSettingsArea, saveExpert, savePlanTuneOpen, savePvOpen, settingsHeading, settingsView } from "./settings";
 import { isPlantRoom, plantHeading, plantView } from "./plant";
+import { surplusPoints, WALLBOX_ICON, wallboxView, type WallboxData } from "./wallbox";
 import { debugDumpFilename, downloadJson } from "./csv";
 import { batteryControlOverlay, decisionView, forecastView, liveView, planView, type Ctx } from "./views";
 import { helpAnchor, type HelpAction } from "./help-content";
@@ -163,12 +165,13 @@ import {
 
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
-type Screen = "live" | "forecast" | "plan" | "decision" | "plant" | "settings";
+type Screen = "live" | "forecast" | "plan" | "decision" | "wallbox" | "plant" | "settings";
 const SCREENS: { id: Screen; label: Key; sub: Key; icon: string }[] = [
   { id: "live", label: "navLive", sub: "subLive", icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' },
   { id: "forecast", label: "navForecast", sub: "subForecast", icon: '<path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/>' },
   { id: "plan", label: "navPlan", sub: "subPlan", icon: '<rect x="3" y="10" width="4" height="11" rx="1"/><rect x="10" y="5" width="4" height="16" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/>' },
   { id: "decision", label: "navDecision", sub: "subDecision", icon: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>' },
+  { id: "wallbox", label: "navWallbox", sub: "subWallbox", icon: WALLBOX_ICON },
   { id: "plant", label: "navPlant", sub: "subPlant", icon: '<path d="M4 21V10l8-7 8 7v11"/><path d="M9 21v-6h6v6"/>' },
   { id: "settings", label: "navSettings", sub: "subSettings", icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
 ];
@@ -193,6 +196,7 @@ const icon = (paths: string, cls = "") =>
 
 const readLocation = (): { screen: Screen; settingsGroup?: string; plantGroup?: string } => {
   const [rawScreen, rawGroup] = location.hash.slice(1).split("/");
+  if (rawScreen === "plant" && rawGroup === "wallbox") return { screen: "wallbox" };
   const screen = SCREENS.some((s) => s.id === rawScreen) ? (rawScreen as Screen) : "live";
   const settingsGroup = screen === "settings" ? resolveSettingsArea(rawGroup) : undefined;
   const plantGroup = screen === "plant" && isPlantRoom(rawGroup) ? rawGroup : undefined;
@@ -255,6 +259,7 @@ class MaestroPanel extends LitElement {
   private _sparks?: Record<SparkKey, Point[]>;
   private _ist?: IstSeries;
   private _timeline?: TimelineItem[];
+  private _wallboxHist?: Omit<WallboxData, "configured" | "soc" | "plugged">;
   private _loadedAt = new Map<string, number>();
   private _pending = new Set<string>();
   private _error?: string;
@@ -1015,6 +1020,12 @@ class MaestroPanel extends LitElement {
       await run("ist", async () => void (this._ist = await loadIst(hass, IST_HOURS)));
     }
     if (this._screen === "decision") await run("timeline", async () => void (this._timeline = await loadTimeline(hass)));
+    if (this._screen === "wallbox") {
+      await run("wallbox", async () => {
+        const [series, days] = await Promise.all([loadPowerSeriesMany(hass, [E.pv, E.house, E.wallboxPower]), loadWallboxDays(hass)]);
+        this._wallboxHist = { surplus: surplusPoints(series[E.pv] ?? [], series[E.house] ?? []), power: series[E.wallboxPower] ?? [], days };
+      });
+    }
     await this._loadPhaseHistory();
   }
 
@@ -1215,6 +1226,12 @@ class MaestroPanel extends LitElement {
         ? this._storedOptions.wallbox_power_sensor
         : undefined,
     );
+  }
+
+  private _wallboxData(hass: Hass): WallboxData {
+    const o = this._storedOptions;
+    const configured = o.wallbox_enabled === true || typeof o.wallbox_power_sensor === "string" || plant.wallboxes.length > 0 || isOn(hass.states[S.wallbox_enabled]);
+    return { ...this._wallboxHist, configured, soc: this._wallboxSoc(hass), plugged: this._wallboxPlugged(hass) };
   }
 
   /** Configured vehicle SoC, else first RSCP wallbox-soc from the plant map. */
@@ -2235,6 +2252,7 @@ class MaestroPanel extends LitElement {
         savePvOpen(next);
         this.requestUpdate();
       },
+      wallbox: this._screen === "wallbox" ? this._wallboxData(hass) : undefined,
       settingsQuery: this._settingsQuery,
       onSettingsQuery: (query) => {
         this._settingsQuery = query;
@@ -2250,7 +2268,7 @@ class MaestroPanel extends LitElement {
     this._syncPauseClock(pauseEnd);
     const pauseText = pauseStatus(t, hass.states[E.ctrlActive]);
     const phase = hass.states[E.phase]?.state;
-    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, plant: plantView, settings: settingsView }[current.id](ctx);
+    const view = { live: liveView, forecast: forecastView, plan: planView, decision: decisionView, wallbox: wallboxView, plant: plantView, settings: settingsView }[current.id](ctx);
 
     const navButton = (s: (typeof SCREENS)[number]) => html`<button
       class="nav-btn ${s.id === current.id ? "active" : ""}"
@@ -2267,7 +2285,7 @@ class MaestroPanel extends LitElement {
           ${SCREENS.map(navButton)}
           <div class="spacer"></div>
           <button class="nav-btn" @click=${() => this._setSheet(true)}>${icon(SLIDERS_ICON)}${t("navControls")}</button>
-          <button class="nav-btn ${this._help ? "active" : ""}" aria-expanded=${this._help ? "true" : "false"} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}${t("navHelp")}</button>
+          <button class="nav-btn rail-help ${this._help ? "active" : ""}" aria-expanded=${this._help ? "true" : "false"} @click=${() => (this._help ? this._closeHelp() : this._openHelp())}>${icon(HELP_ICON)}${t("navHelp")}</button>
         </nav>
         <main>
           <header class="topbar">

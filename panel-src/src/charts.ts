@@ -876,6 +876,53 @@ export function powerHistoryOptions(data: Point[], color: string, fmt: Fmt): Opt
   });
 }
 
+export const WALLBOX_COLOR = "#2dd4bf";
+
+/** PV surplus (area) against wallbox power (line) with the dashed start threshold, in kW. */
+export function wallboxDayOptions(input: { surplus: Point[]; wallbox: Point[]; startW?: number; names: [string, string, string]; fmt: Fmt }): Opts {
+  const { surplus, wallbox, startW, names, fmt } = input;
+  return withBase({
+    chart: { type: "line", height: 260 },
+    series: [
+      { name: names[0], type: "area", data: toKw(surplus) },
+      { name: names[1], type: "line", data: toKw(wallbox) },
+    ],
+    colors: [COLORS.pv, WALLBOX_COLOR],
+    stroke: { width: [1.5, 2.5], curve: "smooth" },
+    fill: { type: ["gradient", "solid"], gradient: { opacityFrom: 0.3, opacityTo: 0.03 } },
+    legend: { show: true, position: "top", horizontalAlign: "left" },
+    annotations:
+      startW && startW > 0
+        ? {
+            yaxis: [
+              {
+                y: startW / 1000,
+                borderColor: COLORS.muted,
+                strokeDashArray: 5,
+                label: { text: names[2], borderWidth: 0, style: { background: "transparent", color: COLORS.muted } },
+              },
+            ],
+          }
+        : {},
+    xaxis: xaxis(),
+    yaxis: { min: 0, decimalsInFloat: 1, title: { text: "kW" }, labels: { formatter: (v: number) => fmt.n(v, 1) } },
+    tooltip: { shared: true, intersect: false, x: { format: "dd.MM. HH:mm" }, y: { formatter: (v: number) => `${fmt.n(v, 2)} kW` } },
+  });
+}
+
+/** Daily wallbox energy as columns, in kWh. */
+export function wallboxDaysOptions(days: { ts: number; kwh: number }[], name: string, fmt: Fmt): Opts {
+  return withBase({
+    chart: { type: "bar", height: 200 },
+    series: [{ name, data: days.map((d) => [d.ts, Math.round(d.kwh * 10) / 10]) }],
+    colors: [WALLBOX_COLOR],
+    plotOptions: { bar: { columnWidth: "70%", borderRadius: 3 } },
+    xaxis: xaxis({ labels: { datetimeUTC: false, format: "dd.MM." } }),
+    yaxis: { min: 0, decimalsInFloat: 0, labels: { formatter: (v: number) => fmt.n(v, 0) } },
+    tooltip: { x: { format: "ddd dd.MM." }, y: { formatter: (v: number) => `${fmt.n(v, 1)} kWh` } },
+  });
+}
+
 export function sparkOptions(data: Point[], color: string): Opts {
   return withBase({
     chart: { type: "area", height: 56, sparkline: { enabled: true } },

@@ -41,7 +41,7 @@ SERVICE_SET_POWER_LIMITS = "set_power_limits"
 SERVICE_CLEAR_POWER_LIMITS = "clear_power_limits"
 SERVICE_SET_POWER_MODE = "set_power_mode"
 SERVICE_MANUAL_CHARGE = "manual_charge"
-SERVICE_SET_WALLBOX_CURRENT = "set_wallbox_charging_current"
+SERVICE_SET_WALLBOX_CURRENT = "set_wallbox_max_charge_current"
 
 # Power modes
 POWER_MODE_NORMAL = "normal"
@@ -228,7 +228,7 @@ CONF_WALLBOX_ENABLED = "wallbox_enabled"
 CONF_WALLBOX_TYPE = "wallbox_type"                    # "e3dc" | "generic"
 CONF_WALLBOX_SERVICE_ON = "wallbox_service_on"
 CONF_WALLBOX_SERVICE_OFF = "wallbox_service_off"
-CONF_WALLBOX_CURRENT_SENSOR = "wallbox_current_sensor"
+CONF_WALLBOX_CURRENT_ENTITY = "wallbox_current_entity"  # number/input_number (A), nur generic
 CONF_WALLBOX_MIN_CURRENT = "wallbox_min_current"      # A
 CONF_WALLBOX_MAX_CURRENT = "wallbox_max_current"      # A
 CONF_WALLBOX_PHASES = "wallbox_phases"                # 1 or 3
@@ -256,6 +256,10 @@ CONF_WALLBOX_PLUG_ENTITY = "wallbox_plug_entity"            # binary_sensor: Ste
 CONF_WALLBOX_INCLUDED_IN_HOUSE = "wallbox_included_in_house"  # bool: True = Hausverbrauchszähler enthält Wallbox bereits
 # Riemann-Fallback: unveränderte Rohleistung länger als so viele Sekunden → 0 W für Energie.
 WALLBOX_POWER_FREEZE_SECONDS = 900
+# Nach einem fehlgeschlagenen Wallbox-Befehl erst so spät erneut versuchen.
+WALLBOX_RETRY_SECONDS = 120
+# e3dc_rscp meldet "Laden abgebrochen" erst beim nächsten Poll: so lange nicht erneut toggeln.
+WALLBOX_TOGGLE_COOLDOWN_SECONDS = 120
 
 # Config entry keys – heat pump (Step 7)
 CONF_HP_ENABLED = "hp_enabled"

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import math
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components import persistent_notification
@@ -21,6 +22,7 @@ from .const import (
     CONF_HP_SWITCH_ENTITY,
     CONF_PV_POWER_SENSOR,
     CONF_SOC_SENSOR,
+    CONF_WALLBOX_CURRENT_ENTITY,
     CONF_WALLBOX_ENABLED,
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
@@ -36,6 +38,8 @@ from .const import (
     SERVICE_SET_POWER_LIMITS,
     SERVICE_SET_POWER_MODE,
     SERVICE_SET_WALLBOX_CURRENT,
+    WALLBOX_RETRY_SECONDS,
+    WALLBOX_TOGGLE_COOLDOWN_SECONDS,
     WALLBOX_TYPE_E3DC,
 )
 from .control_engine import (
@@ -55,6 +59,16 @@ from .coordinator_helpers import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+def _surplus_w(state: MaestroState) -> int:
+    return round(state.pv_power - state.house_power - max(state.battery_power, 0))
+
+
+# e3dc_rscp translation_key -> Rolle für die Wallbox-Steuerung
+_E3DC_WALLBOX_ROLES = {
+    "wallbox-toggle-wallbox-charging": "toggle",
+    "wallbox-charging-canceled": "canceled",
+}
 
 
 class CoordinatorActMixin:
@@ -336,38 +350,144 @@ class CoordinatorActMixin:
 
     async def _async_act_wallbox(self, state: MaestroState, opts: dict) -> None:
         desired_current, turn_off = wallbox_desired_current(state, self._params, self._last_wallbox_current or 0)
+        now = dt_util.utcnow()
+        if self._wallbox_retry_after is not None and now < self._wallbox_retry_after:
+            return
+        last = self._last_wallbox_current
+        e3dc = opts.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC) == WALLBOX_TYPE_E3DC
 
         if turn_off:
-            if self._last_wallbox_current != 0:
-                ok = True
-                if opts.get(CONF_WALLBOX_TYPE) == WALLBOX_TYPE_E3DC:
-                    # Set to minimum to effectively stop
-                    ok = await self._call_e3dc(SERVICE_SET_WALLBOX_CURRENT, {"current": 0})
-                elif opts.get(CONF_WALLBOX_SERVICE_OFF):
-                    try:
-                        await self._call_generic_service(opts[CONF_WALLBOX_SERVICE_OFF])
-                    except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
-                        _LOGGER.warning("Wallbox aus: %s", err)
-                        ok = False
-                if ok:
-                    self._last_wallbox_current = 0
-                    self._log("Wallbox ausgeschaltet (kein Überschuss)")
+            if last == 0:
+                return
+            ok = await (self._e3dc_wallbox_stop() if e3dc else self._generic_wallbox_stop(opts))
+            if ok:
+                self._last_wallbox_current = 0
+                self._log("Wallbox ausgeschaltet (kein Überschuss)")
+                self._wallbox_record("stop", surplus_w=_surplus_w(state))
         elif desired_current is not None:
-            if self._last_wallbox_current is None or abs(desired_current - self._last_wallbox_current) >= 1.0:
-                ok = True
-                if opts.get(CONF_WALLBOX_TYPE) == WALLBOX_TYPE_E3DC:
-                    ok = await self._call_e3dc(
-                        SERVICE_SET_WALLBOX_CURRENT, {"current": int(desired_current)}
-                    )
-                elif opts.get(CONF_WALLBOX_SERVICE_ON):
-                    try:
-                        await self._call_generic_service(opts[CONF_WALLBOX_SERVICE_ON])
-                    except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
-                        _LOGGER.warning("Wallbox ein: %s", err)
-                        ok = False
-                if ok:
-                    self._last_wallbox_current = desired_current
-                    self._log(f"Wallbox {desired_current:.0f}A (Überschuss)")
+            if last and abs(desired_current - last) < 1.0:
+                return
+            ok = await (
+                self._e3dc_wallbox_start(desired_current)
+                if e3dc
+                else self._generic_wallbox_start(opts, desired_current, resume=not last)
+            )
+            if ok:
+                self._last_wallbox_current = desired_current
+                self._log(f"Wallbox {desired_current:.0f}A (Überschuss)")
+                self._wallbox_record(
+                    "current" if last else "start",
+                    current=int(desired_current),
+                    surplus_w=_surplus_w(state),
+                )
+        else:
+            return
+        if not ok and self._wallbox_retry_after is None:
+            self._wallbox_record("error")
+        self._wallbox_retry_after = None if ok else now + timedelta(seconds=WALLBOX_RETRY_SECONDS)
+
+    def _wallbox_record(self, kind: str, **data: Any) -> None:
+        """Ereignis für den Wallbox-Verlauf im Panel (neueste zuerst)."""
+        self._wallbox_history.appendleft(
+            {"timestamp": dt_util.now().isoformat(timespec="seconds"), "kind": kind, **data}
+        )
+
+    def _e3dc_wallbox_entities(self) -> dict[str, str] | None:
+        """Wallbox device plus charging toggle/canceled entities from e3dc_rscp."""
+        if self._e3dc_wallbox is not None:
+            return self._e3dc_wallbox
+        by_device: dict[str, dict[str, str]] = {}
+        for ent in er.async_get(self.hass).entities.values():
+            if ent.platform != E3DC_RSCP_DOMAIN or ent.disabled_by is not None or not ent.device_id:
+                continue
+            role = _E3DC_WALLBOX_ROLES.get(ent.translation_key or "")
+            if role:
+                by_device.setdefault(ent.device_id, {})[role] = ent.entity_id
+        for device_id in sorted(by_device):
+            if "toggle" in by_device[device_id]:
+                self._e3dc_wallbox = {"device_id": device_id, **by_device[device_id]}
+                return self._e3dc_wallbox
+        _LOGGER.warning("E3DC Maestro: keine E3DC-Wallbox in e3dc_rscp gefunden")
+        return None
+
+    def _e3dc_wallbox_canceled(self, wb: dict[str, str]) -> bool | None:
+        """True wenn das Laden an der E3DC-Wallbox abgebrochen ist, None wenn unbekannt."""
+        st = self.hass.states.get(wb.get("canceled", ""))
+        if st is None or st.state not in ("on", "off"):
+            return None
+        return st.state == "on"
+
+    async def _e3dc_wallbox_toggle(self, wb: dict[str, str]) -> bool:
+        """Lade-Toggle drücken; nie zweimal kurz hintereinander (Status hängt nach)."""
+        now = dt_util.utcnow()
+        if (
+            self._wallbox_toggled_at is not None
+            and (now - self._wallbox_toggled_at).total_seconds() < WALLBOX_TOGGLE_COOLDOWN_SECONDS
+        ):
+            return False
+        try:
+            await self.hass.services.async_call(
+                "button", "press", {"entity_id": wb["toggle"]}, blocking=True
+            )
+        except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
+            _LOGGER.warning("Wallbox-Toggle fehlgeschlagen: %s", err)
+            return False
+        self._wallbox_toggled_at = now
+        return True
+
+    async def _e3dc_wallbox_start(self, current: float) -> bool:
+        wb = self._e3dc_wallbox_entities()
+        if wb is None:
+            return False
+        ok = await self._call_e3dc(
+            SERVICE_SET_WALLBOX_CURRENT,
+            {"max_charge_current": int(current)},
+            device_id=wb["device_id"],
+            watchdog=False,
+        )
+        if ok and self._e3dc_wallbox_canceled(wb):
+            ok = await self._e3dc_wallbox_toggle(wb)
+        return ok
+
+    async def _e3dc_wallbox_stop(self) -> bool:
+        # e3dc_rscp lehnt 0 A ab; Stoppen geht nur über den Lade-Toggle.
+        wb = self._e3dc_wallbox_entities()
+        if wb is None:
+            return False
+        canceled = self._e3dc_wallbox_canceled(wb)
+        if canceled is None:
+            _LOGGER.warning("Wallbox aus: Status 'Laden abgebrochen' unbekannt, Toggle ausgelassen")
+            return False
+        if canceled:
+            return True
+        return await self._e3dc_wallbox_toggle(wb)
+
+    async def _generic_wallbox_start(self, opts: dict, current: float, *, resume: bool) -> bool:
+        try:
+            current_entity = opts.get(CONF_WALLBOX_CURRENT_ENTITY)
+            if current_entity:
+                await self.hass.services.async_call(
+                    current_entity.split(".", 1)[0],
+                    "set_value",
+                    {"entity_id": current_entity, "value": int(current)},
+                    blocking=True,
+                )
+            if resume and opts.get(CONF_WALLBOX_SERVICE_ON):
+                await self._call_generic_service(opts[CONF_WALLBOX_SERVICE_ON])
+        except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
+            _LOGGER.warning("Wallbox ein: %s", err)
+            return False
+        return True
+
+    async def _generic_wallbox_stop(self, opts: dict) -> bool:
+        if not opts.get(CONF_WALLBOX_SERVICE_OFF):
+            return True
+        try:
+            await self._call_generic_service(opts[CONF_WALLBOX_SERVICE_OFF])
+        except (HomeAssistantError, ValueError, asyncio.TimeoutError) as err:
+            _LOGGER.warning("Wallbox aus: %s", err)
+            return False
+        return True
 
 
     def _sync_hp_running(self, opts: dict) -> None:
@@ -475,7 +595,14 @@ class CoordinatorActMixin:
             _LOGGER.warning("Fehler beim Freigeben der Limits: %s", err)
 
 
-    async def _call_e3dc(self, service: str, data: dict) -> bool:
+    async def _call_e3dc(
+        self,
+        service: str,
+        data: dict,
+        *,
+        device_id: str | None = None,
+        watchdog: bool = True,
+    ) -> bool:
         """Call an e3dc_rscp service. Return True on success.
 
         Verschluckt Schema- und Timeout-Fehler bewusst: Wenn der
@@ -485,7 +612,11 @@ class CoordinatorActMixin:
         sonst würden alle Maestro-Entitäten kurzzeitig "unavailable".
         Stattdessen loggen und beim nächsten Tick erneut versuchen.
         Caller must only update ``_last_sent_*`` after a True return.
+
+        ``watchdog=False`` (Wallbox): Fehler zählen nicht für den RSCP-Watchdog,
+        der sonst die Akku-Limits freigibt.
         """
+        note_failure = self._note_rscp_failure if watchdog else (lambda: None)
         if service == SERVICE_SET_POWER_MODE and "power_mode" in data:
             power_mode = data["power_mode"]
             data = {
@@ -493,10 +624,10 @@ class CoordinatorActMixin:
                 "power_mode": E3DC_RSCP_POWER_MODE_MAP.get(power_mode, power_mode),
             }
         try:
-            payload = {"device_id": self._resolve_e3dc_device_id(), **data}
+            payload = {"device_id": device_id or self._resolve_e3dc_device_id(), **data}
         except HomeAssistantError as err:
             _LOGGER.warning("E3DC Maestro: device_id nicht auflösbar: %s", err)
-            self._note_rscp_failure()
+            note_failure()
             return False
         try:
             async with asyncio.timeout(15):
@@ -509,16 +640,18 @@ class CoordinatorActMixin:
                 "(payload=%s) – nächster Tick versucht es erneut.",
                 E3DC_RSCP_DOMAIN, service, data,
             )
-            self._note_rscp_failure()
+            note_failure()
             return False
         except (HomeAssistantError, ValueError) as err:
             _LOGGER.warning(
                 "E3DC Maestro: Service %s.%s abgelehnt (payload=%s): %s",
                 E3DC_RSCP_DOMAIN, service, data, err,
             )
-            self._note_rscp_failure()
+            note_failure()
             return False
 
+        if not watchdog:
+            return True
         self._consecutive_rscp_failures = 0
         if self._rscp_watchdog_notified:
             self._rscp_watchdog_notified = False
@@ -557,17 +690,30 @@ class CoordinatorActMixin:
         )
 
 
-    async def _call_generic_service(self, action: dict | str) -> None:
-        """Call a user-defined action (from ActionSelector)."""
-        if isinstance(action, dict):
-            domain = action.get("domain", "")
-            service = action.get("service", "")
-            service_data = action.get("data", {})
-            if domain and service:
-                await self.hass.services.async_call(domain, service, service_data, blocking=True)
-        elif isinstance(action, str) and "." in action:
-            domain, service = action.split(".", 1)
-            await self.hass.services.async_call(domain, service, {}, blocking=True)
+    async def _call_generic_service(self, action: dict | list | str) -> None:
+        """Call user-defined action(s).
+
+        Formats: ``"domain.service"``; a dict with ``action``/``service`` plus
+        ``target``/``data`` (panel, ActionSelector items) or legacy
+        ``domain`` + ``service``; a list of those (ActionSelector).
+        """
+        for item in action if isinstance(action, list) else [action]:
+            if isinstance(item, str):
+                name, data = item, {}
+            elif isinstance(item, dict):
+                name = str(item.get("action") or item.get("service") or "")
+                if item.get("domain") and "." not in name:
+                    name = f"{item['domain']}.{name}"
+                data = {
+                    **(item.get("data") or item.get("service_data") or {}),
+                    **(item.get("target") or {}),
+                }
+            else:
+                name, data = "", {}
+            domain, _, service = name.partition(".")
+            if not domain or not service:
+                raise ValueError(f"Ungültige Aktion: {item!r}")
+            await self.hass.services.async_call(domain, service, data, blocking=True)
 
 
     def _check_watchdog(self) -> None:

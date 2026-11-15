@@ -11,6 +11,24 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.6] – Wallbox-Tab und Wallbox-Korrekturen (2026-11-15)
+
+Beta nach 0.5.9-beta.5. Ausführlich: [docs/release-notes/v0.5.9-beta.6.md](docs/release-notes/v0.5.9-beta.6.md).
+
+### Neu
+- **Wallbox-Tab.** Eigener Tab in der Seitenleiste mit Zustand und Begründung, Überschuss-Skala, Ladestrom, Tageskurve, Schnellschaltern, Energie für Tag, Woche, Monat und Jahr sowie Aktionsverlauf. Die E3DC-Wallbox ist aus „Anlage“ hierher umgezogen.
+- **Hinweis bei widersprüchlichen E3DC-Einstellungen** (Sonnenmodus, „Batterie vor Wallbox“, gesperrte Akku-Entladung), solange die Wallbox-Regelung in Maestro an ist.
+- **Generische Wallbox:** neues Feld „Ladestrom setzen“ (number oder input_number).
+
+### Korrigiert
+- E3DC-Wallbox: Ladestrom über `set_wallbox_max_charge_current`, Start und Stopp über den Lade-Schalter, Wiederholung nach Fehlern ohne RSCP-Watchdog.
+- Startschwelle nie unter der Leistung beim Mindeststrom (6 A auf 3 Phasen sind rund 4,1 kW).
+- Wallbox-Vorrang drosselt den Akku erst, wenn das Auto auch starten kann. Darunter lädt der Akku normal (Discussion #57).
+- Die Wärmepumpe zählt die Wallbox-Leistung nicht mehr als Überschuss (Discussion #57).
+- Netzschutz gibt die Entladung nicht frei, solange Preisplan oder HT-Schutz den Akku zurückhalten.
+
+---
+
 ## [0.5.9-beta.5] – Wallbox-Vorrang (2026-11-15)
 
 Beta nach 0.5.9-beta.4. Ausführlich: [docs/release-notes/v0.5.9-beta.5.md](docs/release-notes/v0.5.9-beta.5.md).

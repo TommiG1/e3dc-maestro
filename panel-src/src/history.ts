@@ -404,6 +404,28 @@ export async function loadPeriodSums(hass: Hass, period: Exclude<Period, "today"
   return loadStatSums(hass, periodStart(period), Date.now());
 }
 
+export interface EnergyDay {
+  day: string;
+  ts: number;
+  kwh: number;
+}
+
+/** Daily wallbox energy since Jan 1 (one row per day that has statistics). */
+export async function loadWallboxDays(hass: Hass): Promise<EnergyDay[]> {
+  const raw = await fetchDayStats(hass, periodStart("year"), Date.now(), ["wallboxEnergy"]);
+  return [...changeByDay(raw[E.wallboxEnergy])]
+    .map(([day, kwh]) => ({ day, ts: parseCalendarDay(day).getTime(), kwh }))
+    .sort((a, b) => a.ts - b.ts);
+}
+
+/** Week, month and year totals: recorded past days plus today's live counter. */
+export function energyPeriodSums(days: readonly EnergyDay[], todayKwh: number | undefined, now = Date.now()): Record<"week" | "month" | "year", number> {
+  const today = calendarDay(new Date(now));
+  const sum = (from: number) =>
+    days.reduce((acc, d) => (d.ts >= from && d.day !== today ? acc + d.kwh : acc), 0) + (todayKwh ?? 0);
+  return { week: sum(periodStart("week", now)), month: sum(periodStart("month", now)), year: sum(periodStart("year", now)) };
+}
+
 /** Sum of daily statistic changes for an arbitrary balance range. */
 export async function loadRangeSums(hass: Hass, range: BalanceRange): Promise<Partial<Record<PeriodKey, number>>> {
   return loadStatSums(hass, range.startMs, range.endMs);

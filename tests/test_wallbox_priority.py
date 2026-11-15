@@ -52,6 +52,12 @@ def test_battery_keeps_surplus_above_wallbox_max():
     assert out.charge_power_limit == 8000 - 2300 - 3680
 
 
+def test_below_start_threshold_battery_keeps_surplus():
+    # 3300 - 2300 = 1000 W < Startschwelle → Auto kann nicht laden, keine Einspeisung erzwingen
+    d = _dec(limit=1000.0)
+    assert _apply_wallbox_priority(d, _state(pv_power=3300), _params()) is d
+
+
 def test_disabled_or_not_waiting_is_noop():
     d = _dec()
     assert _apply_wallbox_priority(d, _state(), _params(wallbox_priority_enabled=False)) is d

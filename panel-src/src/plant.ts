@@ -255,7 +255,7 @@ const shown = (rows: Row[]): TemplateResult | typeof nothing =>
     ? html`<div class="card"><div class="rows">${rows.map((row) => html`<div class="row"><span>${row.label}</span><b>${row.value}</b></div>`)}</div></div>`
     : nothing;
 
-export const PLANT_ROOMS = ["grid", "battery", "pv", "wallbox", "controls"] as const;
+export const PLANT_ROOMS = ["grid", "battery", "pv", "controls"] as const;
 export type PlantRoom = (typeof PLANT_ROOMS)[number];
 
 const ROOM_COPY: Record<PlantRoom, { title: Key; hint: Key; icon: string }> = {
@@ -273,11 +273,6 @@ const ROOM_COPY: Record<PlantRoom, { title: Key; hint: Key; icon: string }> = {
     title: "plantRoomPv",
     hint: "plantRoomPvHint",
     icon: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21"/>',
-  },
-  wallbox: {
-    title: "plantRoomWallbox",
-    hint: "plantRoomWallboxHint",
-    icon: '<path d="M7 17V7a2 2 0 0 1 2-2h4l2 3h2a2 2 0 0 1 2 2v7"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>',
   },
   controls: {
     title: "plantRoomControls",
@@ -349,6 +344,111 @@ const bars = (
         </div>`,
       )}</div>`
     : nothing;
+
+const wallboxCard = (c: PlantCtx, name: string, entities: Record<string, string>): TemplateResult => {
+  const { t } = c.i18n;
+  const value = (key: string) => formatPlant(ent(c, entities[key]), c.fmt);
+  const onOff = (key: string) => flagLabel(ent(c, entities[key]), t);
+  const soc = entities.soc ? plantValue(ent(c, entities.soc)) : undefined;
+  const sun = entities.sun ? plantKw(ent(c, entities.sun)) : undefined;
+  const net = entities.net ? plantKw(ent(c, entities.net)) : undefined;
+  const mix = (sun ?? 0) + (net ?? 0);
+  const rows: Row[] = [
+    entities.phases ? { label: t("plantPhaseCount"), value: value("phases") } : null,
+    entities.current ? { label: t("plantMaxCurrent"), value: value("current") } : null,
+  ].filter((row): row is Row => row !== null);
+  return html`<article class="card pack wall">
+    ${soc !== undefined ? html`<div class="pack-visual">${battery(`${name || t("plantWallbox")}, ${value("soc")}`, soc, entities.charging && ent(c, entities.charging)?.state === "on" ? "charge" : "idle")}<b class="pack-soh">${value("soc")}</b><span>${t("plantCarSoc")}</span></div>` : nothing}
+    <div class="pack-stats">
+      ${plant.wallboxes.length > 1 ? html`<h3>${name || t("plantWallbox")}</h3>` : nothing}
+      <div class="plant-flags">
+        ${entities.plug ? html`<span class="chip ${ent(c, entities.plug)?.state === "on" ? "on" : ""}"><i></i>${t("plantPlug")} ${onOff("plug")}</span>` : nothing}
+        ${entities.charging ? html`<span class="chip ${ent(c, entities.charging)?.state === "on" ? "on" : ""}"><i></i>${t("plantCharging")} ${onOff("charging")}</span>` : nothing}
+      </div>
+      ${sun !== undefined || net !== undefined
+        ? html`<div class="mix" title="${t("plantSun")} ${entities.sun ? value("sun") : ""} · ${t("plantNet")} ${entities.net ? value("net") : ""}">
+            ${sun !== undefined ? html`<i class="sun" style="width:${mix > 0 ? (Math.abs(sun) / mix) * 100 : 0}%"></i>` : nothing}
+            ${net !== undefined ? html`<i class="net" style="width:${mix > 0 ? (Math.abs(net) / mix) * 100 : 0}%"></i>` : nothing}
+          </div>
+          <div class="phase-legend">
+            ${entities.sun ? html`<span><i class="pvi"></i>${t("plantSun")} ${value("sun")}</span>` : nothing}
+            ${entities.net ? html`<span><i class="grid"></i>${t("plantNet")} ${value("net")}</span>` : nothing}
+          </div>`
+        : nothing}
+      ${rows.length ? html`<div class="rows">${rows.map((row) => html`<div class="row"><span>${row.label}</span><b>${row.value}</b></div>`)}</div>` : nothing}
+    </div>
+  </article>`;
+};
+
+const labelOf = (entity: HassEntity | undefined, id: string): string => {
+  const name = entity?.attributes.friendly_name;
+  return typeof name === "string" && name.trim() ? name.trim() : id;
+};
+const controlRow = (c: PlantCtx, id: string): TemplateResult | typeof nothing => {
+  const { t } = c.i18n;
+  const entity = ent(c, id);
+  if (!entity) return nothing;
+  const label = labelOf(entity, id);
+  const domain = id.split(".", 1)[0];
+  const locked = entity.state === "unavailable" || c.pending.has(id);
+  const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement : "";
+  const min = typeof entity.attributes.min === "number" ? entity.attributes.min : undefined;
+  const max = typeof entity.attributes.max === "number" ? entity.attributes.max : undefined;
+  const step = typeof entity.attributes.step === "number" ? entity.attributes.step : 1;
+  const percent = unit === "%" || entity.attributes.mode === "slider";
+  const control =
+    domain === "switch"
+      ? html`<button class="switch ${isOn(entity) ? "on" : ""}" role="switch" aria-checked=${isOn(entity)} aria-label=${label} ?disabled=${locked} @click=${() => c.onToggle(id)}></button>`
+      : domain === "number" && percent && min !== undefined && max !== undefined
+        ? sliderField({
+            label,
+            min,
+            max,
+            step,
+            value: num(entity) ?? min,
+            unit,
+            disabled: locked,
+            onCommit: (value) => c.onNumber(id, value),
+          })
+      : domain === "number"
+        ? html`<label class="setting-num">
+            <input
+              type="number"
+              inputmode="decimal"
+              aria-label=${label}
+              step=${typeof entity.attributes.step === "number" ? entity.attributes.step : "any"}
+              ?disabled=${locked}
+              ${ref((el: Element | undefined) => {
+                const root = el?.getRootNode();
+                const active = root instanceof ShadowRoot ? root.activeElement : null;
+                if (!(el instanceof HTMLInputElement) || el === active) return;
+                const shown = num(entity);
+                const text = shown === undefined ? "" : String(shown);
+                if (el.value !== text) el.value = text;
+              })}
+              @change=${(e: Event) => {
+                const value = Number.parseFloat((e.target as HTMLInputElement).value);
+                if (Number.isFinite(value)) c.onNumber(id, value);
+              }}
+            />
+            ${typeof entity.attributes.unit_of_measurement === "string" ? html`<span>${entity.attributes.unit_of_measurement}</span>` : nothing}
+          </label>`
+        : domain === "button"
+          ? html`<button class="btn" ?disabled=${locked} @click=${() => {
+              if (window.confirm(t("plantSend"))) c.onPress(id);
+            }}>${label}</button>`
+          : nothing;
+  return html`<div class="ctrl setting-row ${percent && domain === "number" ? "wide" : ""}"><div class="txt"><span class="name"><b>${label}</b></span></div>${control}</div>`;
+};
+export const plantControlCard = (c: PlantCtx, ids: Record<string, string> | undefined): TemplateResult | typeof nothing => {
+  const rows = Object.values(ids ?? {}).map((id) => controlRow(c, id));
+  return rows.some((row) => row !== nothing) ? html`<div class="card">${rows}</div>` : nothing;
+};
+/** E3DC-Wallbox(en) mit ihren Schaltern; leer ohne e3dc_rscp-Wallbox. */
+export function plantWallboxBody(c: PlantCtx): TemplateResult | typeof nothing {
+  if (!plant.wallboxes.length && !Object.keys(plant.controls?.wallbox ?? {}).length) return nothing;
+  return html`${plant.wallboxes.length ? html`<div class="plant-packs">${plant.wallboxes.map((box) => html`<div class="wall-stack">${wallboxCard(c, box.name, box.entities)}${plantControlCard(c, box.controls)}</div>`)}</div>` : nothing}${plantControlCard(c, plant.controls?.wallbox)}`;
+}
 
 export function plantView(c: PlantCtx): TemplateResult {
   const { t } = c.i18n;
@@ -542,40 +642,6 @@ export function plantView(c: PlantCtx): TemplateResult {
     </article>`;
   };
 
-  const wallboxCard = (name: string, entities: Record<string, string>) => {
-    const value = (key: string) => formatPlant(ent(c, entities[key]), c.fmt);
-    const onOff = (key: string) => flagLabel(ent(c, entities[key]), t);
-    const soc = entities.soc ? plantValue(ent(c, entities.soc)) : undefined;
-    const sun = entities.sun ? plantKw(ent(c, entities.sun)) : undefined;
-    const net = entities.net ? plantKw(ent(c, entities.net)) : undefined;
-    const mix = (sun ?? 0) + (net ?? 0);
-    const rows: Row[] = [
-      entities.phases ? { label: t("plantPhaseCount"), value: value("phases") } : null,
-      entities.current ? { label: t("plantMaxCurrent"), value: value("current") } : null,
-    ].filter((row): row is Row => row !== null);
-    return html`<article class="card pack wall">
-      ${soc !== undefined ? html`<div class="pack-visual">${battery(`${name || t("plantWallbox")}, ${value("soc")}`, soc, entities.charging && ent(c, entities.charging)?.state === "on" ? "charge" : "idle")}<b class="pack-soh">${value("soc")}</b><span>${t("plantCarSoc")}</span></div>` : nothing}
-      <div class="pack-stats">
-        ${plant.wallboxes.length > 1 ? html`<h3>${name || t("plantWallbox")}</h3>` : nothing}
-        <div class="plant-flags">
-          ${entities.plug ? html`<span class="chip ${ent(c, entities.plug)?.state === "on" ? "on" : ""}"><i></i>${t("plantPlug")} ${onOff("plug")}</span>` : nothing}
-          ${entities.charging ? html`<span class="chip ${ent(c, entities.charging)?.state === "on" ? "on" : ""}"><i></i>${t("plantCharging")} ${onOff("charging")}</span>` : nothing}
-        </div>
-        ${sun !== undefined || net !== undefined
-          ? html`<div class="mix" title="${t("plantSun")} ${entities.sun ? value("sun") : ""} · ${t("plantNet")} ${entities.net ? value("net") : ""}">
-              ${sun !== undefined ? html`<i class="sun" style="width:${mix > 0 ? (Math.abs(sun) / mix) * 100 : 0}%"></i>` : nothing}
-              ${net !== undefined ? html`<i class="net" style="width:${mix > 0 ? (Math.abs(net) / mix) * 100 : 0}%"></i>` : nothing}
-            </div>
-            <div class="phase-legend">
-              ${entities.sun ? html`<span><i class="pvi"></i>${t("plantSun")} ${value("sun")}</span>` : nothing}
-              ${entities.net ? html`<span><i class="grid"></i>${t("plantNet")} ${value("net")}</span>` : nothing}
-            </div>`
-          : nothing}
-        ${rows.length ? html`<div class="rows">${rows.map((row) => html`<div class="row"><span>${row.label}</span><b>${row.value}</b></div>`)}</div>` : nothing}
-      </div>
-    </article>`;
-  };
-
   const modeState = ent(c, plant.entities.mode)?.state;
   const chips = (keys: readonly string[]) => {
     const items = flagChips.filter((item) => keys.includes(item.key));
@@ -586,69 +652,7 @@ export function plantView(c: PlantCtx): TemplateResult {
         })}</div>`
       : nothing;
   };
-  const labelOf = (entity: HassEntity | undefined, id: string): string => {
-    const name = entity?.attributes.friendly_name;
-    return typeof name === "string" && name.trim() ? name.trim() : id;
-  };
-  const controlRow = (id: string): TemplateResult | typeof nothing => {
-    const entity = ent(c, id);
-    if (!entity) return nothing;
-    const label = labelOf(entity, id);
-    const domain = id.split(".", 1)[0];
-    const locked = entity.state === "unavailable" || c.pending.has(id);
-    const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement : "";
-    const min = typeof entity.attributes.min === "number" ? entity.attributes.min : undefined;
-    const max = typeof entity.attributes.max === "number" ? entity.attributes.max : undefined;
-    const step = typeof entity.attributes.step === "number" ? entity.attributes.step : 1;
-    const percent = unit === "%" || entity.attributes.mode === "slider";
-    const control =
-      domain === "switch"
-        ? html`<button class="switch ${isOn(entity) ? "on" : ""}" role="switch" aria-checked=${isOn(entity)} aria-label=${label} ?disabled=${locked} @click=${() => c.onToggle(id)}></button>`
-        : domain === "number" && percent && min !== undefined && max !== undefined
-          ? sliderField({
-              label,
-              min,
-              max,
-              step,
-              value: num(entity) ?? min,
-              unit,
-              disabled: locked,
-              onCommit: (value) => c.onNumber(id, value),
-            })
-        : domain === "number"
-          ? html`<label class="setting-num">
-              <input
-                type="number"
-                inputmode="decimal"
-                aria-label=${label}
-                step=${typeof entity.attributes.step === "number" ? entity.attributes.step : "any"}
-                ?disabled=${locked}
-                ${ref((el: Element | undefined) => {
-                  const root = el?.getRootNode();
-                  const active = root instanceof ShadowRoot ? root.activeElement : null;
-                  if (!(el instanceof HTMLInputElement) || el === active) return;
-                  const shown = num(entity);
-                  const text = shown === undefined ? "" : String(shown);
-                  if (el.value !== text) el.value = text;
-                })}
-                @change=${(e: Event) => {
-                  const value = Number.parseFloat((e.target as HTMLInputElement).value);
-                  if (Number.isFinite(value)) c.onNumber(id, value);
-                }}
-              />
-              ${typeof entity.attributes.unit_of_measurement === "string" ? html`<span>${entity.attributes.unit_of_measurement}</span>` : nothing}
-            </label>`
-          : domain === "button"
-            ? html`<button class="btn" ?disabled=${locked} @click=${() => {
-                if (window.confirm(t("plantSend"))) c.onPress(id);
-              }}>${label}</button>`
-            : nothing;
-    return html`<div class="ctrl setting-row ${percent && domain === "number" ? "wide" : ""}"><div class="txt"><span class="name"><b>${label}</b></span></div>${control}</div>`;
-  };
-  const controlCard = (ids: Record<string, string> | undefined) => {
-    const rows = Object.values(ids ?? {}).map((id) => controlRow(id));
-    return rows.some((row) => row !== nothing) ? html`<div class="card">${rows}</div>` : nothing;
-  };
+  const controlCard = (ids: Record<string, string> | undefined) => plantControlCard(c, ids);
   const identity = plant.identity ?? {};
   const facts = [
     identity.model ? { label: t("plantModel"), value: identity.model } : null,
@@ -694,10 +698,6 @@ export function plantView(c: PlantCtx): TemplateResult {
     pv: {
       show: pvPhases !== nothing || has("installedPeak") || has("acMax") || has("deratePower") || has("deratePercent") || has("extraProduction") || has("pvDerated"),
       body: html`${pvPhases}${chips(["pvDerated"])}${specView(["installedPeak", "acMax", "deratePower", "extraProduction"])}${shown(derateRow)}`,
-    },
-    wallbox: {
-      show: plant.wallboxes.length > 0 || Object.keys(plant.controls?.wallbox ?? {}).length > 0,
-      body: html`${plant.wallboxes.length ? html`<div class="plant-packs">${plant.wallboxes.map((box) => html`<div class="wall-stack">${wallboxCard(box.name, box.entities)}${controlCard(box.controls)}</div>`)}</div>` : nothing}${controlCard(plant.controls?.wallbox)}`,
     },
     controls: {
       show: Object.keys(plant.controls?.general ?? {}).length > 0 || has("mode") || numberRows.length > 0 || has("limitsOn") || has("weatherWait"),

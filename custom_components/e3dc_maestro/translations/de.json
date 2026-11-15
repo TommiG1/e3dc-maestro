@@ -170,6 +170,7 @@
           "wallbox_max_current": "Maximalstrom (A)",
           "wallbox_phases": "Phasenanzahl",
           "wallbox_min_surplus": "Mindest-PV-Überschuss (W)",
+          "wallbox_current_entity": "Ladestrom setzen (number, nur generische Wallbox)",
           "wallbox_service_on": "Service: Laden starten",
           "wallbox_service_off": "Service: Laden stoppen"
         }
@@ -512,11 +513,13 @@
           "wallbox_max_current": "Maximalstrom (A)",
           "wallbox_phases": "Phasenanzahl",
           "wallbox_min_surplus": "Mindest-PV-Überschuss (W)",
+          "wallbox_current_entity": "Ladestrom setzen (number, nur generische Wallbox)",
           "wallbox_service_on": "Service: Laden starten",
           "wallbox_service_off": "Service: Laden stoppen"
         },
         "data_description": {
-          "wallbox_min_surplus": "Maestro startet die Wallbox erst, wenn dieser PV-Überschuss dauerhaft verfügbar ist (Hysterese verhindert Takten).",
+          "wallbox_min_surplus": "Maestro startet die Wallbox erst ab diesem PV-Überschuss. Mindestens gilt aber die Leistung beim Mindeststrom (Mindeststrom × Phasen × 230 V, bei 6 A und 3 Phasen rund 4,1 kW), damit das Auto nicht aus Netz oder Akku lädt.",
+          "wallbox_current_entity": "Nur für generische Wallboxen: eine number- oder input_number-Entität für den Ladestrom in Ampere (z. B. von go-e oder openWB). Maestro setzt dort den Strom nach Überschuss. Ohne sie schaltet Maestro nur über die Services ein und aus.",
           "wallbox_min_current": "Mindestladestrom nach IEC 61851 (normalerweise 6 A). Darunter schaltet Maestro die Wallbox lieber ab.",
           "wallbox_included_in_house": "Nur aktivieren, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen, ihr eigener Leistungsmesser steckt nicht im Hausverbrauch. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan)."
         }

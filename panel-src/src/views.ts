@@ -256,6 +256,8 @@ export interface Ctx {
   onTogglePv: (section: string) => void;
   settingsQuery: string;
   onSettingsQuery: (query: string) => void;
+  /** Wallbox tab only: day series, daily energy and car facts. */
+  wallbox?: import("./wallbox").WallboxData;
 }
 
 const st = (c: Ctx, id: string): HassEntity | undefined => c.hass.states[id];

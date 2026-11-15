@@ -106,6 +106,7 @@ from .const import (
     CONF_SUMMER_MAXIMUM_HOUR,
     CONF_UPDATE_INTERVAL,
     CONF_UPPER_CORRIDOR,
+    CONF_WALLBOX_CURRENT_ENTITY,
     CONF_WALLBOX_ENABLED,
     CONF_WALLBOX_INCLUDED_IN_HOUSE,
     CONF_WALLBOX_MAX_CURRENT,
@@ -1095,6 +1096,9 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
             selector.SelectSelectorConfig(options=["1", "3"], mode=selector.SelectSelectorMode.DROPDOWN)
         ),
         vol.Optional(CONF_WALLBOX_MIN_SURPLUS, default=DEFAULT_WALLBOX_MIN_SURPLUS): _number_selector(0, 10000, 100, "W"),
+        vol.Optional(CONF_WALLBOX_CURRENT_ENTITY): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["number", "input_number"])
+        ),
         vol.Optional(CONF_WALLBOX_SERVICE_ON): selector.ActionSelector(),
         vol.Optional(CONF_WALLBOX_SERVICE_OFF): selector.ActionSelector(),
     }

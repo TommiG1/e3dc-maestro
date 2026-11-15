@@ -90,6 +90,7 @@ PANEL_ENTITIES: dict[str, tuple[str, str]] = {
     "gridToBattery": ("sensor", "grid_to_battery_today"),
     "unjustified": ("binary_sensor", "unjustified_grid_charge"),
     "wallboxEnergy": ("sensor", "wallbox_energy_today"),
+    "wallboxPower": ("sensor", "wallbox_power"),
     "feedInInterventions": ("sensor", "feed_in_interventions"),
     "feedInAvoided": ("sensor", "feed_in_avoided_today"),
     "curtailAvoided": ("sensor", "curtailment_avoided_today"),

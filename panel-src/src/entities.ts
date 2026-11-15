@@ -27,6 +27,7 @@ export const DEFAULT_IDS = {
   gridToBattery: sensor("netz_akku_heute"),
   unjustified: binary("netzladung_ohne_rechtfertigung"),
   wallboxEnergy: sensor("wallbox_energie_heute"),
+  wallboxPower: sensor("wallbox_leistung"),
   feedInInterventions: sensor("einspeise_eingriffe_heute"),
   feedInAvoided: sensor("dc_abregelung_verhindert_heute"),
   curtailAvoided: sensor("abregelung_verhindert_heute"),

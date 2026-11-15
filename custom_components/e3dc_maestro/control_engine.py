@@ -1201,6 +1201,16 @@ def _morning_discharge_decision(
 # Main decision function
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Phasen, deren Entladegrenze der Wallbox-Netzschutz nicht öffnet. Netzladung,
+# Preisplan-Halten und HT-Schutz sparen den Akku bewusst für teure Stunden; dort
+# lädt das Auto aus dem (günstigen) Netz statt aus dem Akku.
+WALLBOX_GUARD_EXEMPT_PHASES = frozenset({
+    "off", "emergency", "feed_in_limit", "curtailment_guard",
+    "reserve_protection", "evcc_pause", "force_discharge", "discharge_lock",
+    "morning_discharge", "grid_charge", "grid_hold", "ht_protection",
+})
+
+
 def _apply_wallbox_discharge_guard(
     decision: MaestroDecision,
     state: MaestroState,
@@ -1214,38 +1224,16 @@ def _apply_wallbox_discharge_guard(
     house + car. The battery may feed the car; that is preferred over buying
     grid power.
 
-    Exempt phases keep winning (off, emergency, feed-in, curtailment, reserve,
-    EVCC now-pause, forced/morning discharge) because those intentionally
-    constrain charge/discharge for safety or explicit user intent.
+    Exempt phases keep winning (see ``WALLBOX_GUARD_EXEMPT_PHASES``) because
+    they intentionally constrain charge/discharge for safety, explicit user
+    intent or the tariff strategy (battery saved for expensive hours).
     """
-    from .const import (
-        PHASE_CURTAILMENT_GUARD,
-        PHASE_EMERGENCY,
-        PHASE_EVCC_PAUSE,
-        PHASE_FEED_IN_LIMIT,
-        PHASE_DISCHARGE_LOCK,
-        PHASE_FORCE_DISCHARGE,
-        PHASE_MORNING_DISCHARGE,
-        PHASE_OFF,
-        PHASE_RESERVE_PROTECTION,
-    )
-
     if not params.wallbox_discharge_guard_enabled:
         return decision
     if state.wallbox_power <= params.wallbox_discharge_guard_threshold_w:
         return decision
 
-    _exempt = {
-        PHASE_OFF,
-        PHASE_EMERGENCY,
-        PHASE_FEED_IN_LIMIT,
-        PHASE_CURTAILMENT_GUARD,
-        PHASE_RESERVE_PROTECTION,
-        PHASE_EVCC_PAUSE,
-        PHASE_FORCE_DISCHARGE,
-        PHASE_DISCHARGE_LOCK,
-        PHASE_MORNING_DISCHARGE,
-    }
+    _exempt = WALLBOX_GUARD_EXEMPT_PHASES
     if decision.phase in _exempt:
         return decision
 
@@ -1292,6 +1280,17 @@ def wallbox_priority_reserve_w(params: MaestroParams) -> float:
     return float(params.wallbox_max_current) * 230.0 * float(params.wallbox_phases)
 
 
+def wallbox_start_surplus_w(params: MaestroParams) -> float:
+    """Überschuss (W), ab dem die Wallbox laden darf.
+
+    Nie weniger als die Leistung beim Mindeststrom: sonst startet z. B. eine
+    3-phasige Wallbox mit 6 A (~4,1 kW) schon bei 1,4 kW Überschuss und zieht
+    den Rest aus Netz oder Akku.
+    """
+    min_power = float(params.wallbox_min_current) * 230.0 * float(params.wallbox_phases)
+    return max(float(params.wallbox_min_surplus), min_power)
+
+
 # Ab dieser Wallbox-Leistung gilt das Auto als "lädt".
 WALLBOX_CHARGING_W = 100.0
 # So lange darf ein angestecktes Auto trotz freiem Überschuss nichts ziehen
@@ -1314,7 +1313,7 @@ def wallbox_waiting_state(
     * Ohne Steckererkennung (``plugged is None``) greift der Vorrang nur
       während des Ladens, ein wartendes Auto lässt sich nicht erkennen.
     * Ist das Auto angesteckt, zieht aber trotz freiem Überschuss
-      (>= ``wallbox_min_surplus``) länger als ``WALLBOX_GIVE_UP_MINUTES``
+      (>= :func:`wallbox_start_surplus_w`) länger als ``WALLBOX_GIVE_UP_MINUTES``
       nichts, ist es vermutlich voll: der Vorrang endet bis zum Abstecken
       oder bis es wieder lädt.
     """
@@ -1322,12 +1321,56 @@ def wallbox_waiting_state(
         return True, None
     if not plugged:
         return False, None
-    if free_surplus_w >= params.wallbox_min_surplus:
+    if free_surplus_w >= wallbox_start_surplus_w(params):
         since = idle_since or now
         if (now - since).total_seconds() / 60.0 >= WALLBOX_GIVE_UP_MINUTES:
             return False, since
         return True, since
     return True, None
+
+
+def wallbox_status(
+    state: MaestroState,
+    params: MaestroParams,
+    *,
+    plugged: bool | None,
+    set_current: float | None,
+) -> dict[str, Any]:
+    """Momentaufnahme der Wallbox-Regelung für Panel und Attribute.
+
+    ``mode``: ``charging`` | ``unplugged`` | ``full`` (angesteckt, zieht trotz
+    Überschuss nichts) | ``waiting`` (zu wenig Überschuss) | ``ready``
+    (Überschuss reicht, Auto lädt noch nicht) | ``idle`` (ohne Steckererkennung).
+    """
+    phases = float(params.wallbox_phases)
+    surplus = state.pv_power - state.house_power - max(state.battery_power, 0)
+    start_w = wallbox_start_surplus_w(params)
+    if state.wallbox_power > WALLBOX_CHARGING_W:
+        mode = "charging"
+    elif plugged is False:
+        mode = "unplugged"
+    elif plugged and not state.wallbox_waiting:
+        mode = "full"
+    elif surplus < start_w:
+        mode = "waiting" if plugged else "idle"
+    else:
+        mode = "ready" if plugged else "idle"
+    target, _off = wallbox_desired_current(state, params)
+    return {
+        "mode": mode,
+        "control_enabled": bool(params.wallbox_enabled),
+        "plugged": plugged,
+        "waiting": bool(state.wallbox_waiting),
+        "surplus_w": round(surplus),
+        "start_w": round(start_w),
+        "min_w": round(float(params.wallbox_min_current) * 230.0 * phases),
+        "max_w": round(wallbox_priority_reserve_w(params)),
+        "min_current": float(params.wallbox_min_current),
+        "max_current": float(params.wallbox_max_current),
+        "phases": int(phases),
+        "target_current": int(target) if target is not None else None,
+        "set_current": int(set_current) if set_current is not None else None,
+    }
 
 
 def _apply_wallbox_priority(
@@ -1341,7 +1384,9 @@ def _apply_wallbox_priority(
     wartet und der SoC über ``wallbox_priority_min_soc`` liegt. Das Akku-
     Ladelimit wird auf ``PV - Haus - max. Wallbox-Leistung`` gedeckelt (mindestens
     0 W). So bleibt der Überschuss für die Wallbox-Regelung übrig, statt als
-    Einspeisung zu enden. Netzladung und Sicherheitsphasen bleiben unberührt.
+    Einspeisung zu enden. Liegt ``PV - Haus`` unter der Startschwelle, kann das
+    Auto nicht laden: dann bekommt der Akku alles. Netzladung und
+    Sicherheitsphasen bleiben unberührt.
     """
     if not (params.wallbox_enabled and params.wallbox_priority_enabled):
         return decision
@@ -1351,8 +1396,11 @@ def _apply_wallbox_priority(
         return decision
     if state.soc < params.wallbox_priority_min_soc:
         return decision
+    free = state.pv_power - state.house_power
+    if free < wallbox_start_surplus_w(params):
+        return decision
 
-    cap = max(0.0, state.pv_power - state.house_power - wallbox_priority_reserve_w(params))
+    cap = max(0.0, free - wallbox_priority_reserve_w(params))
     if cap < params.min_charge_power:
         cap = 0.0
     current = decision.charge_power_limit
@@ -2915,8 +2963,8 @@ def wallbox_desired_current(
     """Return (desired_current_A, turn_off).
 
     Surplus = PV - house - battery_charge.
-    If surplus >= wallbox_min_surplus → compute current and clamp.
-    If surplus < min_current threshold → turn off.
+    If surplus >= wallbox_start_surplus_w → compute current and clamp.
+    Otherwise → turn off.
     """
     if not params.wallbox_enabled:
         return None, False
@@ -2927,7 +2975,7 @@ def wallbox_desired_current(
     desired = surplus / (voltage * phases)
     desired = max(params.wallbox_min_current, min(params.wallbox_max_current, desired))
 
-    if surplus < params.wallbox_min_surplus:
+    if surplus < wallbox_start_surplus_w(params):
         return None, True  # below threshold → off
 
     return desired, False
@@ -2938,8 +2986,8 @@ def wallbox_desired_current(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def hp_surplus_w(state: MaestroState, params: MaestroParams) -> float:
-    """PV-Überschuss für die Wärmepumpe (W); optional ohne Akkuladung."""
-    surplus = state.pv_power - state.house_power
+    """PV-Überschuss für die Wärmepumpe (W) ohne Wallbox; optional ohne Akkuladung."""
+    surplus = state.pv_power - state.house_power - max(state.wallbox_power, 0)
     if params.hp_subtract_battery:
         surplus -= max(state.battery_power, 0)
     return surplus

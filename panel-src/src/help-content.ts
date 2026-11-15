@@ -1,7 +1,7 @@
 import type { Key, Translate } from "./i18n";
 import { LADDER } from "./ladder";
 
-export type HelpScreen = "live" | "forecast" | "plan" | "decision" | "plant" | "settings";
+export type HelpScreen = "live" | "forecast" | "plan" | "decision" | "wallbox" | "plant" | "settings";
 
 export type HelpAction =
   | { kind: "screen"; screen: HelpScreen; group?: string }
@@ -99,6 +99,15 @@ export const HELP: readonly HelpChapter[] = [
     sections: [
       section("decision-page", "helpChDecision", "helpDecisionBody", {
         links: [{ id: "rules", label: "helpSeeLadder" }],
+      }),
+    ],
+  },
+  {
+    id: "wallbox",
+    title: "helpChWallbox",
+    sections: [
+      section("wallbox-page", "helpChWallbox", "helpWallboxBody", {
+        actions: [{ label: "helpOpenSettings", action: { kind: "screen", screen: "settings", group: "loads" } }],
       }),
     ],
   },
@@ -220,6 +229,10 @@ export const HELP: readonly HelpChapter[] = [
       section("faq-old", "helpFaqOld", "helpFaqOldBody"),
       section("faq-balance-stats", "helpFaqBalanceStats", "helpFaqBalanceStatsBody", {
         links: [{ id: "trouble-history", label: "helpTroubleHistory" }],
+      }),
+      section("faq-dump", "helpFaqDump", "helpFaqDumpBody", {
+        links: [{ id: "decision", label: "helpChDecision" }],
+        actions: [{ label: "helpChDecision", action: { kind: "screen", screen: "decision" } }],
       }),
     ],
   },

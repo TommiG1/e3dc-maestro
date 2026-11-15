@@ -21,11 +21,14 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ALL_PHASES,
+    CONF_WALLBOX_TYPE,
     DOMAIN,
     STAT_GRID_TO_BATTERY_JUSTIFIED_TODAY,
     STAT_GRID_TO_BATTERY_TODAY,
     TARIFF_MODE_FIXED,
+    WALLBOX_TYPE_E3DC,
 )
+from .control_engine import wallbox_status
 from .coordinator import E3DCMaestroCoordinator
 from .cost_accounting import simulation_comparable
 from .grid_charge_justify import grid_to_battery_charge_attrs
@@ -37,6 +40,26 @@ from .explanation import decision_explanation as _decision_explanation
 from .sensor_device import device_info as _device_info, set_stable_entity_id
 
 _COST_SIM_KEYS = frozenset({"kosten_heute", "netto_kosten_heute", "pv_ersparnis_heute"})
+
+
+def _wallbox_attrs(coord: E3DCMaestroCoordinator) -> dict[str, Any] | None:
+    """Regelstatus und Ereignisverlauf für den Wallbox-Tab im Panel."""
+    state = coord.data.get("state") if coord.data else None
+    if state is None:
+        return None
+    attrs = wallbox_status(
+        state,
+        coord._params,
+        plugged=coord._wallbox_plugged,
+        set_current=coord._last_wallbox_current,
+    )
+    trace = getattr(coord.last_decision, "trace", None)
+    fired = {g.name for g in trace.gates if g.result} if trace is not None else set()
+    attrs["priority_active"] = "post.wallbox_priority" in fired
+    attrs["guard_active"] = "post.wallbox_discharge_guard" in fired
+    attrs["controller"] = coord.entry.options.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC)
+    attrs["history"] = list(coord._wallbox_history)
+    return attrs
 
 
 def _cost_simulation_attrs(coord: E3DCMaestroCoordinator, key: str) -> dict[str, Any] | None:
@@ -1043,6 +1066,8 @@ class MaestroSensor(CoordinatorEntity[E3DCMaestroCoordinator], SensorEntity):
             # News-Ticker: letzte Phasen-/Grund-Wechsel, neueste zuerst.
             attrs["history"] = list(self.coordinator._action_history)
             return attrs
+        if key == "wallbox_power":
+            return _wallbox_attrs(self.coordinator)
         if key == "debug_log":
             # Full recent lines for the panel; state is truncated to HA's 255 limit.
             lines = list(self.coordinator.debug_log)[-_DEBUG_LOG_MAX_LINES:]
