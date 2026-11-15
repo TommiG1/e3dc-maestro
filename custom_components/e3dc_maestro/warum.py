@@ -411,6 +411,16 @@ def _context_notes(
                 ),
             }
         )
+    if trace is not None and any(g.name == "post.wallbox_priority" for g in trace.gates):
+        notes.append(
+            {
+                "id": "wallbox_priority",
+                "text": (
+                    "Wallbox-Vorrang hat die Akku-Ladung begrenzt, "
+                    "damit der Überschuss beim wartenden Auto ankommt."
+                ),
+            }
+        )
     if hp_explanation:
         notes.append({"id": "heat_pump", "text": hp_explanation})
     return notes

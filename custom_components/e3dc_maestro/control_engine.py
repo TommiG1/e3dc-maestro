@@ -66,6 +66,9 @@ class MaestroState:
     # die Optimierungs-/Korridor-Logik einbezogen, damit EV-Spitzen nicht den
     # Hausverbrauch verfälschen. Reine Telemetrie + getrennter kWh-Zähler.
     wallbox_power: float = 0.0
+    # Auto angesteckt und wartet auf Solarstrom (vom Coordinator gesetzt, siehe
+    # ``wallbox_waiting_state``). Nur dann greift der Wallbox-Vorrang.
+    wallbox_waiting: bool = False
     # EVCC state (D1)
     evcc_charging: bool = False          # True when EV is actively charging
     evcc_mode: str | None = None         # EVCC charging mode: "now", "pv", "minpv", …
@@ -182,6 +185,12 @@ class MaestroParams:
     # mitversorgt). Provider-agnostisch, rein leistungsbasierter Trigger.
     wallbox_discharge_guard_enabled: bool = True
     wallbox_discharge_guard_threshold_w: float = 1000.0
+    # Wallbox-Vorrang: wartet ein angestecktes Auto auf Solarstrom
+    # (``state.wallbox_waiting``), begrenzt Maestro die PV-Akkuladung auf den
+    # Überschuss oberhalb der maximalen Wallbox-Leistung. Unter
+    # ``wallbox_priority_min_soc`` hat der Akku wieder Vorrang.
+    wallbox_priority_enabled: bool = False
+    wallbox_priority_min_soc: float = 20.0
     # Heat pump
     hp_enabled: bool = False
     hp_min_surplus: float = 2000
@@ -1270,6 +1279,108 @@ def _apply_wallbox_discharge_guard(
     )
 
 
+# Phasen, in denen der Akku aus PV-Überschuss lädt und deshalb dem Auto
+# Überschuss wegnehmen kann. Alle anderen Phasen (Notladung, Reserve, Netzladung,
+# Abregelschutz, Einspeisebegrenzung, Entladen) bleiben unberührt.
+_WALLBOX_PRIORITY_PHASES = frozenset({
+    "corridor", "spreading", "fast_floor", "idle",
+})
+
+
+def wallbox_priority_reserve_w(params: MaestroParams) -> float:
+    """Leistung (W), die das Auto bei maximalem Ladestrom aufnehmen kann."""
+    return float(params.wallbox_max_current) * 230.0 * float(params.wallbox_phases)
+
+
+# Ab dieser Wallbox-Leistung gilt das Auto als "lädt".
+WALLBOX_CHARGING_W = 100.0
+# So lange darf ein angestecktes Auto trotz freiem Überschuss nichts ziehen
+# (voll, nicht ladebereit), bevor der Vorrang aufgegeben wird.
+WALLBOX_GIVE_UP_MINUTES = 10.0
+
+
+def wallbox_waiting_state(
+    *,
+    plugged: bool | None,
+    wallbox_power: float,
+    free_surplus_w: float,
+    params: MaestroParams,
+    idle_since: datetime | None,
+    now: datetime,
+) -> tuple[bool, datetime | None]:
+    """Wartet ein Auto auf Solarstrom? Liefert (waiting, idle_since).
+
+    * Lädt das Auto (> ``WALLBOX_CHARGING_W``), gilt es als wartend/aktiv.
+    * Ohne Steckererkennung (``plugged is None``) greift der Vorrang nur
+      während des Ladens, ein wartendes Auto lässt sich nicht erkennen.
+    * Ist das Auto angesteckt, zieht aber trotz freiem Überschuss
+      (>= ``wallbox_min_surplus``) länger als ``WALLBOX_GIVE_UP_MINUTES``
+      nichts, ist es vermutlich voll: der Vorrang endet bis zum Abstecken
+      oder bis es wieder lädt.
+    """
+    if wallbox_power > WALLBOX_CHARGING_W:
+        return True, None
+    if not plugged:
+        return False, None
+    if free_surplus_w >= params.wallbox_min_surplus:
+        since = idle_since or now
+        if (now - since).total_seconds() / 60.0 >= WALLBOX_GIVE_UP_MINUTES:
+            return False, since
+        return True, since
+    return True, None
+
+
+def _apply_wallbox_priority(
+    decision: MaestroDecision,
+    state: MaestroState,
+    params: MaestroParams,
+) -> MaestroDecision:
+    """Wallbox-Vorrang: PV-Überschuss zuerst ans wartende Auto, Rest in den Akku.
+
+    Greift nur, wenn die Wallbox-Regelung und der Vorrang aktiv sind, ein Auto
+    wartet und der SoC über ``wallbox_priority_min_soc`` liegt. Das Akku-
+    Ladelimit wird auf ``PV - Haus - max. Wallbox-Leistung`` gedeckelt (mindestens
+    0 W). So bleibt der Überschuss für die Wallbox-Regelung übrig, statt als
+    Einspeisung zu enden. Netzladung und Sicherheitsphasen bleiben unberührt.
+    """
+    if not (params.wallbox_enabled and params.wallbox_priority_enabled):
+        return decision
+    if not state.wallbox_waiting:
+        return decision
+    if decision.phase not in _WALLBOX_PRIORITY_PHASES:
+        return decision
+    if state.soc < params.wallbox_priority_min_soc:
+        return decision
+
+    cap = max(0.0, state.pv_power - state.house_power - wallbox_priority_reserve_w(params))
+    if cap < params.min_charge_power:
+        cap = 0.0
+    current = decision.charge_power_limit
+    if current is not None and current <= cap:
+        return decision
+
+    guard_trace = decision.trace if decision.trace is not None else GateTrace()
+    guard_trace.gates.append(eval_gate(
+        "post.wallbox_priority",
+        term("wallbox_priority_enabled", params.wallbox_priority_enabled, op=is_true),
+        term("wallbox_waiting", state.wallbox_waiting, op=is_true),
+        term(
+            "soc", state.soc, op=ge, expected=params.wallbox_priority_min_soc,
+            setting_key="wallbox_priority_min_soc",
+        ),
+    ))
+    return replace(
+        decision,
+        trace=guard_trace,
+        charge_power_limit=cap,
+        reason=(
+            decision.reason
+            + f" | Wallbox-Vorrang: Akku-Ladung auf {cap:.0f} W begrenzt "
+            + "(Auto wartet auf Solarstrom)"
+        ),
+    )
+
+
 def manual_reserve_soc(params: MaestroParams) -> float | None:
     """Fixed emergency reserve while the cockpit switch is on."""
     if not params.fixed_reserve_enabled:
@@ -1335,6 +1446,7 @@ def decide(
         previous_battery_priority=previous_battery_priority,
         price_plan=price_plan,
     )
+    decision = _apply_wallbox_priority(decision, state, params)
     return _apply_wallbox_discharge_guard(decision, state, params)
 
 

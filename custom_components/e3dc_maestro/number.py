@@ -62,6 +62,7 @@ from .const import (
     CONF_WALLBOX_MIN_CURRENT,
     CONF_WALLBOX_MIN_SURPLUS,
     CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W,
+    CONF_WALLBOX_PRIORITY_MIN_SOC,
     CONF_WATCHDOG_TIMEOUT,
     CONF_WINTER_MINIMUM_HOUR,
     CONF_MORNING_UNLOAD_SOC,
@@ -385,6 +386,14 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         device_class=NumberDeviceClass.POWER,
         param_key=CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W,
         min_value=0, max_value=11000, step_value=100,
+    ),
+    MaestroNumberDescription(
+        key=CONF_WALLBOX_PRIORITY_MIN_SOC,
+        name="Wallbox-Vorrang ab Akku-SoC",
+        icon="mdi:battery-arrow-up",
+        native_unit_of_measurement=PERCENTAGE,
+        param_key=CONF_WALLBOX_PRIORITY_MIN_SOC,
+        min_value=0, max_value=100, step_value=5,
     ),
     # ── Heat pump ─────────────────────────────────────────────────────────
     MaestroNumberDescription(

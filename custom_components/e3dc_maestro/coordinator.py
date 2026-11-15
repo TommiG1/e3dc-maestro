@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -31,6 +32,7 @@ from .const import (
     CONF_PRICE_SENSOR,
     CONF_PV_POWER_SENSOR,
     CONF_WALLBOX_INCLUDED_IN_HOUSE,
+    CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_POWER_SENSOR,
     CONF_REGELUNG_AKTIV,
     CONF_REGELUNG_PAUSE_UNTIL,
@@ -89,6 +91,7 @@ from .control_engine import (
     decide,
     forward_looking_charge_target as _forward_looking_charge_target,
     manual_reserve_soc,
+    wallbox_waiting_state,
     tariff_schedule_from_params as _tariff_schedule_from_params,
 )
 from .coordinator_act import CoordinatorActMixin
@@ -301,6 +304,8 @@ class E3DCMaestroCoordinator(
 
         # Wallbox current tracking for debounce
         self._last_wallbox_current: float | None = None
+        # Wallbox-Vorrang: seit wann zieht ein angestecktes Auto trotz Überschuss nichts
+        self._wallbox_idle_since: datetime | None = None
         # Riemann freeze guard: stuck power must not inflate daily kWh.
         self._wallbox_energy_last_power: float | None = None
         self._wallbox_energy_power_changed_at: datetime | None = None
@@ -714,6 +719,23 @@ class E3DCMaestroCoordinator(
         )
         # Instant wallbox power for energy bookkeeping (EWMA is for control only).
         self._wallbox_power_instant = _instant_wallbox
+
+        # Wallbox-Vorrang: wartet ein angestecktes Auto auf Solarstrom?
+        _plug_eid = opts.get(CONF_WALLBOX_PLUG_ENTITY)
+        _plugged: bool | None = None
+        if _plug_eid:
+            _ps = self.hass.states.get(_plug_eid)
+            if _ps is not None and _ps.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                _plugged = _ps.state.lower() in ("on", "true", "1", "yes", "connected", "plugged")
+        _waiting, self._wallbox_idle_since = wallbox_waiting_state(
+            plugged=_plugged,
+            wallbox_power=state_data.wallbox_power,
+            free_surplus_w=max(0.0, state_data.pv_power - state_data.house_power),
+            params=self._params,
+            idle_since=self._wallbox_idle_since,
+            now=dt_util.now(),
+        )
+        state_data = dataclasses.replace(state_data, wallbox_waiting=_waiting)
 
         # Current electricity price (optional). Octopus day-rate events have a
         # timestamp state — fall back to the slot that covers ``now``.

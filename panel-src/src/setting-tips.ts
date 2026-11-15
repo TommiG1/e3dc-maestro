@@ -344,6 +344,14 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Überschuss, ab dem die Wallbox laden darf.",
     en: "Surplus from which the wallbox may charge.",
   },
+  wallbox_priority_enabled: {
+    de: "Wartet ein angestecktes Auto auf Solarstrom, bekommt es den Überschuss zuerst. Maestro begrenzt dafür die Akku-Ladung.",
+    en: "When a plugged-in car waits for solar power it gets the surplus first. Maestro limits battery charging for that.",
+  },
+  wallbox_priority_min_soc: {
+    de: "Unter diesem Akku-Ladestand lädt der Akku wieder zuerst.",
+    en: "Below this battery level the battery charges first again.",
+  },
   wallbox_discharge_guard_enabled: {
     de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt.",
     en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped.",

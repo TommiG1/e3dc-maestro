@@ -46,6 +46,7 @@ from .const import (
     CONF_TWO_TIER_ENABLED,
     CONF_WALLBOX_DISCHARGE_GUARD_ENABLED,
     CONF_WALLBOX_ENABLED,
+    CONF_WALLBOX_PRIORITY_ENABLED,
     DOMAIN,
 )
 from .coordinator import E3DCMaestroCoordinator
@@ -132,6 +133,15 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         param_key=CONF_WALLBOX_DISCHARGE_GUARD_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_WALLBOX_DISCHARGE_GUARD_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_WALLBOX_DISCHARGE_GUARD_ENABLED, False),
+    ),
+    # Wallbox-Vorrang: Überschuss zuerst ans wartende Auto, Rest in den Akku
+    MaestroSwitchDescription(
+        key=CONF_WALLBOX_PRIORITY_ENABLED,
+        name="Wallbox-Vorrang",
+        icon="mdi:ev-station",
+        param_key=CONF_WALLBOX_PRIORITY_ENABLED,
+        on_fn=lambda coord: coord.update_param(CONF_WALLBOX_PRIORITY_ENABLED, True),
+        off_fn=lambda coord: coord.update_param(CONF_WALLBOX_PRIORITY_ENABLED, False),
     ),
     MaestroSwitchDescription(
         key=CONF_HP_ENABLED,

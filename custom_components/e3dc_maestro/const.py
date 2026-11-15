@@ -240,6 +240,11 @@ CONF_WALLBOX_MIN_SURPLUS = "wallbox_min_surplus"      # W
 CONF_WALLBOX_DISCHARGE_GUARD_ENABLED = "wallbox_discharge_guard_enabled"      # bool
 CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = "wallbox_discharge_guard_threshold_w"  # W
 
+# Wallbox-Vorrang: Wartet ein angestecktes Auto auf Solarstrom, begrenzt Maestro
+# die PV-Akkuladung so, dass der Überschuss zuerst bei der Wallbox ankommt.
+CONF_WALLBOX_PRIORITY_ENABLED = "wallbox_priority_enabled"        # bool
+CONF_WALLBOX_PRIORITY_MIN_SOC = "wallbox_priority_min_soc"        # %
+
 # Wallbox power source (separater Verbrauchszähler)
 # Trennt EV-Ladeverbrauch vom Hausverbrauch, damit Optimizer/EWMA/Forecast
 # nicht durch Ladespitzen verfälscht werden.
@@ -508,6 +513,9 @@ DEFAULT_WALLBOX_MIN_SURPLUS = 1400
 # Ladeleistung, ab der ein Auto als "aktiv ladend" gilt.
 DEFAULT_WALLBOX_DISCHARGE_GUARD_ENABLED = True
 DEFAULT_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = 1000
+# Wallbox-Vorrang ist opt-in; unter dem Mindest-SoC hat der Akku wieder Vorrang.
+DEFAULT_WALLBOX_PRIORITY_ENABLED = False
+DEFAULT_WALLBOX_PRIORITY_MIN_SOC = 20
 DEFAULT_HP_MIN_SURPLUS = 2000
 DEFAULT_HP_MAX_PRICE = 0.15
 DEFAULT_HP_MIN_RUN_MINUTES = 20
