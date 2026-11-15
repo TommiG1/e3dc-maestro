@@ -207,7 +207,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       "wallbox_discharge_guard_enabled",
       "wallbox_discharge_guard_threshold_w",
     ]),
-    sec("secEvcc", "secEvccHint", ["evcc_enabled", "evcc_discharge_limit_w"]),
+    sec("secEvcc", "secEvccHint", ["evcc_enabled", "evcc_discharge_limit_w", "evcc_grid_charge_enabled"]),
     sec("secHp", "secHpHint", ["hp_enabled", "hp_shadow", "hp_min_surplus", "hp_surplus_delay_minutes", "hp_off_surplus", "hp_subtract_battery", "hp_max_price", "hp_min_run_minutes", "hp_min_pause_minutes"]),
     sec("secMorning", "secMorningHint", [
       "morning_discharge_mode",
@@ -1252,7 +1252,7 @@ export const SWITCH_FIELDS: Record<string, readonly string[]> = {
   wallbox_enabled: ["wallbox_type", "wallbox_min_current", "wallbox_max_current", "wallbox_min_surplus"],
   wallbox_priority_enabled: ["wallbox_priority_min_soc"],
   wallbox_discharge_guard_enabled: ["wallbox_discharge_guard_threshold_w"],
-  evcc_enabled: ["evcc_discharge_limit_w"],
+  evcc_enabled: ["evcc_discharge_limit_w", "evcc_grid_charge_enabled"],
   hp_enabled: ["hp_shadow", "hp_min_surplus", "hp_surplus_delay_minutes", "hp_off_surplus", "hp_subtract_battery", "hp_max_price", "hp_min_run_minutes", "hp_min_pause_minutes"],
   auto_mode_enabled: ["auto_mode_objective"],
   force_discharge: ["force_discharge_power_w"],

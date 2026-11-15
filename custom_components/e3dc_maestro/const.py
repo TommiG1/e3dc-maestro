@@ -377,6 +377,7 @@ CONF_EVCC_CHARGING_ENTITY = "evcc_charging_entity"  # entity_id (boolean/binary_
 CONF_EVCC_MODE_ENTITY = "evcc_mode_entity"          # entity_id (string state: "now", "pv", …)
 CONF_EVCC_NOW_VALUE = "evcc_now_value"              # state-Wert der als 'Now' gilt (z. B. "sofortladen")
 CONF_EVCC_DISCHARGE_LIMIT_W = "evcc_discharge_limit_w"  # max Entladeleistung bei EVCC Now-Modus (W, 0 = sperren)
+CONF_EVCC_GRID_CHARGE_ENABLED = "evcc_grid_charge_enabled"  # bool: Akku bei Sofortladen aus dem Netz laden
 
 # Config entry keys – failsafes (Step 8)
 CONF_WATCHDOG_TIMEOUT = "watchdog_timeout"            # minutes, 0 = disabled

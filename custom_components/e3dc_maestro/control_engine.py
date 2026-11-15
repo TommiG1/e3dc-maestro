@@ -225,6 +225,9 @@ class MaestroParams:
     evcc_enabled: bool = False
     evcc_now_value: str = "now"  # State-Wert der den 'Sofortladen'-Modus signalisiert
     evcc_discharge_limit_w: float = 0  # max Entladeleistung bei EVCC Now-Modus (W, 0 = vollständig sperren)
+    # Sofortladen lädt den Akku zusätzlich aus dem Netz bis charge_target
+    # (z. B. Arbeitgeber zahlt die Wallbox). Nur bei tariff_mode "dynamic".
+    evcc_grid_charge_enabled: bool = False
     # E2: Prognosebasiertes Spreading (Ladeverteilung)
     spreading_enabled: bool = True
     spreading_target_soc: float = 100.0  # Ziel-SoC für die Ladeverteilung (Standard: 100 %)
@@ -1627,6 +1630,20 @@ def _decide_core(
         and _budget_left_kwh > 0
         and _gc_jit_due
     )
+    _evcc_now = (
+        params.evcc_enabled
+        and state.evcc_charging
+        and state.evcc_mode == params.evcc_now_value
+    )
+    _evcc_grid_charge = bool(
+        _evcc_now
+        and params.evcc_grid_charge_enabled
+        and params.tariff_mode == "dynamic"
+        and not curtailment_guard_active
+        and state.soc < params.charge_target
+        and _budget_left_kwh > 0
+        and not _hard_cap_reached
+    )
 
     # Schwacher-PV-Tag: einmal pro Tick auswerten und als Flag durchreichen.
     # Bei aktivem Flag wird Spreading übersprungen, die Korridor-Pause umgangen
@@ -1929,6 +1946,7 @@ def _decide_core(
             term("soc", state.soc, op=le, expected=reserve_soc),
             term("plan_charge", _plan_charge, op=is_false),
             term("grid_charge_pending", _grid_charge_pending, op=is_false),
+            term("evcc_grid_charge", _evcc_grid_charge, op=is_false),
         )
         trace.record(gate)
         if gate.result:
@@ -1954,6 +1972,38 @@ def _decide_core(
     )
     trace.record(gate)
     if gate.result:
+        if params.evcc_grid_charge_enabled:
+            gate = eval_gate(
+                "5.evcc_pause.grid_charge",
+                term(
+                    "evcc_grid_charge_enabled", params.evcc_grid_charge_enabled,
+                    op=is_true, setting_key="evcc_grid_charge_enabled",
+                ),
+                term("tariff_mode", params.tariff_mode, op=eq, expected="dynamic"),
+                term("curtailment_guard_active", curtailment_guard_active, op=is_false),
+                term(
+                    "soc", state.soc, op=lt, expected=params.charge_target,
+                    setting_key="charge_target",
+                ),
+                term("grid_budget_left_kwh", _budget_left_kwh, op=gt, expected=0),
+                term("hard_cap_reached", _hard_cap_reached, op=is_false),
+            )
+            trace.record(gate)
+        if _evcc_grid_charge:
+            return MaestroDecision(
+                phase=PHASE_EVCC_PAUSE,
+                reason=(
+                    f"Sofortladen ({params.evcc_now_value!r}) – Akku lädt aus dem Netz "
+                    f"mit {params.max_charge_power:.0f} W, SoC {state.soc:.0f}% → "
+                    f"{params.charge_target:.0f}%"
+                ),
+                power_mode=POWER_MODE_CHARGE,
+                charge_power_limit=params.max_charge_power,
+                discharge_power_limit=0.0,
+                target_soc=params.charge_target,
+                target_charge_power=params.max_charge_power,
+                trace=trace,
+            )
         limit_w = params.evcc_discharge_limit_w
         if limit_w <= 0:
             # Entladung vollständig sperren

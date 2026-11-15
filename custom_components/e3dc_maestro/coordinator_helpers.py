@@ -15,6 +15,7 @@ from .const import (
     CONF_TARIFF_SLOTS,
     PHASE_CURTAILMENT_GUARD,
     PHASE_EMERGENCY,
+    PHASE_EVCC_PAUSE,
     PHASE_FAST_FLOOR,
     PHASE_FEED_IN_LIMIT,
     PHASE_FORCE_DISCHARGE,
@@ -196,10 +197,11 @@ def _action_history_changed(
 # Phasen, die sofort volle Leistung verlangen: weder Anlauf-Rampe (A2) noch
 # Schonladung (F0). PHASE_GRID_CHARGE: angeforderte Netzladung im Tiefpreis
 # (NT-Slot oder Preisplan) soll das günstige Fenster voll nutzen.
+# PHASE_EVCC_PAUSE: Netzladung während Sofortladen, solange das Auto zieht.
 _FULL_POWER_PHASES = frozenset({
     PHASE_OFF, PHASE_EMERGENCY, PHASE_FEED_IN_LIMIT, PHASE_CURTAILMENT_GUARD,
     PHASE_MORNING_DISCHARGE, PHASE_FORCE_DISCHARGE, PHASE_GRID_CHARGE,
-    PHASE_RESERVE_PROTECTION, PHASE_FAST_FLOOR,
+    PHASE_RESERVE_PROTECTION, PHASE_FAST_FLOOR, PHASE_EVCC_PAUSE,
 })
 
 

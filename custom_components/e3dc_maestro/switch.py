@@ -15,6 +15,7 @@ from .const import (
     CONF_ADVANCED_CORRIDOR,
     CONF_CURTAILMENT_GUARD_ENABLED,
     CONF_EVCC_ENABLED,
+    CONF_EVCC_GRID_CHARGE_ENABLED,
     CONF_CHARGE_RAMP_DISABLED,
     CONF_FAST_CHARGE_FLOOR_ENABLED,
     CONF_HP_ENABLED,
@@ -201,6 +202,14 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         on_fn=lambda coord: coord.update_param(CONF_EVCC_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_EVCC_ENABLED, False),
         stable_object_id="e3dc_maestro_evcc_integration",
+    ),
+    MaestroSwitchDescription(
+        key=CONF_EVCC_GRID_CHARGE_ENABLED,
+        name="Sofortladen: Akku aus dem Netz laden",
+        icon="mdi:battery-charging-high",
+        param_key=CONF_EVCC_GRID_CHARGE_ENABLED,
+        on_fn=lambda coord: coord.update_param(CONF_EVCC_GRID_CHARGE_ENABLED, True),
+        off_fn=lambda coord: coord.update_param(CONF_EVCC_GRID_CHARGE_ENABLED, False),
     ),
     # E3/Phase 1: Curtailment Guard
     MaestroSwitchDescription(

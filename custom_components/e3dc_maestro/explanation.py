@@ -112,6 +112,13 @@ def decision_explanation(coord) -> str:
                 f"Notstromreserve geschützt: Batterie-Entladung ist gesperrt, "
                 f"bis SoC {soc}% wieder über die Reserveschwelle steigt."
             )
+    elif phase == "evcc_pause" and dec.power_mode == "charge":
+        target = _f(dec.target_soc)
+        power = _f(dec.charge_power_limit)
+        text = (
+            f"Sofortladen aktiv: Der Akku lädt mit {power} W aus dem Netz bis "
+            f"{target}% und gibt nichts an das Auto ab."
+        )
     elif phase == "evcc_pause":
         mode = state.evcc_mode if state and state.evcc_mode else "now"
         text = (

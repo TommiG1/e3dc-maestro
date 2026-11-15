@@ -180,7 +180,8 @@
           "evcc_enabled": "Enable instant charge: battery guard",
           "evcc_charging_entity": "Charging active (optional, boolean/binary_sensor)",
           "evcc_mode_entity": "Charge mode (sensor/select with instant-charging value)",
-          "evcc_now_value": "Value for instant charging (EVCC: \"now\", openWB: \"Instant Charging\")"
+          "evcc_now_value": "Value for instant charging (EVCC: \"now\", openWB: \"Instant Charging\")",
+          "evcc_grid_charge_enabled": "Charge battery from the grid during instant charging"
         }
       },
       "heatpump": {
@@ -528,10 +529,12 @@
           "evcc_charging_entity": "Charging active (optional, boolean/binary_sensor)",
           "evcc_mode_entity": "Charge mode (sensor/select with instant-charging value)",
           "evcc_now_value": "Value for instant charging (EVCC: \"now\", openWB: \"Instant Charging\")",
-          "evcc_discharge_limit_w": "Discharge limit during instant charging (W)"
+          "evcc_discharge_limit_w": "Discharge limit during instant charging (W)",
+          "evcc_grid_charge_enabled": "Charge battery from the grid during instant charging"
         },
         "data_description": {
-          "evcc_discharge_limit_w": "Maximum battery discharge power during instant charging. 0 = discharging completely blocked."
+          "evcc_discharge_limit_w": "Maximum battery discharge power during instant charging. 0 = discharging completely blocked.",
+          "evcc_grid_charge_enabled": "For charging someone else pays for (e.g. your employer): during instant charging Maestro charges the home battery from the grid at full power up to the charge end target, then keeps discharging blocked. Dynamic tariff only. The battery charge goes through your house meter."
         }
       },
       "heatpump": {
@@ -798,6 +801,9 @@
       },
       "evcc_enabled": {
         "name": "Instant charge: battery guard"
+      },
+      "evcc_grid_charge_enabled": {
+        "name": "Instant charge: charge battery from grid"
       },
       "curtailment_guard_enabled": {
         "name": "Curtailment guard"

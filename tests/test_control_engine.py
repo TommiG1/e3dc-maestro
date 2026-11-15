@@ -1072,6 +1072,97 @@ class TestEvccPause:
         assert decision.phase == PHASE_EMERGENCY
 
 
+class TestEvccGridCharge:
+    """Sofortladen + 'Akku aus dem Netz laden' (Arbeitgeber zahlt die Wallbox)."""
+
+    def _params(self, **kwargs) -> MaestroParams:
+        base = {
+            **DEFAULT_PARAMS.__dict__,
+            "evcc_enabled": True,
+            "evcc_grid_charge_enabled": True,
+            "tariff_mode": "dynamic",
+            "ht_enabled": False,
+            "charge_target": 85,
+            "max_charge_power": 6000,
+            "wallbox_discharge_guard_enabled": True,
+        }
+        base.update(kwargs)
+        return MaestroParams(**base)
+
+    def _state(self, **kwargs) -> MaestroState:
+        base = dict(
+            soc=50, pv_power=0, house_power=500, grid_power=-11500,
+            battery_power=0, wallbox_power=11000,
+            evcc_charging=True, evcc_mode="now",
+        )
+        base.update(kwargs)
+        return MaestroState(**base)
+
+    def test_charges_from_grid_and_locks_discharge(self):
+        decision = decide(self._state(), self._params(), _now(11, 15, 20))
+        assert decision.phase == PHASE_EVCC_PAUSE
+        assert decision.power_mode == POWER_MODE_CHARGE
+        assert decision.charge_power_limit == 6000
+        assert decision.discharge_power_limit == 0.0
+        assert decision.target_soc == 85
+
+    def test_wallbox_guard_does_not_open_discharge(self):
+        decision = decide(self._state(), self._params(), _now(11, 15, 20))
+        assert "Wallbox-Netzschutz" not in decision.reason
+
+    def test_target_reached_falls_back_to_discharge_lock(self):
+        decision = decide(self._state(soc=85), self._params(), _now(11, 15, 20))
+        assert decision.phase == PHASE_EVCC_PAUSE
+        assert decision.power_mode == POWER_MODE_NORMAL
+        assert decision.charge_power_limit is None
+        assert decision.discharge_power_limit == 0.0
+
+    def test_fixed_tariff_only_locks_discharge(self):
+        decision = decide(
+            self._state(), self._params(tariff_mode="fixed"), _now(11, 15, 20)
+        )
+        assert decision.phase == PHASE_EVCC_PAUSE
+        assert decision.power_mode == POWER_MODE_NORMAL
+
+    def test_option_off_only_locks_discharge(self):
+        decision = decide(
+            self._state(), self._params(evcc_grid_charge_enabled=False),
+            _now(11, 15, 20),
+        )
+        assert decision.power_mode == POWER_MODE_NORMAL
+
+    def test_pv_mode_stays_normal_regulation(self):
+        decision = decide(
+            self._state(evcc_mode="pv", pv_power=12000), self._params(),
+            _now(6, 15, 12),
+        )
+        assert decision.phase != PHASE_EVCC_PAUSE
+
+    def test_grid_budget_exhausted_stops_charging(self):
+        decision = decide(
+            self._state(), self._params(max_grid_charge_kwh=5.0),
+            _now(11, 15, 20), grid_charged_today_kwh=5.0,
+        )
+        assert decision.power_mode == POWER_MODE_NORMAL
+
+    def test_hard_soc_limit_stops_charging(self):
+        decision = decide(
+            self._state(soc=80),
+            self._params(hard_soc_limit_enabled=True, hard_soc_limit=80.0),
+            _now(11, 15, 20),
+        )
+        assert decision.power_mode == POWER_MODE_NORMAL
+
+    def test_below_reserve_still_charges_from_grid(self):
+        decision = decide(
+            self._state(soc=15),
+            self._params(seasonal_reserve_enabled=True),
+            _now(1, 15, 20),
+        )
+        assert decision.phase == PHASE_EVCC_PAUSE
+        assert decision.power_mode == POWER_MODE_CHARGE
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Wallbox-Netzschutz: kein Netzbezug – Akku darf Auto mitversorgen
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2121,6 +2212,22 @@ class TestTariffScheduler:
         assert ctc(_now(6, 20, 10), sched) == NORMAL  # Saturday excluded
         # cheap-threshold low
         assert ctc(_now(6, 15, 22), sched, current_price=0.05) == LOW
+
+    def test_legacy_equal_on_off_means_whole_day(self):
+        _TS, _TSlot, ctc, t_from_p, HIGH, _LOW, NORMAL = self._import()
+        params = MaestroParams(
+            ht_enabled=True, ht_on=5, ht_off=5,
+            ht_sat=True, ht_sun=False,
+        )
+        sched = t_from_p(params)
+        slot = sched.slots[0]
+        assert (slot.start_h, slot.end_h) == (0.0, 24.0)
+        # Mon 2026-06-15: rund um die Uhr Hochtarif, auch direkt an der Grenze
+        for hour in (0, 4, 5, 12, 23):
+            assert ctc(_now(6, 15, hour), sched) == HIGH
+        # Sat 23:59 bleibt drin, Sun ist abgewählt
+        assert ctc(_now(6, 20, 23, 59), sched) == HIGH
+        assert ctc(_now(6, 21, 12), sched) == NORMAL
 
     def test_legacy_disabled_dynamic_does_not_create_low(self):
         _TS, _TSlot, ctc, t_from_p, _H, _L, NORMAL = self._import()

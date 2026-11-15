@@ -204,6 +204,7 @@ from .const import (
     DEFAULT_EVCC_NOW_VALUE,
     CONF_EVCC_DISCHARGE_LIMIT_W,
     DEFAULT_EVCC_DISCHARGE_LIMIT_W,
+    CONF_EVCC_GRID_CHARGE_ENABLED,
     CONF_SPREADING_ENABLED,
     CONF_SPREADING_TARGET_SOC,
     DEFAULT_SPREADING_TARGET_SOC,
@@ -1117,6 +1118,7 @@ STEP_EVCC_SCHEMA = vol.Schema(
             selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
         ),
         vol.Optional(CONF_EVCC_DISCHARGE_LIMIT_W, default=DEFAULT_EVCC_DISCHARGE_LIMIT_W): _number_selector(0, 15000, 50, "W"),
+        vol.Optional(CONF_EVCC_GRID_CHARGE_ENABLED, default=False): selector.BooleanSelector(),
     }
 )
 

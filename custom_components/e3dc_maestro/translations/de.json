@@ -182,7 +182,8 @@
           "evcc_enabled": "Sofortladen: Akku-Schutz aktivieren",
           "evcc_charging_entity": "Laden aktiv (optional, boolean/binary_sensor)",
           "evcc_mode_entity": "Lade-Modus (Sensor/Select mit Sofortlade-Wert)",
-          "evcc_now_value": "Wert für Sofortladen (EVCC: \"now\", openWB: \"Instant Charging\")"
+          "evcc_now_value": "Wert für Sofortladen (EVCC: \"now\", openWB: \"Instant Charging\")",
+          "evcc_grid_charge_enabled": "Akku bei Sofortladen aus dem Netz laden"
         }
       },
       "heatpump": {
@@ -532,10 +533,12 @@
           "evcc_charging_entity": "Laden aktiv (optional, boolean/binary_sensor)",
           "evcc_mode_entity": "Lade-Modus (Sensor/Select mit Sofortlade-Wert)",
           "evcc_now_value": "Wert für Sofortladen (EVCC: \"now\", openWB: \"Instant Charging\")",
-          "evcc_discharge_limit_w": "Entlade-Limit bei Sofortladen (W)"
+          "evcc_discharge_limit_w": "Entlade-Limit bei Sofortladen (W)",
+          "evcc_grid_charge_enabled": "Akku bei Sofortladen aus dem Netz laden"
         },
         "data_description": {
-          "evcc_discharge_limit_w": "Maximale Entladeleistung des Akkus während Sofortladen. 0 = Entladen komplett gesperrt."
+          "evcc_discharge_limit_w": "Maximale Entladeleistung des Akkus während Sofortladen. 0 = Entladen komplett gesperrt.",
+          "evcc_grid_charge_enabled": "Für Laden, das jemand anders bezahlt (z. B. der Arbeitgeber): Während Sofortladen lädt Maestro den Hausakku mit voller Leistung aus dem Netz bis zum Ladeende-Ziel, danach bleibt die Entladung gesperrt. Nur bei dynamischem Tarif. Die Akkuladung läuft über deinen Hauszähler."
         }
       },
       "heatpump": {
@@ -808,6 +811,9 @@
       },
       "evcc_enabled": {
         "name": "Sofortladen: Akku-Schutz"
+      },
+      "evcc_grid_charge_enabled": {
+        "name": "Sofortladen: Akku aus dem Netz laden"
       },
       "curtailment_guard_enabled": {
         "name": "Abregelschutz"

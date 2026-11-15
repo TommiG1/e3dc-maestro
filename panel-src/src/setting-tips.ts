@@ -277,8 +277,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Hour when the discharge-protection window starts.",
   },
   ht_off: {
-    de: "Stunde, ab der das Entladeschutz-Fenster endet.",
-    en: "Hour when the discharge-protection window ends.",
+    de: "Stunde, ab der das Entladeschutz-Fenster endet. Gleich wie der Beginn heißt: Entladeschutz den ganzen Tag.",
+    en: "Hour when the discharge-protection window ends. Same as the start means: protection all day.",
   },
   ht_min: {
     de: "SoC, den der Entladeschutz im Winter nicht unterschreitet.",
@@ -319,6 +319,10 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
   evcc_discharge_limit_w: {
     de: "Höchste Entladung in Watt während Sofortladen.",
     en: "Highest discharge in watts during instant charging.",
+  },
+  evcc_grid_charge_enabled: {
+    de: "Lädt den Akku während Sofortladen aus dem Netz bis zum Ladeende-Ziel, etwa wenn der Arbeitgeber das Auto bezahlt. Nur bei dynamischem Tarif.",
+    en: "Charges the battery from the grid during instant charging up to the charge end target, e.g. when your employer pays for the car. Dynamic tariff only.",
   },
   wallbox_enabled: {
     de: "Maestro steuert den Ladestrom der Wallbox nach Überschuss.",

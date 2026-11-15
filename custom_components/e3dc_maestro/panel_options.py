@@ -155,6 +155,7 @@ _SPECS: dict[str, _Spec] = {
     "evcc_mode_entity": _entity(),
     "evcc_now_value": ("text",),
     "evcc_discharge_limit_w": _n(0, 15000),
+    "evcc_grid_charge_enabled": ("bool",),
     "hp_enabled": ("bool",),
     "hp_switch_entity": _entity(),
     "hp_service_on": ("action",),
