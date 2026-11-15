@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.5] – Wallbox-Vorrang (2026-11-15)
+
+Beta nach 0.5.9-beta.4. Ausführlich: [docs/release-notes/v0.5.9-beta.5.md](docs/release-notes/v0.5.9-beta.5.md).
+
+### Neu
+- **Wallbox-Vorrang.** Wartet ein angestecktes Auto auf Solarstrom, begrenzt Maestro die Akku-Ladung aus PV, damit der Überschuss zuerst bei der Wallbox ankommt statt in Akku oder Netz (Discussion #57). Opt-in über den Schalter „Wallbox-Vorrang“ und den Mindest-Akkustand „Wallbox-Vorrang ab Akku-SoC“ (Standard 20 %).
+
+---
+
 ## [0.5.9-beta.4] – Modul 3 nach Quartalen (2026-11-14)
 
 Beta nach 0.5.9-beta.3. Ausführlich: [docs/release-notes/v0.5.9-beta.4.md](docs/release-notes/v0.5.9-beta.4.md).
