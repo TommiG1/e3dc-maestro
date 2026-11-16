@@ -9,9 +9,16 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.9-beta.7] – Modul 3 pro Quartal und Preisplan für feste Tarife (2026-11-16)
+
+Beta nach 0.5.9-beta.6. Ausführlich: [docs/release-notes/v0.5.9-beta.7.md](docs/release-notes/v0.5.9-beta.7.md).
+
 ### Neu
 - **Modul 3: Zeiten pro Quartal.** Unter „Zeiten für“ bekommt jedes gewählte Quartal auf Wunsch eigene NT- und HT-Fenster. Die Preise bleiben für das ganze Jahr gleich, Quartale ohne eigene Zeiten nutzen die gemeinsamen (Discussion #56).
 - **Preisplan für feste Tarife mit Modul 3.** Ohne Preis-Sensor rechnet der Preisplan (Strategie „Dynamisch“) mit dem Festpreis als Preis in der Standardzeit plus den Modul-3-Netzentgelten. Er lädt im NT oder vor dem HT nur so viel, wie die Prognose verlangt, und hält Akku-Energie für das HT zurück. In Quartalen ohne Modul 3 lädt und hält er nichts (Discussion #56).
+- **Sofortladen: Akku aus dem Netz laden.** Neuer Schalter für Laden, das jemand anders bezahlt (zum Beispiel der Arbeitgeber). Während Sofortladen lädt Maestro den Hausakku mit voller Leistung aus dem Netz bis zum Ladeende-Ziel und sperrt danach die Entladung. Nur bei dynamischem Tarif.
 
 ---
 
