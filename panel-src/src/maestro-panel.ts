@@ -330,6 +330,7 @@ class MaestroPanel extends LitElement {
   private _slotsDirty = false;
   private _modul3Zones: Modul3Zones = modul3ZonesFrom(undefined);
   private _modul3Dirty = false;
+  private _modul3Quarter = 0;
   private _phasePoints: Record<string, Point[]> = {};
   private _phaseHistory: "idle" | "loading" | "ready" | "error" = "idle";
   private _phaseTicket = 0;
@@ -1954,6 +1955,11 @@ class MaestroPanel extends LitElement {
       pending: this._pending,
       slots: this._slots,
       modul3Zones: this._modul3Zones,
+      modul3Quarter: this._modul3Quarter,
+      onModul3Quarter: (quarter) => {
+        this._modul3Quarter = quarter;
+        this.requestUpdate();
+      },
       onQuery: (key, query) => {
         this._optionQuery = { ...this._optionQuery, [key]: query };
         this.requestUpdate();

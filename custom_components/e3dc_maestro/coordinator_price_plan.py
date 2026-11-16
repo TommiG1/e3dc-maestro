@@ -17,7 +17,7 @@ from .const import (
 from .energyforecast import API_URL, extend_horizon, slots_from_payload
 from .grid_charge_strategy import plan_tuning
 from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
-from .modul3 import add_modul3_to_horizon, parse_modul3_profile
+from .modul3 import add_modul3_to_horizon, fixed_price_horizon, parse_modul3_profile
 from .octopus_prices import merge_octopus_rate_attrs, related_octopus_rate_entity_ids
 from .ostrom_prices import normalize_ostrom_curve_attrs
 from .price_curve import PriceHorizon, price_at, read_price_horizon
@@ -142,6 +142,20 @@ class CoordinatorPricePlanMixin:
         # §14a Modul 3: Netzentgelt-Schicht auf die fertige Kurve (inkl. Forecast).
         modul3 = parse_modul3_profile(self.entry.options)
         return add_modul3_to_horizon(horizon, modul3, now)
+
+    def _plan_horizon(self, now: datetime, horizon: PriceHorizon | None) -> PriceHorizon | None:
+        """Kurve für den Preisplan: Preis-Sensor, sonst Festpreis plus Modul 3.
+
+        Nur ohne Preis-Sensor. Fällt ein konfigurierter Sensor aus, plant der
+        Preisplan nicht mit einem Ersatz, sondern meldet "keine Preise".
+        """
+        if horizon is not None or self.entry.options.get(CONF_PRICE_SENSOR):
+            return horizon
+        return fixed_price_horizon(
+            parse_modul3_profile(self.entry.options),
+            float(getattr(self._params, "fixed_buy_price", 0.30)),
+            now,
+        )
 
     async def _async_update_price_plan(
         self, state: MaestroState, now: datetime, horizon: PriceHorizon | None

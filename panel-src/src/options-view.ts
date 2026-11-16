@@ -13,8 +13,12 @@ import {
   emptySlot,
   entityChoices,
   fieldLabel,
+  modul3HasOwnWindows,
   modul3QuartersFrom,
   modul3StatusFrom,
+  modul3WindowsFor,
+  modul3WithWindows,
+  modul3WithoutQuarter,
   selectValue,
   timeValue,
   type Modul3ZoneKey,
@@ -39,6 +43,9 @@ export interface OptionCtx {
   pending: ReadonlySet<string>;
   slots: Slot[];
   modul3Zones: Modul3Zones;
+  /** Quartal, dessen Zeiten der Editor zeigt; 0 = gemeinsame Zeiten. */
+  modul3Quarter: number;
+  onModul3Quarter: (quarter: number) => void;
   onQuery: (key: string, query: string) => void;
   onChange: (key: string, value: unknown) => void;
   onSlots: (slots: Slot[]) => void;
@@ -211,8 +218,13 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
   const quarters = modul3QuartersFrom(c.options.modul3_quarters);
   const status = modul3StatusFrom(c.options, c.modul3Zones);
   const liveOn = c.options.modul3_tariff_slots === true;
+  const tab = quarters.includes(c.modul3Quarter) ? c.modul3Quarter : 0;
+  const ownTimes = tab !== 0 && modul3HasOwnWindows(c.modul3Zones, tab);
+  const windowsLocked = locked || (tab !== 0 && !ownTimes);
   const setZone = (key: Modul3ZoneKey, zone: Modul3Zones[Modul3ZoneKey]) =>
     c.onModul3Zones({ ...c.modul3Zones, [key]: zone });
+  const setWindows = (key: Modul3ZoneKey, windows: Modul3Zones[Modul3ZoneKey]["windows"]) =>
+    setZone(key, modul3WithWindows(c.modul3Zones[key], tab, windows));
   const setWindowHours = (
     key: Modul3ZoneKey,
     index: number,
@@ -221,13 +233,22 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
   ) => {
     const hours = timeToHours(raw, which === "end_h");
     if (hours === null) return;
-    const zone = c.modul3Zones[key];
-    const other = which === "start_h" ? zone.windows[index].end_h : zone.windows[index].start_h;
+    const current = modul3WindowsFor(c.modul3Zones[key], tab);
+    const other = which === "start_h" ? current[index].end_h : current[index].start_h;
     if (hours === other) return;
-    const windows = zone.windows.map((window, i) =>
-      i === index ? { ...window, [which]: hours } : window,
+    setWindows(
+      key,
+      current.map((window, i) => (i === index ? { ...window, [which]: hours } : window)),
     );
-    setZone(key, { ...zone, windows });
+  };
+  const setOwnTimes = (on: boolean) => {
+    const next = { ...c.modul3Zones };
+    for (const key of ["nt", "ht"] as const) {
+      next[key] = on
+        ? modul3WithWindows(next[key], tab, next[key].windows.map((w) => ({ ...w })))
+        : modul3WithoutQuarter(next[key], tab);
+    }
+    c.onModul3Zones(next);
   };
   const toggleQuarter = (quarter: number) => {
     const next = quarters.includes(quarter)
@@ -261,8 +282,34 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
     <h4>${t("secModul3Zones")}</h4>
     <p class="sub">${t("secModul3ZonesHint")}</p>
     ${!enabled ? html`<p class="hint">${t("modul3OffHint")}</p>` : nothing}
+    <div class="opt-days" role="group" aria-label=${t("modul3TimesFor")}>
+      <button
+        type="button"
+        class=${tab === 0 ? "on" : ""}
+        aria-pressed=${tab === 0}
+        ?disabled=${!enabled}
+        @click=${() => c.onModul3Quarter(0)}
+      >${t("modul3TimesAll")}</button>
+      ${quarters.map(
+        (quarter) => html`<button
+          type="button"
+          class=${tab === quarter ? "on" : ""}
+          aria-pressed=${tab === quarter}
+          ?disabled=${!enabled}
+          @click=${() => c.onModul3Quarter(quarter)}
+        >${t(MODUL3_QUARTER_LABEL[quarter])}${modul3HasOwnWindows(c.modul3Zones, quarter) ? " •" : ""}</button>`,
+      )}
+    </div>
+    ${tab === 0
+      ? html`<p class="hint">${t("modul3TimesAllHint")}</p>`
+      : html`<p class="hint">
+          ${t(ownTimes ? "modul3TimesOwnHint" : "modul3TimesSharedHint").replace("{quarter}", `Q${tab}`)}
+          <button type="button" class="btn" ?disabled=${locked} @click=${() => setOwnTimes(!ownTimes)}
+          >${t(ownTimes ? "modul3TimesUseShared" : "modul3TimesMakeOwn").replace("{quarter}", `Q${tab}`)}</button>
+        </p>`}
     ${MODUL3_ZONE_KEYS.map((key) => {
       const zone = c.modul3Zones[key];
+      const windows = modul3WindowsFor(zone, tab);
       return html`<div class="slot-card">
         <div class="txt"><span class="name"><b>${t(MODUL3_ZONE_TITLE[key])}</b></span></div>
         <div class="opt-slot-fields">
@@ -280,21 +327,22 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
           </label>
           ${key === "st"
             ? html`<p class="hint">${t("modul3StRest")}</p>`
-            : html`${zone.windows.map(
+            : html`${windows.map(
                 (window, index) => html`<label>${t("optFrom")}
-                  <input type="time" step="900" .value=${_timeDisplay(window.start_h)} ?disabled=${locked}
+                  <input type="time" step="900" .value=${_timeDisplay(window.start_h)} ?disabled=${windowsLocked}
                     @change=${(e: Event) => setWindowHours(key, index, "start_h", (e.target as HTMLInputElement).value)}
                   /></label>
                   <label>${t("optTo")}
-                  <input type="time" step="900" .value=${_timeDisplay(window.end_h, true)} ?disabled=${locked}
+                  <input type="time" step="900" .value=${_timeDisplay(window.end_h, true)} ?disabled=${windowsLocked}
                     @change=${(e: Event) => setWindowHours(key, index, "end_h", (e.target as HTMLInputElement).value)}
                   /></label>
-                  <button type="button" class="btn" ?disabled=${locked}
-                    @click=${() => setZone(key, { ...zone, windows: zone.windows.filter((_, i) => i !== index) })}
+                  <button type="button" class="btn" ?disabled=${windowsLocked}
+                    @click=${() => setWindows(key, windows.filter((_, i) => i !== index))}
                   >${t("optRemove")}</button>`,
               )}
-              <button type="button" class="btn" ?disabled=${locked}
-                @click=${() => setZone(key, { ...zone, windows: [...zone.windows, { start_h: 0, end_h: 6 }] })}
+              ${!windows.length && tab !== 0 ? html`<p class="hint">${t("modul3NoWindow")}</p>` : nothing}
+              <button type="button" class="btn" ?disabled=${windowsLocked}
+                @click=${() => setWindows(key, [...windows, { start_h: 0, end_h: 6 }])}
               >${t("modul3AddWindow")}</button>`}
         </div>
       </div>`;
@@ -320,7 +368,8 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
           <ul class="hint">
             ${status.derived_slots.map(
               (slot) => html`<li>${slot.class_ === "low" ? t("classLow") : t("classHigh")}:
-                ${_timeDisplay(slot.start_h)}–${_timeDisplay(slot.end_h, true)}</li>`,
+                ${_timeDisplay(slot.start_h)}–${_timeDisplay(slot.end_h, true)}
+                (${slot.quarters.map((q) => `Q${q}`).join(", ")})</li>`,
             )}
           </ul>
         </div>`

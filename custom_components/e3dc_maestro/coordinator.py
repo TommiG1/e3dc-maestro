@@ -766,10 +766,12 @@ class E3DCMaestroCoordinator(
                 # Pick any HT slot of the schedule when none is active right now,
                 # so the HT-window mean is still computed during the day.
                 if ht_slot is None:
-                    for slot in schedule.slots:
-                        if slot.class_ == "high":
-                            ht_slot = slot
-                            break
+                    quarter = (now.month - 1) // 3 + 1
+                    highs = [s for s in schedule.slots if s.class_ == "high"]
+                    ht_slot = next(
+                        (s for s in highs if s.quarters is None or quarter in s.quarters),
+                        highs[0] if highs else None,
+                    )
                 await self._consumption_stats.async_refresh(
                     self._params.adaptive_reserve_lookback_days, ht_slot
                 )
@@ -806,7 +808,7 @@ class E3DCMaestroCoordinator(
         if need_fn is not None:
             state_data = dataclasses.replace(state_data, low_slot_need_kwh=need_fn(now))
         await self._async_update_forecast(state_data, now, need_fn=need_fn, price_fn=price_fn)
-        await self._async_update_price_plan(state_data, now, horizon)
+        await self._async_update_price_plan(state_data, now, self._plan_horizon(now, horizon))
         await self._async_maybe_run_optimizer(state_data, now)
 
         # Rule engine

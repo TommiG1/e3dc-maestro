@@ -620,6 +620,8 @@ export type StrategyCtx = ControlCtx & {
   lowSlots?: number;
   /** False when the options are loaded and no price sensor is set. */
   priceSensor?: boolean;
+  /** Modul 3 is on: without a price sensor the plan uses fixed price plus grid fees. */
+  modul3?: boolean;
 };
 
 const groupHasRows = (c: SettingsCtx, group: SettingsGroup): boolean =>
@@ -1507,7 +1509,9 @@ function strategySummary(c: StrategyCtx, strategy: GridChargeStrategy): Template
     const active = S.price_plan_active ? isOn(c.hass.states[S.price_plan_active]) : false;
     lines.push(html`<p>${t(active ? "sumActive" : "sumShadow")}</p>`);
   }
-  if ((strategy === "threshold" || isPlanStrategy(strategy)) && c.priceSensor === false) {
+  if (isPlanStrategy(strategy) && c.priceSensor === false && c.modul3) {
+    lines.push(html`<p>${t("sumPlanModul3")}</p>`);
+  } else if ((strategy === "threshold" || isPlanStrategy(strategy)) && c.priceSensor === false) {
     lines.push(html`<p>${t("sumNoPrice")}
       <button type="button" class="text-link" @click=${jumpTo("tariff-price")}>${t("sumJumpPrice")}</button></p>`);
   }
@@ -1745,6 +1749,7 @@ export function settingsView(c: SettingsCtx): TemplateResult {
       ...c,
       lowSlots: c.options.ready ? c.options.slots.filter((slot) => slot.class_ === "low").length : undefined,
       priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined,
+      modul3: c.options.ready && c.options.options.modul3_enabled === true,
     };
     const strategy = strategyOf(c.hass);
     const charge = current.sections.filter((section) =>

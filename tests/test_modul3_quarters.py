@@ -205,7 +205,9 @@ def test_runtime_status_reports_quarter_and_zone():
     assert status["quarters"] == [1, 4]
     assert status["active"] is False
     assert status["zone"] == ZONE_ST
-    assert status["derived_slots"][0] == {"start_h": 22.25, "end_h": 6.25, "class_": "low"}
+    assert status["derived_slots"][0] == {
+        "start_h": 22.25, "end_h": 6.25, "class_": "low", "quarters": [1, 4],
+    }
     winter = modul3_runtime_status(profile, dt.datetime(2026, 1, 10, 23, 0, tzinfo=BERLIN))
     assert winter["active"] is True and winter["zone"] == ZONE_NT
 

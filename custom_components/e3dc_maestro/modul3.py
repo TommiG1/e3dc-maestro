@@ -45,6 +45,13 @@ class Modul3Window:
 class Modul3Zone:
     price_ct_kwh: float
     windows: tuple[Modul3Window, ...] = ()
+    # Eigene Fenster je Quartal (Preisblatt: Zeiten pro Quartal). Ein leeres
+    # Tupel heißt "in diesem Quartal kein Fenster"; fehlt das Quartal, gelten
+    # die gemeinsamen ``windows``.
+    quarter_windows: Mapping[int, tuple[Modul3Window, ...]] = field(default_factory=dict)
+
+    def windows_for(self, quarter: int) -> tuple[Modul3Window, ...]:
+        return self.quarter_windows.get(quarter, self.windows)
 
 
 @dataclass(frozen=True)
@@ -94,11 +101,12 @@ def zone_at(now: _dt.datetime, profile: Modul3Profile) -> str:
     if not profile.active_in(now):
         return ZONE_ST
     hour = now.hour + now.minute / 60.0 + now.second / 3600.0
+    quarter = quarter_of(now)
     for zone in (ZONE_HT, ZONE_NT):
         z = profile.zones.get(zone)
         if z is None:
             continue
-        for window in z.windows:
+        for window in z.windows_for(quarter):
             if _window_active(window, hour):
                 return zone
     return ZONE_ST
@@ -131,6 +139,48 @@ def add_modul3_to_horizon(
         prices=prices,
         known_until=horizon.known_until,
     )
+
+
+FIXED_HORIZON_HOURS = 48.0
+_FIXED_STEP = _dt.timedelta(minutes=15)
+
+
+def fixed_price_horizon(
+    profile: Modul3Profile,
+    st_price_eur: float,
+    now: _dt.datetime,
+    hours: float = FIXED_HORIZON_HOURS,
+) -> PriceHorizon | None:
+    """Preiskurve für den Festpreis-Tarif mit Modul 3, im Viertelstundenraster.
+
+    Der Festpreis gilt als Preis in der Standardzeit; NT und HT weichen um die
+    Differenz der Netzentgelte davon ab. In Quartalen ohne Modul 3 ist die
+    Kurve flach, der Preisplan findet dort keinen Spread und tut nichts.
+    """
+    if not profile.enabled or hours <= 0:
+        return None
+    base = max(0.0, float(st_price_eur) - profile.fee_eur(ZONE_ST))
+    tz = now.tzinfo
+    start = now.astimezone(_dt.timezone.utc) if tz is not None else now
+    end = start + _dt.timedelta(hours=hours)
+    # Erster Slot bis zur nächsten Viertelstunde, damit Fenstergrenzen wie
+    # 22:15 genau auf einer Slotgrenze liegen.
+    boundary = start.replace(second=0, microsecond=0) - _dt.timedelta(minutes=start.minute % 15)
+    slot_hours: list[float] = []
+    cursor = start
+    nxt = boundary + _FIXED_STEP
+    while cursor < end:
+        stop = min(nxt, end)
+        slot_hours.append((stop - cursor).total_seconds() / 3600.0)
+        cursor = stop
+        nxt = stop + _FIXED_STEP
+    flat = PriceHorizon(
+        start=now,
+        slot_hours=slot_hours,
+        prices=[base] * len(slot_hours),
+        known_until=end.astimezone(tz) if tz is not None else end,
+    )
+    return add_modul3_to_horizon(flat, replace(profile, add_to_curve=True), now)
 
 
 def tariff_slots_from_modul3(profile: Modul3Profile) -> list[dict[str, Any]]:
@@ -170,17 +220,33 @@ def derived_tariff_slots(profile: Modul3Profile) -> tuple[TariffSlot, ...]:
         z = profile.zones.get(zone)
         if z is None:
             continue
-        for window in z.windows:
+        for window, quarters in _window_quarters(z, profile.quarters):
             out.append(
                 TariffSlot(
                     weekdays=weekdays,
                     start_h=float(window.start_h),
                     end_h=float(window.end_h),
                     class_=class_,
-                    quarters=profile.quarters,
+                    quarters=quarters,
                 )
             )
     return tuple(out)
+
+
+def _window_quarters(
+    zone: Modul3Zone, quarters: frozenset[int]
+) -> list[tuple[Modul3Window, frozenset[int]]]:
+    """Jedes Fenster der Zone mit den Quartalen (aus ``quarters``), in denen es gilt."""
+    out: dict[Modul3Window, set[int]] = {}
+    for quarter in sorted(quarters):
+        for window in zone.windows_for(quarter):
+            out.setdefault(window, set()).add(quarter)
+    return [(window, frozenset(qs)) for window, qs in out.items()]
+
+
+def has_quarter_windows(profile: Modul3Profile) -> bool:
+    """True wenn mindestens eine Zone eigene Fenster für ein Quartal hat."""
+    return any(z.quarter_windows for z in profile.zones.values())
 
 
 def gate_stored_modul3_slots(
@@ -193,25 +259,33 @@ def gate_stored_modul3_slots(
     Gate schaltet nur ab, nie zu: Ein Slot mit gleichem Fenster wie NT/HT gilt
     höchstens in den Modul-3-Quartalen.
     """
-    if not profile.enabled or profile.quarters == ALL_QUARTERS:
+    if not profile.enabled:
         return slots
-    windows = {
-        class_: [(w.start_h, w.end_h) for w in z.windows]
+    if profile.quarters == ALL_QUARTERS and not has_quarter_windows(profile):
+        return slots
+    # Je Fenster die Quartale, in denen es laut Modul 3 gilt. Hat ein Quartal
+    # eigene Zeiten, gilt eine Kopie des gemeinsamen Fensters dort nicht mehr.
+    # Gemeinsame Fenster bleiben mit leerer Quartalsmenge drin: Eine Kopie
+    # davon gilt dann nirgends, statt ungebremst das ganze Jahr.
+    windows: dict[str, list[tuple[Modul3Window, frozenset[int]]]] = {
+        class_: [
+            *_window_quarters(z, profile.quarters),
+            *((w, frozenset()) for w in z.windows),
+        ]
         for zone, class_ in ((ZONE_NT, TARIFF_LOW), (ZONE_HT, TARIFF_HIGH))
         if (z := profile.zones.get(zone)) is not None
     }
     out: list[TariffSlot] = []
     for slot in slots:
-        match = any(
-            abs(slot.start_h - start) < 1e-6 and abs(slot.end_h - end) < 1e-6
-            for start, end in windows.get(slot.class_, ())
-        )
-        if match:
-            quarters = (
-                profile.quarters
-                if slot.quarters is None
-                else slot.quarters & profile.quarters
-            )
+        matched: set[int] = set()
+        found = False
+        for window, quarters in windows.get(slot.class_, ()):
+            if abs(slot.start_h - window.start_h) < 1e-6 and abs(slot.end_h - window.end_h) < 1e-6:
+                matched |= quarters
+                found = True
+        if found:
+            allowed = frozenset(matched)
+            quarters = allowed if slot.quarters is None else slot.quarters & allowed
             slot = replace(slot, quarters=quarters)
         out.append(slot)
     return out
@@ -227,7 +301,12 @@ def modul3_runtime_status(profile: Modul3Profile, now: _dt.datetime) -> dict[str
         "zone": zone_at(now, profile),
         "tariff_slots": profile.tariff_slots,
         "derived_slots": [
-            {"start_h": s.start_h, "end_h": s.end_h, "class_": s.class_}
+            {
+                "start_h": s.start_h,
+                "end_h": s.end_h,
+                "class_": s.class_,
+                "quarters": sorted(s.quarters or ALL_QUARTERS),
+            }
             for s in derived_tariff_slots(profile)
         ],
     }
@@ -257,14 +336,31 @@ def _parse_zone(raw: Any) -> Modul3Zone:
         price = 0.0
     if price != price or price < 0:
         price = 0.0
-    windows: list[Modul3Window] = []
-    raw_windows = raw.get("windows")
-    if isinstance(raw_windows, list):
-        for item in raw_windows:
-            window = _parse_window(item)
-            if window is not None:
-                windows.append(window)
-    return Modul3Zone(price_ct_kwh=price, windows=tuple(windows))
+    quarter_windows: dict[int, tuple[Modul3Window, ...]] = {}
+    raw_quarters = raw.get("quarter_windows")
+    if isinstance(raw_quarters, Mapping):
+        for key, items in raw_quarters.items():
+            try:
+                quarter = int(key)
+            except (TypeError, ValueError):
+                continue
+            if quarter in ALL_QUARTERS and isinstance(items, list):
+                quarter_windows[quarter] = _parse_windows(items)
+    return Modul3Zone(
+        price_ct_kwh=price,
+        windows=_parse_windows(raw.get("windows")),
+        quarter_windows=quarter_windows,
+    )
+
+
+def _parse_windows(raw: Any) -> tuple[Modul3Window, ...]:
+    if not isinstance(raw, list):
+        return ()
+    return tuple(w for item in raw if (w := _parse_window(item)) is not None)
+
+
+def _windows_dict(windows: tuple[Modul3Window, ...]) -> list[dict[str, float]]:
+    return [{"start_h": round(w.start_h, 4), "end_h": round(w.end_h, 4)} for w in windows]
 
 
 def empty_zones_dict() -> dict[str, dict[str, Any]]:
@@ -361,11 +457,14 @@ def clean_modul3_zones(value: Any) -> tuple[dict[str, Any] | None, str | None]:
         zone = _parse_zone(value.get(key))
         cleaned[key] = {
             "price_ct_kwh": round(zone.price_ct_kwh, 4),
-            "windows": [
-                {"start_h": round(w.start_h, 4), "end_h": round(w.end_h, 4)}
-                for w in zone.windows
-            ],
+            "windows": _windows_dict(zone.windows),
         }
+        # ST ist der Rest des Tages und hat keine eigenen Fenster.
+        if key != ZONE_ST and zone.quarter_windows:
+            cleaned[key]["quarter_windows"] = {
+                str(q): _windows_dict(zone.quarter_windows[q])
+                for q in sorted(zone.quarter_windows)
+            }
     return cleaned, None
 
 
@@ -432,7 +531,7 @@ def migrate_copied_modul3_slots(options: Mapping[str, Any]) -> dict[str, Any] | 
     if not isinstance(stored, list) or not stored:
         return None
     profile = parse_modul3_profile(options)
-    if profile.quarters != ALL_QUARTERS:
+    if profile.quarters != ALL_QUARTERS or has_quarter_windows(profile):
         return None
     derived = tariff_slots_from_modul3(profile)
     if not derived or len(stored) < len(derived):

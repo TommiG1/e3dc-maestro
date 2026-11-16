@@ -41,6 +41,8 @@ export interface Modul3Window {
 export interface Modul3Zone {
   price_ct_kwh: number;
   windows: Modul3Window[];
+  /** Eigene Fenster je Quartal ("1"–"4"); fehlt ein Quartal, gelten `windows`. */
+  quarter_windows?: Record<string, Modul3Window[]>;
 }
 
 export type Modul3Zones = Record<Modul3ZoneKey, Modul3Zone>;
@@ -372,23 +374,59 @@ export const emptyModul3Zones = (): Modul3Zones => ({
   ht: { price_ct_kwh: 0, windows: [{ start_h: 17, end_h: 21 }] },
 });
 
+const windowsFrom = (raw: unknown): Modul3Window[] => {
+  const windows: Modul3Window[] = [];
+  if (!Array.isArray(raw)) return windows;
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const w = item as Record<string, unknown>;
+    const start_h = typeof w.start_h === "number" ? w.start_h : 0;
+    const end_h = typeof w.end_h === "number" ? w.end_h : 0;
+    if (start_h === end_h) continue;
+    windows.push({ start_h, end_h });
+  }
+  return windows;
+};
+
 const zoneFrom = (raw: unknown, fallback: Modul3Zone): Modul3Zone => {
   if (!raw || typeof raw !== "object") return fallback;
   const row = raw as Record<string, unknown>;
   const price = typeof row.price_ct_kwh === "number" && Number.isFinite(row.price_ct_kwh) ? Math.max(0, row.price_ct_kwh) : 0;
-  const windows: Modul3Window[] = [];
-  if (Array.isArray(row.windows)) {
-    for (const item of row.windows) {
-      if (!item || typeof item !== "object") continue;
-      const w = item as Record<string, unknown>;
-      const start_h = typeof w.start_h === "number" ? w.start_h : 0;
-      const end_h = typeof w.end_h === "number" ? w.end_h : 0;
-      if (start_h === end_h) continue;
-      windows.push({ start_h, end_h });
+  const zone: Modul3Zone = { price_ct_kwh: price, windows: windowsFrom(row.windows) };
+  const rawQuarters = row.quarter_windows;
+  if (rawQuarters && typeof rawQuarters === "object" && !Array.isArray(rawQuarters)) {
+    const quarterWindows: Record<string, Modul3Window[]> = {};
+    for (const [key, items] of Object.entries(rawQuarters as Record<string, unknown>)) {
+      if (["1", "2", "3", "4"].includes(key) && Array.isArray(items)) quarterWindows[key] = windowsFrom(items);
     }
+    if (Object.keys(quarterWindows).length) zone.quarter_windows = quarterWindows;
   }
-  return { price_ct_kwh: price, windows };
+  return zone;
 };
+
+/** Fenster einer Zone für ein Quartal; 0 = die gemeinsamen Fenster. */
+export const modul3WindowsFor = (zone: Modul3Zone, quarter: number): Modul3Window[] =>
+  quarter === 0 ? zone.windows : (zone.quarter_windows?.[String(quarter)] ?? zone.windows);
+
+/** True wenn NT oder HT für dieses Quartal eigene Fenster haben. */
+export const modul3HasOwnWindows = (zones: Modul3Zones, quarter: number): boolean =>
+  (["nt", "ht"] as const).some((key) => zones[key].quarter_windows?.[String(quarter)] !== undefined);
+
+/** Fenster einer Zone für ein Quartal setzen; 0 = gemeinsame Fenster. */
+export function modul3WithWindows(zone: Modul3Zone, quarter: number, windows: Modul3Window[]): Modul3Zone {
+  if (quarter === 0) return { ...zone, windows };
+  return { ...zone, quarter_windows: { ...zone.quarter_windows, [String(quarter)]: windows } };
+}
+
+/** Eigene Fenster eines Quartals entfernen; danach gelten die gemeinsamen. */
+export function modul3WithoutQuarter(zone: Modul3Zone, quarter: number): Modul3Zone {
+  if (!zone.quarter_windows) return zone;
+  const rest = { ...zone.quarter_windows };
+  delete rest[String(quarter)];
+  const next: Modul3Zone = { price_ct_kwh: zone.price_ct_kwh, windows: zone.windows };
+  if (Object.keys(rest).length) next.quarter_windows = rest;
+  return next;
+}
 
 export function modul3ZonesFrom(value: unknown): Modul3Zones {
   const base = emptyModul3Zones();
@@ -408,7 +446,7 @@ export type Modul3RuntimeStatus = {
   active: boolean;
   zone: Modul3ZoneKey;
   tariff_slots: boolean;
-  derived_slots: { start_h: number; end_h: number; class_: string }[];
+  derived_slots: { start_h: number; end_h: number; class_: string; quarters: number[] }[];
 };
 
 /** Quartale aus den Options; fehlend oder leer → alle vier. */
@@ -441,7 +479,7 @@ export function modul3StatusFrom(
   if (active) {
     const hour = now.getHours() + now.getMinutes() / 60;
     for (const key of ["ht", "nt"] as const) {
-      if (zones[key].windows.some((window) => _windowActive(window, hour))) {
+      if (modul3WindowsFor(zones[key], quarter).some((window) => _windowActive(window, hour))) {
         zone = key;
         break;
       }
@@ -450,11 +488,17 @@ export function modul3StatusFrom(
   const tariff_slots = options.modul3_tariff_slots === true;
   const derived_slots: Modul3RuntimeStatus["derived_slots"] = [];
   if (enabled && tariff_slots) {
-    for (const window of zones.nt.windows) {
-      derived_slots.push({ start_h: window.start_h, end_h: window.end_h, class_: "low" });
-    }
-    for (const window of zones.ht.windows) {
-      derived_slots.push({ start_h: window.start_h, end_h: window.end_h, class_: "high" });
+    for (const [key, class_] of [["nt", "low"], ["ht", "high"]] as const) {
+      const byWindow = new Map<string, Modul3RuntimeStatus["derived_slots"][number]>();
+      for (const q of quarters) {
+        for (const window of modul3WindowsFor(zones[key], q)) {
+          const id = `${window.start_h}-${window.end_h}`;
+          const slot = byWindow.get(id) ?? { start_h: window.start_h, end_h: window.end_h, class_, quarters: [] };
+          slot.quarters.push(q);
+          byWindow.set(id, slot);
+        }
+      }
+      derived_slots.push(...byWindow.values());
     }
   }
   return { enabled, quarter, quarters, active, zone, tariff_slots, derived_slots };

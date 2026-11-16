@@ -9,6 +9,10 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Modul 3: Zeiten pro Quartal.** Unter „Zeiten für“ bekommt jedes gewählte Quartal auf Wunsch eigene NT- und HT-Fenster. Die Preise bleiben für das ganze Jahr gleich, Quartale ohne eigene Zeiten nutzen die gemeinsamen (Discussion #56).
+- **Preisplan für feste Tarife mit Modul 3.** Ohne Preis-Sensor rechnet der Preisplan (Strategie „Dynamisch“) mit dem Festpreis als Preis in der Standardzeit plus den Modul-3-Netzentgelten. Er lädt im NT oder vor dem HT nur so viel, wie die Prognose verlangt, und hält Akku-Energie für das HT zurück. In Quartalen ohne Modul 3 lädt und hält er nichts (Discussion #56).
+
 ---
 
 ## [0.5.9-beta.6] – Wallbox-Tab und Wallbox-Korrekturen (2026-11-15)

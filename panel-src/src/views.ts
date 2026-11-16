@@ -1220,7 +1220,11 @@ export function planView(c: Ctx): TemplateResult {
   const a = attrs(c, E.plan);
   const slots = parseSlots(a.plan_slots);
   const strategy = strategyOf(c.hass);
-  const controls = planControls({ ...c, priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined });
+  const controls = planControls({
+    ...c,
+    priceSensor: c.options.ready ? !!c.options.options.price_sensor : undefined,
+    modul3: c.options.ready && c.options.options.modul3_enabled === true,
+  });
   const diag = planDiagRows(c, a);
   if (!slots.length) {
     const kind = planEmptyKind(strategy, a);

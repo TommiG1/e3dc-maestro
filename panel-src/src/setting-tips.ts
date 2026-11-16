@@ -1,8 +1,8 @@
 /** One short sentence per setting. Shown after a second of hover or press. */
 export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
   grid_charge_strategy: {
-    de: "Aus: nie aus dem Netz. Zeitfenster: in Tarif-Slots Klasse Niedrig. Preisschwelle: unter einem festen Preis. Dynamisch: Preisplan (startet im Schattenmodus). Experte: wie Dynamisch, mit eigenen Werten.",
-    en: "Off: never from the grid. Time windows: in tariff slots class Low. Price threshold: below a fixed price. Dynamic: price plan (starts in shadow mode). Expert: like Dynamic, with your own values.",
+    de: "Aus: nie aus dem Netz. Zeitfenster: in Tarif-Slots Klasse Niedrig. Preisschwelle: unter einem festen Preis. Dynamisch: Preisplan (startet im Schattenmodus), bei festem Tarif mit Modul 3 auch ohne Preis-Sensor. Experte: wie Dynamisch, mit eigenen Werten.",
+    en: "Off: never from the grid. Time windows: in tariff slots class Low. Price threshold: below a fixed price. Dynamic: price plan (starts in shadow mode), also without a price sensor on a fixed tariff with Module 3. Expert: like Dynamic, with your own values.",
   },
   inverter_power: {
     de: "Gesamte WR-Leistung der Anlage inkl. zusätzlicher Erzeuger. Begrenzt die Entladung und skaliert die Last-Balken im Haus-Fluss.",

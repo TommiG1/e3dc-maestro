@@ -47,7 +47,7 @@
 | **Live-Energiefluss** | PV, Netz, Haus, Akku und Verbraucher — plus Tagesbilanz |
 | **48h-Prognose** | Vorausschauendes Laden und SoC-Trajektorie |
 | **Preisplan & Tarife** | Dynamische Tarife, Zeitfenster, Netzladung — nachvollziehbar |
-| **Modul 3 (§14a, DE)** | NT/ST/HT aus dem Netzbetreiber-Preisblatt, nur in den gültigen Quartalen, mit Uhrzeit in Viertelstunden. NT lädt nur über Tarif-Slots und die Strategie „Zeitfenster“ |
+| **Modul 3 (§14a, DE)** | NT/ST/HT aus dem Netzbetreiber-Preisblatt, nur in den gültigen Quartalen, auf Wunsch mit eigenen Zeiten pro Quartal, mit Uhrzeit in Viertelstunden. Geladen wird über die Strategie „Zeitfenster“ oder prognosebasiert über den Preisplan, der bei festem Tarif mit Festpreis plus Netzentgelt rechnet |
 | **Entscheidung erklären** | Warum gerade diese Phase aktiv ist |
 | **Schnellsteuerung** | Reserve, Pause, Overrides direkt im Panel |
 | **Lokal** | Priorisierte Phasen, Abregelschutz, Wallbox- und WP-Logik |

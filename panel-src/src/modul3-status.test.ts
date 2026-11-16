@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { emptyModul3Zones, modul3QuartersFrom, modul3StatusFrom } from "./options";
+import {
+  emptyModul3Zones,
+  modul3HasOwnWindows,
+  modul3QuartersFrom,
+  modul3StatusFrom,
+  modul3WithoutQuarter,
+  modul3ZonesFrom,
+} from "./options";
 
 describe("modul3QuartersFrom", () => {
   it("defaults to all four and sorts", () => {
@@ -33,6 +40,31 @@ describe("modul3StatusFrom", () => {
     );
     expect(status.active).toBe(true);
     expect(status.zone).toBe("nt");
+  });
+
+  it("uses own quarter windows and lists slot quarters", () => {
+    const own = {
+      ...zones,
+      nt: { ...zones.nt, quarter_windows: { "4": [{ start_h: 23, end_h: 5 }] } },
+    };
+    const options = { modul3_enabled: true, modul3_quarters: [1, 4], modul3_tariff_slots: true };
+    expect(modul3StatusFrom(options, own, new Date(2026, 10, 16, 22, 30)).zone).toBe("st");
+    expect(modul3StatusFrom(options, own, new Date(2026, 10, 16, 23, 30)).zone).toBe("nt");
+    expect(modul3StatusFrom(options, own, new Date(2026, 0, 14, 22, 30)).zone).toBe("nt");
+    const lows = modul3StatusFrom(options, own).derived_slots.filter((s) => s.class_ === "low");
+    expect(lows).toEqual([
+      { start_h: 22.25, end_h: 6.25, class_: "low", quarters: [1] },
+      { start_h: 23, end_h: 5, class_: "low", quarters: [4] },
+    ]);
+  });
+
+  it("round-trips quarter windows through the parser", () => {
+    const parsed = modul3ZonesFrom({
+      nt: { price_ct_kwh: 2, windows: [], quarter_windows: { "4": [{ start_h: 23, end_h: 5 }], "9": [] } },
+    });
+    expect(parsed.nt.quarter_windows).toEqual({ "4": [{ start_h: 23, end_h: 5 }] });
+    expect(modul3HasOwnWindows(parsed, 4)).toBe(true);
+    expect(modul3HasOwnWindows({ ...parsed, nt: modul3WithoutQuarter(parsed.nt, 4) }, 4)).toBe(false);
   });
 
   it("hides derived slots when the switch is off", () => {
