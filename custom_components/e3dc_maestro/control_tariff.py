@@ -113,11 +113,15 @@ def _legacy_schedule(params: MaestroParams) -> TariffSchedule:
             weekdays.add(5)
         if params.ht_sun:
             weekdays.add(6)
+        start_h, end_h = float(params.ht_on), float(params.ht_off)
+        # Beginn == Ende heißt "ganzer Tag" (wie bei e3dc-control).
+        if start_h == end_h:
+            start_h, end_h = 0.0, 24.0
         slots.append(
             TariffSlot(
                 weekdays=frozenset(weekdays),
-                start_h=float(params.ht_on),
-                end_h=float(params.ht_off),
+                start_h=start_h,
+                end_h=end_h,
                 class_=TARIFF_HIGH,
             )
         )
