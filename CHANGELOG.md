@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.5.9-beta.8] – Modul 3 Preise pro Quartal (2026-11-16)
+
+Beta nach 0.5.9-beta.7. Ausführlich: [docs/release-notes/v0.5.9-beta.8.md](docs/release-notes/v0.5.9-beta.8.md).
+
 ### Neu
 - **Modul 3: Preise pro Quartal.** Neben den Zeiten kann jedes Quartal eigene NT-/ST-/HT-ct/kWh bekommen. Praktisch am Jahreswechsel: Im November Q1 mit dem neuen Preisblatt befüllen, Q4 behält die alten Werte bis zum 31.12. (Discussion #56).
 
