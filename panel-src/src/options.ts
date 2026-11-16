@@ -43,6 +43,8 @@ export interface Modul3Zone {
   windows: Modul3Window[];
   /** Eigene Fenster je Quartal ("1"–"4"); fehlt ein Quartal, gelten `windows`. */
   quarter_windows?: Record<string, Modul3Window[]>;
+  /** Eigene ct/kWh je Quartal; fehlt ein Quartal, gilt `price_ct_kwh`. */
+  quarter_prices?: Record<string, number>;
 }
 
 export type Modul3Zones = Record<Modul3ZoneKey, Modul3Zone>;
@@ -401,6 +403,15 @@ const zoneFrom = (raw: unknown, fallback: Modul3Zone): Modul3Zone => {
     }
     if (Object.keys(quarterWindows).length) zone.quarter_windows = quarterWindows;
   }
+  const rawPrices = row.quarter_prices;
+  if (rawPrices && typeof rawPrices === "object" && !Array.isArray(rawPrices)) {
+    const quarterPrices: Record<string, number> = {};
+    for (const [key, value] of Object.entries(rawPrices as Record<string, unknown>)) {
+      if (!["1", "2", "3", "4"].includes(key) || typeof value !== "number" || !Number.isFinite(value) || value < 0) continue;
+      quarterPrices[key] = value;
+    }
+    if (Object.keys(quarterPrices).length) zone.quarter_prices = quarterPrices;
+  }
   return zone;
 };
 
@@ -408,9 +419,17 @@ const zoneFrom = (raw: unknown, fallback: Modul3Zone): Modul3Zone => {
 export const modul3WindowsFor = (zone: Modul3Zone, quarter: number): Modul3Window[] =>
   quarter === 0 ? zone.windows : (zone.quarter_windows?.[String(quarter)] ?? zone.windows);
 
+/** Preis einer Zone für ein Quartal; 0 = der gemeinsame Preis. */
+export const modul3PriceFor = (zone: Modul3Zone, quarter: number): number =>
+  quarter === 0 ? zone.price_ct_kwh : (zone.quarter_prices?.[String(quarter)] ?? zone.price_ct_kwh);
+
 /** True wenn NT oder HT für dieses Quartal eigene Fenster haben. */
 export const modul3HasOwnWindows = (zones: Modul3Zones, quarter: number): boolean =>
   (["nt", "ht"] as const).some((key) => zones[key].quarter_windows?.[String(quarter)] !== undefined);
+
+/** True wenn irgendeine Zone für dieses Quartal einen eigenen Preis hat. */
+export const modul3HasOwnPrices = (zones: Modul3Zones, quarter: number): boolean =>
+  (["nt", "st", "ht"] as const).some((key) => zones[key].quarter_prices?.[String(quarter)] !== undefined);
 
 /** Fenster einer Zone für ein Quartal setzen; 0 = gemeinsame Fenster. */
 export function modul3WithWindows(zone: Modul3Zone, quarter: number, windows: Modul3Window[]): Modul3Zone {
@@ -418,15 +437,36 @@ export function modul3WithWindows(zone: Modul3Zone, quarter: number, windows: Mo
   return { ...zone, quarter_windows: { ...zone.quarter_windows, [String(quarter)]: windows } };
 }
 
-/** Eigene Fenster eines Quartals entfernen; danach gelten die gemeinsamen. */
-export function modul3WithoutQuarter(zone: Modul3Zone, quarter: number): Modul3Zone {
+/** Preis einer Zone für ein Quartal setzen; 0 = gemeinsamer Preis. */
+export function modul3WithPrice(zone: Modul3Zone, quarter: number, price_ct_kwh: number): Modul3Zone {
+  if (quarter === 0) return { ...zone, price_ct_kwh };
+  return { ...zone, quarter_prices: { ...zone.quarter_prices, [String(quarter)]: price_ct_kwh } };
+}
+
+/** Eigene Fenster eines Quartals entfernen; Preise bleiben. */
+export function modul3WithoutQuarterWindows(zone: Modul3Zone, quarter: number): Modul3Zone {
   if (!zone.quarter_windows) return zone;
   const rest = { ...zone.quarter_windows };
   delete rest[String(quarter)];
   const next: Modul3Zone = { price_ct_kwh: zone.price_ct_kwh, windows: zone.windows };
+  if (zone.quarter_prices) next.quarter_prices = zone.quarter_prices;
   if (Object.keys(rest).length) next.quarter_windows = rest;
   return next;
 }
+
+/** Eigene Preise eines Quartals entfernen; Fenster bleiben. */
+export function modul3WithoutQuarterPrices(zone: Modul3Zone, quarter: number): Modul3Zone {
+  if (!zone.quarter_prices) return zone;
+  const rest = { ...zone.quarter_prices };
+  delete rest[String(quarter)];
+  const next: Modul3Zone = { price_ct_kwh: zone.price_ct_kwh, windows: zone.windows };
+  if (zone.quarter_windows) next.quarter_windows = zone.quarter_windows;
+  if (Object.keys(rest).length) next.quarter_prices = rest;
+  return next;
+}
+
+/** @deprecated Use modul3WithoutQuarterWindows. */
+export const modul3WithoutQuarter = modul3WithoutQuarterWindows;
 
 export function modul3ZonesFrom(value: unknown): Modul3Zones {
   const base = emptyModul3Zones();

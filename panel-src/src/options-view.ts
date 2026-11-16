@@ -13,12 +13,16 @@ import {
   emptySlot,
   entityChoices,
   fieldLabel,
+  modul3HasOwnPrices,
   modul3HasOwnWindows,
+  modul3PriceFor,
   modul3QuartersFrom,
   modul3StatusFrom,
   modul3WindowsFor,
+  modul3WithPrice,
   modul3WithWindows,
-  modul3WithoutQuarter,
+  modul3WithoutQuarterPrices,
+  modul3WithoutQuarterWindows,
   selectValue,
   timeValue,
   type Modul3ZoneKey,
@@ -220,11 +224,15 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
   const liveOn = c.options.modul3_tariff_slots === true;
   const tab = quarters.includes(c.modul3Quarter) ? c.modul3Quarter : 0;
   const ownTimes = tab !== 0 && modul3HasOwnWindows(c.modul3Zones, tab);
+  const ownPrices = tab !== 0 && modul3HasOwnPrices(c.modul3Zones, tab);
   const windowsLocked = locked || (tab !== 0 && !ownTimes);
+  const pricesLocked = locked || (tab !== 0 && !ownPrices);
   const setZone = (key: Modul3ZoneKey, zone: Modul3Zones[Modul3ZoneKey]) =>
     c.onModul3Zones({ ...c.modul3Zones, [key]: zone });
   const setWindows = (key: Modul3ZoneKey, windows: Modul3Zones[Modul3ZoneKey]["windows"]) =>
     setZone(key, modul3WithWindows(c.modul3Zones[key], tab, windows));
+  const setPrice = (key: Modul3ZoneKey, price: number) =>
+    setZone(key, modul3WithPrice(c.modul3Zones[key], tab, price));
   const setWindowHours = (
     key: Modul3ZoneKey,
     index: number,
@@ -246,7 +254,16 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
     for (const key of ["nt", "ht"] as const) {
       next[key] = on
         ? modul3WithWindows(next[key], tab, next[key].windows.map((w) => ({ ...w })))
-        : modul3WithoutQuarter(next[key], tab);
+        : modul3WithoutQuarterWindows(next[key], tab);
+    }
+    c.onModul3Zones(next);
+  };
+  const setOwnPrices = (on: boolean) => {
+    const next = { ...c.modul3Zones };
+    for (const key of MODUL3_ZONE_KEYS) {
+      next[key] = on
+        ? modul3WithPrice(next[key], tab, next[key].price_ct_kwh)
+        : modul3WithoutQuarterPrices(next[key], tab);
     }
     c.onModul3Zones(next);
   };
@@ -297,7 +314,9 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
           aria-pressed=${tab === quarter}
           ?disabled=${!enabled}
           @click=${() => c.onModul3Quarter(quarter)}
-        >${t(MODUL3_QUARTER_LABEL[quarter])}${modul3HasOwnWindows(c.modul3Zones, quarter) ? " •" : ""}</button>`,
+        >${t(MODUL3_QUARTER_LABEL[quarter])}${
+          modul3HasOwnWindows(c.modul3Zones, quarter) || modul3HasOwnPrices(c.modul3Zones, quarter) ? " •" : ""
+        }</button>`,
       )}
     </div>
     ${tab === 0
@@ -306,10 +325,14 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
           ${t(ownTimes ? "modul3TimesOwnHint" : "modul3TimesSharedHint").replace("{quarter}", `Q${tab}`)}
           <button type="button" class="btn" ?disabled=${locked} @click=${() => setOwnTimes(!ownTimes)}
           >${t(ownTimes ? "modul3TimesUseShared" : "modul3TimesMakeOwn").replace("{quarter}", `Q${tab}`)}</button>
+          ${t(ownPrices ? "modul3PricesOwnHint" : "modul3PricesSharedHint").replace("{quarter}", `Q${tab}`)}
+          <button type="button" class="btn" ?disabled=${locked} @click=${() => setOwnPrices(!ownPrices)}
+          >${t(ownPrices ? "modul3PricesUseShared" : "modul3PricesMakeOwn").replace("{quarter}", `Q${tab}`)}</button>
         </p>`}
     ${MODUL3_ZONE_KEYS.map((key) => {
       const zone = c.modul3Zones[key];
       const windows = modul3WindowsFor(zone, tab);
+      const price = modul3PriceFor(zone, tab);
       return html`<div class="slot-card">
         <div class="txt"><span class="name"><b>${t(MODUL3_ZONE_TITLE[key])}</b></span></div>
         <div class="opt-slot-fields">
@@ -319,10 +342,9 @@ function modul3ZonesEditor(c: OptionCtx): TemplateResult {
               min="0"
               max="100"
               step="0.01"
-              .value=${String(zone.price_ct_kwh)}
-              ?disabled=${locked}
-              @change=${(e: Event) =>
-                setZone(key, { ...zone, price_ct_kwh: Number((e.target as HTMLInputElement).value) || 0 })}
+              .value=${String(price)}
+              ?disabled=${pricesLocked}
+              @change=${(e: Event) => setPrice(key, Number((e.target as HTMLInputElement).value) || 0)}
             />
           </label>
           ${key === "st"

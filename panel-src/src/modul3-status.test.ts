@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyModul3Zones,
+  modul3HasOwnPrices,
   modul3HasOwnWindows,
+  modul3PriceFor,
   modul3QuartersFrom,
   modul3StatusFrom,
-  modul3WithoutQuarter,
+  modul3WithoutQuarterPrices,
+  modul3WithoutQuarterWindows,
+  modul3WithPrice,
   modul3ZonesFrom,
 } from "./options";
 
@@ -64,7 +68,31 @@ describe("modul3StatusFrom", () => {
     });
     expect(parsed.nt.quarter_windows).toEqual({ "4": [{ start_h: 23, end_h: 5 }] });
     expect(modul3HasOwnWindows(parsed, 4)).toBe(true);
-    expect(modul3HasOwnWindows({ ...parsed, nt: modul3WithoutQuarter(parsed.nt, 4) }, 4)).toBe(false);
+    expect(modul3HasOwnWindows({ ...parsed, nt: modul3WithoutQuarterWindows(parsed.nt, 4) }, 4)).toBe(false);
+  });
+
+  it("round-trips quarter prices and keeps windows when clearing prices", () => {
+    const parsed = modul3ZonesFrom({
+      nt: {
+        price_ct_kwh: 2,
+        windows: [{ start_h: 22, end_h: 6 }],
+        quarter_windows: { "1": [{ start_h: 23, end_h: 5 }] },
+        quarter_prices: { "1": 2.5, "9": 1 },
+      },
+      st: { price_ct_kwh: 6, windows: [], quarter_prices: { "1": 7 } },
+    });
+    expect(parsed.nt.quarter_prices).toEqual({ "1": 2.5 });
+    expect(modul3PriceFor(parsed.nt, 1)).toBe(2.5);
+    expect(modul3PriceFor(parsed.nt, 4)).toBe(2);
+    expect(modul3HasOwnPrices(parsed, 1)).toBe(true);
+    const cleared = {
+      ...parsed,
+      nt: modul3WithoutQuarterPrices(parsed.nt, 1),
+      st: modul3WithoutQuarterPrices(parsed.st, 1),
+    };
+    expect(modul3HasOwnPrices(cleared, 1)).toBe(false);
+    expect(cleared.nt.quarter_windows).toEqual({ "1": [{ start_h: 23, end_h: 5 }] });
+    expect(modul3PriceFor(modul3WithPrice(parsed.nt, 1, 3), 1)).toBe(3);
   });
 
   it("hides derived slots when the switch is off", () => {

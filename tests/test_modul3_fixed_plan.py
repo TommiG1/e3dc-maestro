@@ -27,6 +27,7 @@ from custom_components.e3dc_maestro.modul3 import (
     ZONE_HT,
     ZONE_NT,
     ZONE_ST,
+    add_modul3_to_horizon,
     clean_modul3_zones,
     derived_tariff_slots,
     fixed_price_horizon,
@@ -36,6 +37,7 @@ from custom_components.e3dc_maestro.modul3 import (
     parse_modul3_profile,
     zone_at,
 )
+from custom_components.e3dc_maestro.price_curve import PriceHorizon
 from custom_components.e3dc_maestro.price_plan_runner import compute_price_plan
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -147,15 +149,75 @@ def test_clean_keeps_quarter_windows_and_drops_junk():
             "price_ct_kwh": 2.32,
             "windows": [{"start_h": 22.25, "end_h": 6.25}],
             "quarter_windows": {"4": [{"start_h": 23, "end_h": 5}], "7": [], "x": []},
+            "quarter_prices": {"1": 2.5, "9": 1.0, "x": -1},
         },
-        "st": {"price_ct_kwh": 6.82, "windows": [], "quarter_windows": {"1": []}},
+        "st": {"price_ct_kwh": 6.82, "windows": [], "quarter_windows": {"1": []}, "quarter_prices": {"1": 7.1}},
         "ht": {"price_ct_kwh": 13.58, "windows": []},
     }
     cleaned, err = clean_modul3_zones(raw)
     assert err is None
     assert cleaned["nt"]["quarter_windows"] == {"4": [{"start_h": 23.0, "end_h": 5.0}]}
+    assert cleaned["nt"]["quarter_prices"] == {"1": 2.5}
+    assert cleaned["st"]["quarter_prices"] == {"1": 7.1}
     assert "quarter_windows" not in cleaned["st"]
     assert "quarter_windows" not in cleaned["ht"]
+    assert "quarter_prices" not in cleaned["ht"]
+
+
+def test_fee_eur_uses_quarter_price():
+    zones = {
+        **JENA_ZONES,
+        "nt": {**JENA_ZONES["nt"], "quarter_prices": {"1": 3.0}},
+        "st": {**JENA_ZONES["st"], "quarter_prices": {"1": 7.0}},
+    }
+    profile = parse_modul3_profile(_options(zones))
+    assert profile.fee_eur(ZONE_NT, _at(1, 14, 23, 0)) == pytest.approx(0.03)
+    assert profile.fee_eur(ZONE_NT, _at(11, 16, 23, 0)) == pytest.approx(0.0232)
+    assert profile.fee_eur(ZONE_ST, _at(1, 14, 12, 0)) == pytest.approx(0.07)
+    assert profile.fee_eur(ZONE_ST) == pytest.approx(0.0682)
+
+
+def test_price_layer_uses_quarter_prices():
+    zones = {
+        **JENA_ZONES,
+        "nt": {**JENA_ZONES["nt"], "quarter_prices": {"1": 1.0}},
+        "st": {**JENA_ZONES["st"], "quarter_prices": {"1": 5.0}},
+        "ht": {**JENA_ZONES["ht"], "quarter_prices": {"1": 9.0}},
+    }
+    profile = parse_modul3_profile(_options(zones))
+    start = _at(1, 14, 16, 0)
+    horizon = PriceHorizon(start=start, slot_hours=[1.0] * 7, prices=[0.0] * 7, known_until=start)
+    out = add_modul3_to_horizon(horizon, profile, start)
+    assert out is not None
+    # 16 ST, 17–19 HT, 20–21 ST, 22 start of NT hour still ST until 22:15… slot mid 22:30 is NT
+    assert out.prices == pytest.approx([0.05, 0.09, 0.09, 0.09, 0.05, 0.05, 0.01])
+
+
+def test_fixed_horizon_follows_quarter_prices_across_year():
+    """31.12. → 1.1.: Q4 alte Preise, Q1 neue. Spread NT–ST bleibt je Quartal korrekt."""
+    zones = {
+        "nt": {
+            "price_ct_kwh": 2.0,
+            "windows": [{"start_h": 22.0, "end_h": 6.0}],
+            "quarter_prices": {"1": 1.0},
+        },
+        "st": {"price_ct_kwh": 6.0, "windows": [], "quarter_prices": {"1": 5.0}},
+        "ht": {"price_ct_kwh": 12.0, "windows": []},
+    }
+    profile = parse_modul3_profile(_options(zones, quarters=(1, 4)))
+    now = dt.datetime(2026, 12, 31, 21, 0, tzinfo=BERLIN)
+    horizon = fixed_price_horizon(profile, 0.30, now, hours=6.0)
+    assert horizon is not None
+    by_start = {}
+    cursor = now
+    for hours, price in zip(horizon.slot_hours, horizon.prices):
+        by_start[cursor.astimezone(BERLIN).strftime("%m-%d %H:%M")] = price
+        cursor += dt.timedelta(hours=hours)
+    # Q4 ST: 0.30; Q4 NT: 0.30 + (0.02−0.06) = 0.26
+    assert by_start["12-31 21:00"] == pytest.approx(0.30)
+    assert by_start["12-31 22:00"] == pytest.approx(0.26)
+    # Q1 NT: 0.30 + (0.01−0.05) = 0.26; Q1 ST after 06:00 would be 0.30
+    assert by_start["01-01 00:00"] == pytest.approx(0.26)
 
 
 def test_runtime_status_lists_slot_quarters():
