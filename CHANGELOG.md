@@ -11,6 +11,15 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.11] – Hotfix für die Auswahlfelder (2026-11-18)
+
+Beta nach 0.5.9-beta.10. Ausführlich: [docs/release-notes/v0.5.9-beta.11.md](docs/release-notes/v0.5.9-beta.11.md).
+
+### Behoben
+- **Auswahlfelder wieder verfügbar.** Der neue Wallbox-Lademodus ließ sich nicht anlegen, dadurch fielen alle Maestro-Selects aus (Discussion #59).
+
+---
+
 ## [0.5.9-beta.10] – Wallbox-Lademodi und Phasenzahl zur Laufzeit (2026-11-18)
 
 Beta nach 0.5.9-beta.9. Ausführlich: [docs/release-notes/v0.5.9-beta.10.md](docs/release-notes/v0.5.9-beta.10.md).
