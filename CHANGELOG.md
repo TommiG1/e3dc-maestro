@@ -11,6 +11,16 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.9] – Preisplan im Support-Dump (2026-11-18)
+
+Beta nach 0.5.9-beta.8. Ausführlich: [docs/release-notes/v0.5.9-beta.9.md](docs/release-notes/v0.5.9-beta.9.md).
+
+### Neu
+- **Preisplan-Diagnose im Support-Dump.** Neuer Block `diagnostics` mit PV-Quelle und Restprognose, Verbrauchsquelle und Bilanz bis zum teuersten Slot (Discussion #56).
+- **Debug-Log für den Preisplan.** Bei aktivem Debug eine Zeile pro Änderung der Plan-Entscheidung.
+
+---
+
 ## [0.5.9-beta.8] – Modul 3 Preise pro Quartal (2026-11-16)
 
 Beta nach 0.5.9-beta.7. Ausführlich: [docs/release-notes/v0.5.9-beta.8.md](docs/release-notes/v0.5.9-beta.8.md).
