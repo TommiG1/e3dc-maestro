@@ -50,7 +50,7 @@ class CoordinatorPricePlanMixin:
     _energyforecast_zone: str | None = None
     _energyforecast_warned: bool = False
     _price_provider_until: datetime | None = None
-    _price_plan_pv_sources: dict[str, bool] | None = None
+    _price_plan_pv_sources: dict[str, Any] | None = None
 
     def _reset_price_plan(self) -> None:
         self.price_plan = None
@@ -175,10 +175,13 @@ class CoordinatorPricePlanMixin:
             pv_hist = list(pv_stats.hourly_profile_w) if pv_stats is not None else None
             pv_today = self._read_pv_forecast_profile(now, days_ahead=0, ignore_enabled=True)
             pv_tomorrow = self._read_pv_forecast_profile(now, days_ahead=1, ignore_enabled=True)
+            sensor_ids = getattr(self, "_pv_profile_sensor_ids", {})
             self._price_plan_pv_sources = {
                 "today": pv_today is not None,
                 "tomorrow": pv_tomorrow is not None,
                 "history": pv_hist is not None,
+                "today_sensor": sensor_ids.get(0) if pv_today is not None else None,
+                "tomorrow_sensor": sensor_ids.get(1) if pv_tomorrow is not None else None,
             }
 
             cap = max(float(params.battery_capacity_kwh), 0.1)
@@ -229,8 +232,28 @@ class CoordinatorPricePlanMixin:
             self.price_plan = snapshot
             self._price_plan_fingerprint = fingerprint
             _LOGGER.debug("Preisplan: %s", snapshot.message)
+            self._log_price_plan_change(snapshot, state.soc)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Preisplan fehlgeschlagen: %s", err)
+
+    def _log_price_plan_change(self, snapshot: PricePlanSnapshot, soc: float) -> None:
+        """Eine Debug-Zeile, wenn sich die Plan-Entscheidung ändert (nicht alle 5 Minuten)."""
+        plan = snapshot.plan
+        if plan is None:
+            return
+        key = (plan.charge_now, plan.hold_now, round(plan.total_grid_charge_kwh))
+        if key == getattr(self, "_price_plan_log_key", None):
+            return
+        self._price_plan_log_key = key
+        peak = snapshot.diagnostics.get("until_peak_end", {})
+        sources = snapshot.diagnostics.get("pv_source", {})
+        self._log(
+            f"Preisplan: SoC {soc:.0f} %, laden={plan.charge_now}, halten={plan.hold_now}, "
+            f"Netzladung gesamt {plan.total_grid_charge_kwh:.1f} kWh, "
+            f"PV heute roh {snapshot.diagnostics.get('pv_rest_today_raw_kwh')} kWh ({sources.get('today')}), "
+            f"bis Spitzenende PV {peak.get('pv_planned_kwh')} / Verbrauch {peak.get('consumption_planned_kwh')} / "
+            f"Ladung {peak.get('grid_charge_kwh')} kWh"
+        )
 
     async def _async_tibber_curve_attrs(
         self, sensor_id: str, state: Any, now: datetime

@@ -430,6 +430,7 @@ class CoordinatorForecastMixin:
                     attrs, target_date=target_date, ignore_date=True
                 )
             if profile is not None:
+                self._pv_profile_sensor_ids[days_ahead] = sensor_id
                 if days_ahead >= 1:
                     _LOGGER.debug(
                         "Auto-Optimizer: Tag-%s-Profil aus '%s' (target=%s, sum≈%.1f kWh)",
@@ -462,6 +463,7 @@ class CoordinatorForecastMixin:
                     dict(cached_state.attributes), target_date=target_date
                 )
                 if profile is not None:
+                    self._pv_profile_sensor_ids[days_ahead] = self._autodetected_pv_sensor
                     return profile
             _LOGGER.debug(
                 "Auto-Optimizer: Gecachter PV-Sensor '%s' nicht mehr verfügbar – erneute Suche",
@@ -476,6 +478,7 @@ class CoordinatorForecastMixin:
             profile = extract_pv_profile(dict(attrs), target_date=target_date)
             if profile is not None:
                 self._autodetected_pv_sensor = state.entity_id
+                self._pv_profile_sensor_ids[days_ahead] = state.entity_id
                 _LOGGER.info(
                     "Auto-Optimizer: PV-Tagesprognose aus '%s' erkannt – wird für weitere Zyklen gecacht. "
                     "Tipp: Sensor in der Integration konfigurieren, um Auto-Erkennung zu deaktivieren.",

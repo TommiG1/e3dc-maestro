@@ -384,6 +384,8 @@ class E3DCMaestroCoordinator(
         # PV-Forecast Auto-Detect: cached entity_id after first discovery (avoids
         # repeated full sensor scan and log spam every cycle)
         self._autodetected_pv_sensor: str | None = None
+        # Zuletzt gelesener PV-Prognose-Sensor je Tag (0 = heute), für den Support-Dump.
+        self._pv_profile_sensor_ids: dict[int, str] = {}
         # Schwacher-PV-Tag: Tagesprognose einmal pro Tag latchen (kein Flip durch
         # Solcast-Updates). Schwelle/Referenz-Params wirken live – siehe
         # ``_is_low_yield_day_active``.

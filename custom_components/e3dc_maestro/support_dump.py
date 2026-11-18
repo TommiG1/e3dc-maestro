@@ -21,7 +21,7 @@ def redact_options(options: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
-def price_plan_dump(snapshot: Any | None, pv_sources: dict[str, bool] | None) -> dict[str, Any] | None:
+def price_plan_dump(snapshot: Any | None, pv_sources: dict[str, Any] | None) -> dict[str, Any] | None:
     """Preisplan für den Support-Dump: Eckwerte, PV-Quellen und alle Planzeilen."""
     if snapshot is None:
         return None
@@ -45,6 +45,7 @@ def price_plan_dump(snapshot: Any | None, pv_sources: dict[str, bool] | None) ->
         "terminal_price": snapshot.terminal_price,
         # Welche PV-Profile der Plan lesen konnte (False = historische Kurve).
         "pv_profile_found": pv_sources,
+        "diagnostics": dict(getattr(snapshot, "diagnostics", None) or {}),
         "rows": list(snapshot.rows),
     }
 

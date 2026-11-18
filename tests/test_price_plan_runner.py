@@ -168,3 +168,30 @@ class TestPlanFromCurve:
         snap = _run(self._curve(), pv_tomorrow_w=[2000.0] * 24, pv_hist_w=[1000.0] * 24)
         tomorrow_row = next(r for r in snap.rows if r["start"].startswith("2026-10-10T12"))
         assert abs(tomorrow_row["pv_kwh"] - 2.0) < 1e-6
+
+
+class TestDiagnostics:
+    def test_balance_and_sources(self):
+        # Morgens 05:30: NT-Kurve, Spitze am Abend, PV-Prognose heute.
+        now = dt.datetime(2026, 10, 9, 5, 30, tzinfo=TZ)
+        prices = [0.20] * 6 + [0.30] * 11 + [0.45] * 3 + [0.30] * 4
+        horizon = read_price_horizon({"raw_today": _raw(9, prices)}, now)
+        pv = [0.0] * 6 + [1000.0] * 8 + [0.0] * 10  # UTC 06–14 → 8 kWh
+        snap = _run(horizon, now=now, pv_today_w=pv, pv_hist_w=[0.0] * 24)
+        diag = snap.diagnostics
+        assert diag["consumption_source"] == "profile"
+        assert diag["pv_source"] == {"today": "forecast_today", "tomorrow": "history"}
+        assert diag["pv_rest_today_raw_kwh"] == pytest.approx(8.0)
+        assert diag["price_max"] == pytest.approx(0.45)
+        assert diag["peak_end"].startswith("2026-10-09T20:00")
+        peak = diag["until_peak_end"]
+        assert peak["pv_kwh"] == pytest.approx(8.0)
+        assert peak["pv_planned_kwh"] == pytest.approx(6.4)
+        assert peak["consumption_kwh"] == pytest.approx(0.4 * 14.5, abs=0.01)
+        assert peak["grid_charge_kwh"] == pytest.approx(sum(r["grid_charge_kwh"] for r in snap.rows[:15]), abs=0.01)
+        assert list(diag["by_day"]) == ["2026-10-09"]
+
+    def test_no_pv_forecast(self):
+        snap = _run(_horizon())
+        assert snap.diagnostics["pv_source"]["today"] == "none"
+        assert snap.diagnostics["pv_rest_today_raw_kwh"] is None
