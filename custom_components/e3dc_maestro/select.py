@@ -73,6 +73,7 @@ class MaestroWallboxTypeSelect(CoordinatorEntity[E3DCMaestroCoordinator], Select
 
 class MaestroWallboxModeSelect(CoordinatorEntity[E3DCMaestroCoordinator], SelectEntity):
     _attr_has_entity_name = True
+    _attr_name = "Wallbox-Lademodus"
     _attr_translation_key = "wallbox_mode"
     _attr_icon = "mdi:ev-station"
     _attr_options = list(WALLBOX_MODES)
