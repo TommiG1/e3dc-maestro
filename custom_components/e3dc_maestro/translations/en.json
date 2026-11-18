@@ -169,6 +169,7 @@
           "wallbox_min_current": "Minimum current (A)",
           "wallbox_max_current": "Maximum current (A)",
           "wallbox_phases": "Number of phases",
+          "wallbox_phases_entity": "Phase count sensor (optional)",
           "wallbox_min_surplus": "Minimum PV surplus (W)",
           "wallbox_current_entity": "Set charge current (number, generic wallbox only)",
           "wallbox_service_on": "Service: start charging",
@@ -513,6 +514,7 @@
           "wallbox_min_current": "Minimum current (A)",
           "wallbox_max_current": "Maximum current (A)",
           "wallbox_phases": "Number of phases",
+          "wallbox_phases_entity": "Phase count sensor (optional)",
           "wallbox_min_surplus": "Minimum PV surplus (W)",
           "wallbox_current_entity": "Set charge current (number, generic wallbox only)",
           "wallbox_service_on": "Service: start charging",
@@ -522,7 +524,8 @@
           "wallbox_min_surplus": "Maestro only starts the wallbox from this PV surplus on. It never uses less than the power at minimum current (minimum current × phases × 230 V, about 4.1 kW at 6 A and 3 phases), so the car does not charge from the grid or the battery.",
           "wallbox_current_entity": "Generic wallboxes only: a number or input_number entity for the charge current in amps (e.g. from go-e or openWB). Maestro sets the current there from the surplus. Without it Maestro only switches on and off through the services.",
           "wallbox_min_current": "Minimum charging current per IEC 61851 (normally 6 A). Below this, Maestro prefers to switch the wallbox off.",
-          "wallbox_included_in_house": "Enable only if the house consumption sensor already counts the wallbox (e.g. openWB on the utility meter). Leave it off for an original E3DC wallbox, its own power meter is not part of the house consumption. Maestro then subtracts the wallbox live and from the learned consumption profile (forecast/price plan)."
+          "wallbox_included_in_house": "Enable only if the house consumption sensor already counts the wallbox (e.g. openWB on the utility meter). Leave it off for an original E3DC wallbox, its own power meter is not part of the house consumption. Maestro then subtracts the wallbox live and from the learned consumption profile (forecast/price plan).",
+          "wallbox_phases_entity": "Entity with the current phase count (1 or 3). For an E3DC wallbox the sensor is found automatically. Without a valid reading the fixed phase count applies."
         }
       },
       "evcc": {

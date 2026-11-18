@@ -113,6 +113,7 @@ from .const import (
     CONF_WALLBOX_MIN_CURRENT,
     CONF_WALLBOX_MIN_SURPLUS,
     CONF_WALLBOX_PHASES,
+    CONF_WALLBOX_PHASES_ENTITY,
     CONF_WALLBOX_POWER_SENSOR,
     CONF_WALLBOX_ENERGY_SENSOR,
     CONF_WALLBOX_PROVIDER,
@@ -1095,6 +1096,11 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
         vol.Optional(CONF_WALLBOX_MAX_CURRENT, default=DEFAULT_WALLBOX_MAX_CURRENT): _number_selector(6, 32, 1, "A"),
         vol.Optional(CONF_WALLBOX_PHASES, default=DEFAULT_WALLBOX_PHASES): selector.SelectSelector(
             selector.SelectSelectorConfig(options=["1", "3"], mode=selector.SelectSelectorMode.DROPDOWN)
+        ),
+        vol.Optional(CONF_WALLBOX_PHASES_ENTITY): selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["sensor", "number", "select", "input_number", "input_select"]
+            )
         ),
         vol.Optional(CONF_WALLBOX_MIN_SURPLUS, default=DEFAULT_WALLBOX_MIN_SURPLUS): _number_selector(0, 10000, 100, "W"),
         vol.Optional(CONF_WALLBOX_CURRENT_ENTITY): selector.EntitySelector(

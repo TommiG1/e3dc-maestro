@@ -146,6 +146,7 @@ _SPECS: dict[str, _Spec] = {
     "wallbox_min_current": _n(6, 32),
     "wallbox_max_current": _n(6, 32),
     "wallbox_phases": ("select", ("1", "3")),
+    "wallbox_phases_entity": _entity(),
     "wallbox_min_surplus": _n(0, 10000),
     "wallbox_current_entity": _entity(),
     "wallbox_service_on": ("action",),

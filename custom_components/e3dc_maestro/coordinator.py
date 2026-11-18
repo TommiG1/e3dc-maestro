@@ -313,6 +313,9 @@ class E3DCMaestroCoordinator(
         self._wallbox_history: deque[dict[str, Any]] = deque(maxlen=30)
         # Wallbox-Vorrang: seit wann zieht ein angestecktes Auto trotz Überschuss nichts
         self._wallbox_idle_since: datetime | None = None
+        self._wallbox_phases_latched: int | None = None
+        self._wallbox_phases_source: str = "config"
+        self._wallbox_phases_entity_effective: str | None = None
         # Riemann freeze guard: stuck power must not inflate daily kWh.
         self._wallbox_energy_last_power: float | None = None
         self._wallbox_energy_power_changed_at: datetime | None = None
@@ -676,6 +679,8 @@ class E3DCMaestroCoordinator(
             raise UpdateFailed(f"Sensordaten nicht lesbar: {err}") from err
 
         self._consecutive_failures = 0
+
+        self._update_wallbox_phases(opts)
 
         # C1: Append house power to rolling window for autonomy calculation
         self._house_power_window.append(state_data.house_power)

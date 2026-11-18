@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 import logging
 from datetime import timedelta
@@ -26,6 +27,7 @@ from .const import (
     CONF_WALLBOX_ENABLED,
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
+    CONF_WALLBOX_PHASES_ENTITY,
     CONF_WALLBOX_TYPE,
     CONF_WATCHDOG_TIMEOUT,
     DEFAULT_WATCHDOG_TIMEOUT,
@@ -56,6 +58,8 @@ from .coordinator_helpers import (
     _build_power_mode_data,
     _effective_discharge_limit_w,
     _limits_changed_vs_sent_values,
+    config_wallbox_phases_int,
+    parse_wallbox_phases_value,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +72,7 @@ def _surplus_w(state: MaestroState) -> int:
 _E3DC_WALLBOX_ROLES = {
     "wallbox-toggle-wallbox-charging": "toggle",
     "wallbox-charging-canceled": "canceled",
+    "wallbox-phases": "phases",
 }
 
 
@@ -391,6 +396,48 @@ class CoordinatorActMixin:
         self._wallbox_history.appendleft(
             {"timestamp": dt_util.now().isoformat(timespec="seconds"), "kind": kind, **data}
         )
+
+    def _wallbox_phases_entity_id(self, opts: dict) -> str | None:
+        """Configured phase entity or E3DC wallbox-phases sensor when type is e3dc."""
+        eid = opts.get(CONF_WALLBOX_PHASES_ENTITY)
+        if eid:
+            return eid
+        if not opts.get(CONF_WALLBOX_ENABLED):
+            return None
+        if opts.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC) != WALLBOX_TYPE_E3DC:
+            return None
+        wb = self._e3dc_wallbox_entities()
+        if wb is None:
+            return None
+        return wb.get("phases")
+
+    def _update_wallbox_phases(self, opts: dict) -> None:
+        """Lese Phasenzahl live ein und schreibe sie in MaestroParams für diese Runde."""
+        config_phases = config_wallbox_phases_int(opts)
+        entity_id = self._wallbox_phases_entity_id(opts)
+        self._wallbox_phases_entity_effective = entity_id
+
+        if entity_id:
+            st = self.hass.states.get(entity_id)
+            parsed = parse_wallbox_phases_value(st.state if st else None)
+            if parsed is not None:
+                self._wallbox_phases_latched = parsed
+            if self._wallbox_phases_latched is not None:
+                effective = self._wallbox_phases_latched
+                self._wallbox_phases_source = "sensor"
+            else:
+                effective = config_phases
+                self._wallbox_phases_source = "config"
+        else:
+            self._wallbox_phases_latched = None
+            effective = config_phases
+            self._wallbox_phases_source = "config"
+
+        self._params = dataclasses.replace(self._params, wallbox_phases=effective)
+        if self._auto_params is not None:
+            self._auto_params = dataclasses.replace(
+                self._auto_params, wallbox_phases=effective
+            )
 
     def _e3dc_wallbox_entities(self) -> dict[str, str] | None:
         """Wallbox device plus charging toggle/canceled entities from e3dc_rscp."""

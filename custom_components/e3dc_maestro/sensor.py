@@ -58,6 +58,8 @@ def _wallbox_attrs(coord: E3DCMaestroCoordinator) -> dict[str, Any] | None:
     attrs["priority_active"] = "post.wallbox_priority" in fired
     attrs["guard_active"] = "post.wallbox_discharge_guard" in fired
     attrs["controller"] = coord.entry.options.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC)
+    attrs["phases_source"] = coord._wallbox_phases_source
+    attrs["phases_entity"] = coord._wallbox_phases_entity_effective
     attrs["history"] = list(coord._wallbox_history)
     return attrs
 

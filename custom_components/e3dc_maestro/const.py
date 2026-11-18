@@ -232,6 +232,7 @@ CONF_WALLBOX_CURRENT_ENTITY = "wallbox_current_entity"  # number/input_number (A
 CONF_WALLBOX_MIN_CURRENT = "wallbox_min_current"      # A
 CONF_WALLBOX_MAX_CURRENT = "wallbox_max_current"      # A
 CONF_WALLBOX_PHASES = "wallbox_phases"                # 1 or 3
+CONF_WALLBOX_PHASES_ENTITY = "wallbox_phases_entity"  # optional live phase count
 CONF_WALLBOX_MIN_SURPLUS = "wallbox_min_surplus"      # W
 # Wallbox-Netzschutz: oberstes Ziel = kein Netzbezug, während eine Wallbox lädt
 # (z. B. openWB PV-Laden). Die Akku-Entladung bleibt voll freigegeben, damit

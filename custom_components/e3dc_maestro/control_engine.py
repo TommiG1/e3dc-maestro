@@ -191,6 +191,12 @@ class MaestroParams:
     # ``wallbox_priority_min_soc`` hat der Akku wieder Vorrang.
     wallbox_priority_enabled: bool = False
     wallbox_priority_min_soc: float = 20.0
+    # Lademodus (Maestro-gesteuert): solar | solar_grid | now | off. Preisgrenze
+    # (EUR/kWh) für "solar_grid"; None = nur der Preisplan-Slot zählt als günstig.
+    # ``wallbox_battery_to_car``: Akku darf bei Netzladung des Autos mitversorgen.
+    wallbox_mode: str = "solar"
+    wallbox_max_price: float | None = None
+    wallbox_battery_to_car: bool = False
     # Heat pump
     hp_enabled: bool = False
     hp_min_surplus: float = 2000
@@ -1204,6 +1210,84 @@ def _morning_discharge_decision(
 # Main decision function
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Wallbox-Lademodi (Maestro-gesteuert).
+WALLBOX_MODE_SOLAR = "solar"
+WALLBOX_MODE_SOLAR_GRID = "solar_grid"
+WALLBOX_MODE_NOW = "now"
+WALLBOX_MODE_OFF = "off"
+WALLBOX_MODES = (
+    WALLBOX_MODE_SOLAR, WALLBOX_MODE_SOLAR_GRID, WALLBOX_MODE_NOW, WALLBOX_MODE_OFF,
+)
+
+
+def wallbox_mode_of(params: MaestroParams) -> str:
+    """Effektiver Modus; unbekannte Werte fallen auf ``solar`` zurück."""
+    mode = params.wallbox_mode
+    return mode if mode in WALLBOX_MODES else WALLBOX_MODE_SOLAR
+
+
+def _price_plan_on(
+    params: MaestroParams,
+    price_plan: PricePlanAction | None,
+    curtailment_guard_active: bool = False,
+) -> bool:
+    """Preisplan darf steuern: eingeschaltet, frisch (Plan vorhanden), kein Abregelschutz."""
+    return bool(
+        params.price_plan_enabled
+        and params.price_plan_active
+        and price_plan is not None
+        and not curtailment_guard_active
+    )
+
+
+def price_plan_charge_slot(
+    params: MaestroParams,
+    price_plan: PricePlanAction | None,
+    curtailment_guard_active: bool = False,
+) -> bool:
+    """Hat der aktive Preisplan gerade einen Ladeslot (``_plan_on and charge_now``)?"""
+    return bool(
+        _price_plan_on(params, price_plan, curtailment_guard_active)
+        and price_plan.charge_now
+    )
+
+
+def wallbox_grid_cheap(
+    params: MaestroParams,
+    current_price: float | None,
+    plan_charge_now: bool,
+) -> bool:
+    """Ist Netzstrom für das Auto günstig? Preis <= Grenze oder Preisplan-Ladeslot."""
+    return bool(
+        (
+            params.wallbox_max_price is not None
+            and current_price is not None
+            and current_price <= params.wallbox_max_price
+        )
+        or plan_charge_now
+    )
+
+
+def wallbox_grid_charging(
+    state: MaestroState,
+    params: MaestroParams,
+    *,
+    current_price: float | None = None,
+    plan_charge_now: bool = False,
+) -> bool:
+    """Lädt das Auto gerade per Maestro-Modus aus dem Netz ohne Akku-Mitversorgung?
+
+    Wahr bei Modus ``now`` oder ``solar_grid`` (günstig), Auto zieht Strom und
+    ``wallbox_battery_to_car`` ist aus. Dann bleibt der Netzschutz zu und die
+    Entladung wird auf den Hausverbrauch begrenzt.
+    """
+    if params.wallbox_battery_to_car or state.wallbox_power <= WALLBOX_CHARGING_W:
+        return False
+    return wallbox_target(
+        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
+    ).from_grid
+
+
 # Phasen, deren Entladegrenze der Wallbox-Netzschutz nicht öffnet. Netzladung,
 # Preisplan-Halten und HT-Schutz sparen den Akku bewusst für teure Stunden; dort
 # lädt das Auto aus dem (günstigen) Netz statt aus dem Akku.
@@ -1218,6 +1302,8 @@ def _apply_wallbox_discharge_guard(
     decision: MaestroDecision,
     state: MaestroState,
     params: MaestroParams,
+    *,
+    grid_mode_active: bool = False,
 ) -> MaestroDecision:
     """Keep battery discharge open while a car is charging – avoid grid import.
 
@@ -1231,6 +1317,8 @@ def _apply_wallbox_discharge_guard(
     they intentionally constrain charge/discharge for safety, explicit user
     intent or the tariff strategy (battery saved for expensive hours).
     """
+    if grid_mode_active:
+        return decision  # Maestro lädt das Auto bewusst aus dem Netz, Akku bleibt draußen
     if not params.wallbox_discharge_guard_enabled:
         return decision
     if state.wallbox_power <= params.wallbox_discharge_guard_threshold_w:
@@ -1266,6 +1354,45 @@ def _apply_wallbox_discharge_guard(
             decision.reason
             + f" | Wallbox-Netzschutz: Entladung frei ({open_w:.0f} W) "
             + f"(Auto lädt {state.wallbox_power:.0f} W → kein Netzbezug)"
+        ),
+    )
+
+
+def _apply_wallbox_grid_battery_cap(
+    decision: MaestroDecision,
+    state: MaestroState,
+    params: MaestroParams,
+    *,
+    grid_mode_active: bool,
+) -> MaestroDecision:
+    """Netzladung des Autos: Akku deckt nur das Haus, nicht das Auto.
+
+    Deckelt ``discharge_power_limit`` auf den Hausverbrauch. Ein bereits
+    niedrigeres Limit (z. B. 0 W bei Netzladung) bleibt, Ladegrenzen bleiben
+    unberührt. Ausnahme-Phasen (Vorentladung, erzwungene Entladung, ...)
+    behalten ihr Limit wie beim Netzschutz.
+    """
+    if not grid_mode_active or decision.phase in WALLBOX_GUARD_EXEMPT_PHASES:
+        return decision
+    house_w = max(0.0, float(state.house_power))
+    current = decision.discharge_power_limit
+    if current is not None and current <= house_w:
+        return decision
+
+    cap_trace = decision.trace if decision.trace is not None else GateTrace()
+    cap_trace.gates.append(eval_gate(
+        "post.wallbox_grid_battery_cap",
+        term("wallbox_battery_to_car", params.wallbox_battery_to_car, op=is_false),
+        term("wallbox_power", state.wallbox_power, op=gt, expected=WALLBOX_CHARGING_W),
+    ))
+    return replace(
+        decision,
+        trace=cap_trace,
+        discharge_power_limit=house_w,
+        reason=(
+            decision.reason
+            + f" | Wallbox-Netzladung: Entladung auf Hausverbrauch begrenzt ({house_w:.0f} W) "
+            + f"(Auto lädt {state.wallbox_power:.0f} W aus dem Netz, Akku versorgt nur das Haus)"
         ),
     )
 
@@ -1338,6 +1465,8 @@ def wallbox_status(
     *,
     plugged: bool | None,
     set_current: float | None,
+    current_price: float | None = None,
+    plan_charge_now: bool = False,
 ) -> dict[str, Any]:
     """Momentaufnahme der Wallbox-Regelung für Panel und Attribute.
 
@@ -1358,9 +1487,15 @@ def wallbox_status(
         mode = "waiting" if plugged else "idle"
     else:
         mode = "ready" if plugged else "idle"
-    target, _off = wallbox_desired_current(state, params)
+    wb = wallbox_target(
+        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
+    )
+    target = wb.current
     return {
         "mode": mode,
+        "wallbox_mode": wallbox_mode_of(params),
+        "from_grid": wb.from_grid,
+        "explanation": wb.reason,
         "control_enabled": bool(params.wallbox_enabled),
         "plugged": plugged,
         "waiting": bool(state.wallbox_waiting),
@@ -1392,6 +1527,8 @@ def _apply_wallbox_priority(
     Sicherheitsphasen bleiben unberührt.
     """
     if not (params.wallbox_enabled and params.wallbox_priority_enabled):
+        return decision
+    if wallbox_mode_of(params) not in (WALLBOX_MODE_SOLAR, WALLBOX_MODE_SOLAR_GRID):
         return decision
     if not state.wallbox_waiting:
         return decision
@@ -1498,7 +1635,15 @@ def decide(
         price_plan=price_plan,
     )
     decision = _apply_wallbox_priority(decision, state, params)
-    return _apply_wallbox_discharge_guard(decision, state, params)
+    grid_mode = wallbox_grid_charging(
+        state, params,
+        current_price=current_price,
+        plan_charge_now=price_plan_charge_slot(params, price_plan, curtailment_guard_active),
+    )
+    decision = _apply_wallbox_discharge_guard(
+        decision, state, params, grid_mode_active=grid_mode,
+    )
+    return _apply_wallbox_grid_battery_cap(decision, state, params, grid_mode_active=grid_mode)
 
 
 def _decide_core(
@@ -1578,12 +1723,7 @@ def _decide_core(
     # Nur wenn der Nutzer die Steuerung eingeschaltet hat und der Plan frisch ist
     # (der Koordinator liefert ``None`` bei veraltetem/fehlendem Plan). Der
     # Abregelschutz hat Vorrang.
-    _plan_on = (
-        params.price_plan_enabled
-        and params.price_plan_active
-        and price_plan is not None
-        and not curtailment_guard_active
-    )
+    _plan_on = _price_plan_on(params, price_plan, curtailment_guard_active)
     _hard_cap_reached = (
         params.hard_soc_limit_enabled and state.soc >= params.hard_soc_limit
     )
@@ -3005,30 +3145,96 @@ def _decide_core(
 # Wallbox surplus calculation
 # ──────────────────────────────────────────────────────────────────────────────
 
+@dataclass(frozen=True)
+class WallboxTarget:
+    """Soll der Wallbox-Regelung: Strom, Aus-Befehl, Netzbezug und Begründung."""
+
+    current: float | None
+    turn_off: bool
+    from_grid: bool
+    reason: str
+
+
+def _de_num(value: float, digits: int = 1) -> str:
+    """Zahl mit deutschem Komma, ohne überflüssige Nachkommastellen."""
+    text = f"{value:.{digits}f}".rstrip("0").rstrip(".")
+    return text.replace(".", ",")
+
+
+def _phase_text(params: MaestroParams) -> str:
+    n = int(params.wallbox_phases)
+    return f"{n} Phase" if n == 1 else f"{n} Phasen"
+
+
+def wallbox_target(
+    state: MaestroState,
+    params: MaestroParams,
+    *,
+    current_price: float | None = None,
+    plan_charge_now: bool = False,
+) -> WallboxTarget:
+    """Soll-Ladestrom je Modus (siehe ``WALLBOX_MODES``) mit deutscher Begründung.
+
+    ``current_price`` in EUR/kWh. ``plan_charge_now`` kommt aus
+    :func:`price_plan_charge_slot`. ``current=None, turn_off=False`` heißt:
+    Maestro fasst die Wallbox nicht an.
+    """
+    mode = wallbox_mode_of(params)
+    if not params.wallbox_enabled or mode == WALLBOX_MODE_OFF:
+        return WallboxTarget(None, False, False, "Aus: Maestro steuert die Wallbox nicht")
+
+    phases_s = _phase_text(params)
+    max_a = float(params.wallbox_max_current)
+    max_txt = f"{max_a:.0f} A × {phases_s}"
+    if mode == WALLBOX_MODE_NOW:
+        return WallboxTarget(max_a, False, True, f"Sofort: {max_txt}")
+
+    prefix = "Solar + Netz" if mode == WALLBOX_MODE_SOLAR_GRID else "Solar"
+    if mode == WALLBOX_MODE_SOLAR_GRID and wallbox_grid_cheap(
+        params, current_price, plan_charge_now,
+    ):
+        if (
+            params.wallbox_max_price is not None
+            and current_price is not None
+            and current_price <= params.wallbox_max_price
+        ):
+            why = (
+                f"Preis {_de_num(current_price * 100)} ct unter Grenze "
+                f"{_de_num(params.wallbox_max_price * 100)} ct"
+            )
+        else:
+            why = "Preisplan-Slot"
+        return WallboxTarget(max_a, False, True, f"{prefix}: {why}, {max_txt}")
+
+    surplus = state.pv_power - state.house_power - max(state.battery_power, 0)
+    desired = surplus / (230.0 * float(params.wallbox_phases))
+    desired = max(params.wallbox_min_current, min(params.wallbox_max_current, desired))
+    start_w = wallbox_start_surplus_w(params)
+    if surplus < start_w:
+        return WallboxTarget(
+            None, True, False,
+            f"{prefix}: Überschuss {_de_num(surplus / 1000)} kW unter Start "
+            f"{_de_num(start_w / 1000)} kW ({phases_s})",
+        )
+    return WallboxTarget(
+        desired, False, False,
+        f"{prefix}: Überschuss {_de_num(surplus / 1000)} kW, {int(desired)} A × {phases_s}",
+    )
+
+
 def wallbox_desired_current(
     state: MaestroState,
     params: MaestroParams,
     current_wallbox_current: float = 0,
+    *,
+    current_price: float | None = None,
+    plan_charge_now: bool = False,
 ) -> tuple[float | None, bool]:
-    """Return (desired_current_A, turn_off).
-
-    Surplus = PV - house - battery_charge.
-    If surplus >= wallbox_start_surplus_w → compute current and clamp.
-    Otherwise → turn off.
-    """
-    if not params.wallbox_enabled:
-        return None, False
-
-    surplus = state.pv_power - state.house_power - max(state.battery_power, 0)
-    voltage = 230.0
-    phases = float(params.wallbox_phases)
-    desired = surplus / (voltage * phases)
-    desired = max(params.wallbox_min_current, min(params.wallbox_max_current, desired))
-
-    if surplus < wallbox_start_surplus_w(params):
-        return None, True  # below threshold → off
-
-    return desired, False
+    """Return (desired_current_A, turn_off); Dünner Wrapper um :func:`wallbox_target`."""
+    t = wallbox_target(
+        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
+    )
+    return t.current, t.turn_off
 
 
 # ──────────────────────────────────────────────────────────────────────────────

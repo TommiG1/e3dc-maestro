@@ -337,6 +337,36 @@ E3DC_RSCP_POWER_MODE_MAP = {
 
 
 
+def parse_wallbox_phases_value(raw: str | None) -> int | None:
+    """Parse a homeassistant entity state into a valid wallbox phase count (1..3)."""
+    from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+
+    if raw is None or raw in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        value = int(float(text))
+    except (ValueError, TypeError):
+        return None
+    if 1 <= value <= 3:
+        return value
+    return None
+
+
+def config_wallbox_phases_int(options: dict[str, Any]) -> int:
+    """Fixed phase count from options (CONF_WALLBOX_PHASES), default 3."""
+    from .const import CONF_WALLBOX_PHASES, DEFAULT_WALLBOX_PHASES
+
+    raw = options.get(CONF_WALLBOX_PHASES, DEFAULT_WALLBOX_PHASES)
+    try:
+        value = int(float(str(raw)))
+    except (ValueError, TypeError):
+        value = 3
+    return value if value in (1, 3) else 3
+
+
 def _params_from_options(options: dict[str, Any]) -> MaestroParams:
     """Build MaestroParams from config entry options."""
     p = MaestroParams()

@@ -182,6 +182,7 @@ export const OPTION_BLOCKS: readonly OptionBlock[] = [
       entity("wallbox_plug_entity", ["binary_sensor", "sensor"]),
       { key: "wallbox_included_in_house", kind: "bool" },
       { key: "wallbox_phases", kind: "select", choices: ["1", "3"] },
+      entity("wallbox_phases_entity", ["sensor", "number", "select", "input_number", "input_select"]),
       entity("wallbox_current_entity", ["number", "input_number"]),
       { key: "wallbox_service_on", kind: "action" },
       { key: "wallbox_service_off", kind: "action" },
@@ -287,6 +288,10 @@ const labels: Record<string, { de: string; en: string }> = {
   wallbox_plug_entity: { de: "Stecker angesteckt", en: "Plug connected" },
   wallbox_included_in_house: { de: "In der Hauslast enthalten", en: "Included in house load" },
   wallbox_phases: { de: "Phasen", en: "Phases" },
+  wallbox_phases_entity: {
+    de: "Phasen-Sensor (optional)",
+    en: "Phase count sensor (optional)",
+  },
   wallbox_current_entity: {
     de: "Ladestrom setzen (nur generische Wallbox)",
     en: "Set charge current (generic wallbox only)",
