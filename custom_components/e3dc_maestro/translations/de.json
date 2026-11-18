@@ -268,7 +268,8 @@
       }
     },
     "abort": {
-      "e3dc_rscp_not_configured": "E3DC Maestro benötigt die 'E3DC RSCP' Integration. Bitte zuerst konfigurieren."
+      "e3dc_rscp_not_configured": "E3DC Maestro benötigt die 'E3DC RSCP' Integration. Bitte zuerst konfigurieren.",
+      "already_configured": "E3DC Maestro ist bereits eingerichtet."
     }
   },
   "options": {

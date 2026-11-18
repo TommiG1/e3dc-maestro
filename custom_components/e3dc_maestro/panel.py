@@ -592,6 +592,7 @@ def _ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, A
     ws_panel_options_set(hass, connection, msg)
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_PANEL_PAUSE,
@@ -610,6 +611,7 @@ def _ws_panel_pause(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -
     connection.send_result(msg["id"], {"hours": msg["hours"]})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): WS_DEBUG_DUMP})
 @callback
 def _ws_debug_dump(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:

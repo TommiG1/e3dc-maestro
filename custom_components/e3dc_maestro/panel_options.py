@@ -17,8 +17,10 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     AUTO_MODE_OBJECTIVES,
+    CONF_EVCC_NOW_VALUE,
     CONF_SIZING_WALLBOX_ENERGY_SENSOR,
     CONF_WALLBOX_ENERGY_SENSOR,
+    DEFAULT_EVCC_NOW_VALUE,
     DOMAIN,
     MAX_ADDITIONAL_PRODUCERS,
     TARIFF_MODES,
@@ -398,6 +400,9 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             errors[key] = "unknown"
             continue
         if value is None:
+            if key == CONF_EVCC_NOW_VALUE:
+                cleaned[key] = DEFAULT_EVCC_NOW_VALUE
+                continue
             clearable = spec[0] in {
                 "entity", "entities", "action", "text", "slots",
                 "modul3_zones", "modul3_quarters",
@@ -410,7 +415,10 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
         if spec[0] == "text" and isinstance(value, str):
             value = value.strip()
             if not value:
-                cleaned[key] = None
+                if key == CONF_EVCC_NOW_VALUE:
+                    cleaned[key] = DEFAULT_EVCC_NOW_VALUE
+                else:
+                    cleaned[key] = None
                 continue
         if spec[0] == "consumers":
             parsed, reason = _flow_consumers(value, known)
@@ -578,7 +586,7 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
     }
 
 
-def panel_options_payload(hass: HomeAssistant) -> dict[str, Any]:
+def panel_options_payload(hass: HomeAssistant, *, admin: bool = True) -> dict[str, Any]:
     """Current options of the loaded entry. Unknown to non-setup users as an empty payload."""
     entry = _loaded_entry(hass)
     if entry is None:
@@ -592,6 +600,10 @@ def panel_options_payload(hass: HomeAssistant) -> dict[str, Any]:
     )
 
     options = normalize_modul3_vat_options(dict(entry.options))
+    if not admin:
+        from .support_dump import redact_options
+
+        options = redact_options(options)
     return {
         "entry_id": entry.entry_id,
         "options": options,
@@ -605,7 +617,7 @@ def _admin(connection: Any) -> bool:
 
 
 def ws_panel_options(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
-    connection.send_result(msg["id"], panel_options_payload(hass))
+    connection.send_result(msg["id"], panel_options_payload(hass, admin=_admin(connection)))
 
 
 def ws_panel_options_set(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:

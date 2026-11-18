@@ -1,6 +1,7 @@
 """Cockpit option read/write."""
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -241,9 +242,44 @@ def test_flow_consumers_reject_an_unknown_entity():
     assert err.value.errors["flow_consumers"] == "unknown_entity"
 
 
-def test_payload_hides_nothing_but_returns_stored_options():
+def test_payload_returns_full_options_for_admin():
     hass, _, _, _ = _hass({CONF_SOC_SENSOR: "sensor.soc"}, {"sensor.soc"}, None)
-    assert panel_options_payload(hass)["options"][CONF_SOC_SENSOR] == "sensor.soc"
+    assert panel_options_payload(hass, admin=True)["options"][CONF_SOC_SENSOR] == "sensor.soc"
+
+
+def test_payload_redacts_secrets_for_non_admin():
+    opts = {
+        CONF_SOC_SENSOR: "sensor.soc",
+        "energyforecast_token": "secret-token",
+        "wallbox_service_on": {"service": "switch.turn_on", "target": {}},
+    }
+    hass, _, _, _ = _hass(opts, {"sensor.soc"}, None)
+    payload = panel_options_payload(hass, admin=False)["options"]
+    assert payload[CONF_SOC_SENSOR] == "sensor.soc"
+    assert payload["energyforecast_token"] == "**REDACTED**"
+    assert payload["wallbox_service_on"] == "**REDACTED**"
+
+
+def test_evcc_now_value_empty_or_none_defaults_to_now():
+    params = SimpleNamespace(evcc_now_value="sofortladen")
+    hass, entry, written, _ = _hass({"evcc_now_value": "sofortladen"}, set(), params)
+    apply_panel_options(hass, {"evcc_now_value": ""})
+    assert written == [("evcc_now_value", "now")]
+    assert entry.options["evcc_now_value"] == "now"
+
+    written.clear()
+    apply_panel_options(hass, {"evcc_now_value": None})
+    assert written == [("evcc_now_value", "now")]
+    assert entry.options["evcc_now_value"] == "now"
+
+
+def test_pause_and_debug_dump_require_admin_decorator():
+    panel_py = Path(__file__).resolve().parents[1] / "custom_components/e3dc_maestro/panel.py"
+    text = panel_py.read_text()
+    for name in ("_ws_panel_pause", "_ws_debug_dump"):
+        idx = text.index(f"def {name}")
+        header = text[max(0, idx - 500) : idx]
+        assert "@websocket_api.require_admin" in header
 
 
 def test_ws_set_refuses_non_admin():

@@ -1519,6 +1519,8 @@ class E3DCMaestroConfigFlow(_TariffSlotsMixin, ConfigFlow, domain=DOMAIN):
         """Step 0: guard – check e3dc_rscp is present."""
         if not self.hass.config_entries.async_entries(E3DC_RSCP_DOMAIN):
             return self.async_abort(reason="e3dc_rscp_not_configured")
+        if self.hass.config_entries.async_entries(DOMAIN):
+            return self.async_abort(reason="already_configured")
         return await self.async_step_sources()
 
     async def async_step_sources(
