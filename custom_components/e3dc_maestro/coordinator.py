@@ -611,6 +611,22 @@ class E3DCMaestroCoordinator(
             self.update_param(key, value)
         self._create_background_task(self.async_request_refresh(), "e3dc_maestro_refresh")
 
+    def _maybe_reset_wallbox_mode(self, plugged: bool | None) -> None:
+        """Nach dem Abstecken springt „Sofort“ zurück auf Solar (wenn eingeschaltet).
+
+        Greift auch beim ersten Lesen nach einem Neustart, falls das Auto
+        abgesteckt wurde, während HA aus war.
+        """
+        if (
+            plugged is False
+            and self._wallbox_plugged is not False
+            and self.entry.options.get(CONF_WALLBOX_MODE_RESET, DEFAULT_WALLBOX_MODE_RESET)
+            and wallbox_mode_of(self._params) == WALLBOX_MODE_NOW
+        ):
+            self.update_param(CONF_WALLBOX_MODE, WALLBOX_MODE_SOLAR)
+            self._log("Wallbox-Lademodus nach Abstecken auf Solar zurückgesetzt")
+            self._wallbox_record("mode_reset")
+
     def update_param(self, key: str, value: Any) -> None:
         """Called by number/select/switch entities when user changes a value."""
         # Lat/lon come from HA config, not user entities
@@ -772,12 +788,7 @@ class E3DCMaestroCoordinator(
                 _plugged = _ps.state.lower() in ("on", "true", "1", "yes", "connected", "plugged")
         if _plugged is not None and self._wallbox_plugged is not None and _plugged != self._wallbox_plugged:
             self._wallbox_record("plug" if _plugged else "unplug")
-            if not _plugged and self.entry.options.get(
-                CONF_WALLBOX_MODE_RESET, DEFAULT_WALLBOX_MODE_RESET
-            ) and wallbox_mode_of(self._params) == WALLBOX_MODE_NOW:
-                self.update_param(CONF_WALLBOX_MODE, WALLBOX_MODE_SOLAR)
-                self._log("Wallbox-Lademodus nach Abstecken auf Solar zurückgesetzt")
-                self._wallbox_record("mode_reset")
+        self._maybe_reset_wallbox_mode(_plugged)
         self._wallbox_plugged = _plugged
         _waiting, self._wallbox_idle_since = wallbox_waiting_state(
             plugged=_plugged,

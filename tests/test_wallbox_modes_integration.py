@@ -13,7 +13,6 @@ from custom_components.e3dc_maestro.const import (
     CONF_WALLBOX_MODE_RESET,
     CONF_WALLBOX_MAX_PRICE,
     CONF_WALLBOX_TYPE,
-    DEFAULT_WALLBOX_MODE_RESET,
     E3DC_RSCP_DOMAIN,
     SERVICE_SET_WALLBOX_CURRENT,
     WALLBOX_TYPE_E3DC,
@@ -23,6 +22,7 @@ from custom_components.e3dc_maestro.control_engine import (
     MaestroState,
     WALLBOX_MODE_SOLAR,
 )
+from custom_components.e3dc_maestro.coordinator import E3DCMaestroCoordinator
 from custom_components.e3dc_maestro.coordinator_act import CoordinatorActMixin, dt_util
 from custom_components.e3dc_maestro.coordinator_helpers import _params_from_options
 
@@ -180,28 +180,8 @@ class _CoordStub:
 
 
 def _simulate_unplug(coord: _CoordStub) -> None:
-    from custom_components.e3dc_maestro.control_engine import (
-        WALLBOX_MODE_NOW,
-        WALLBOX_MODE_SOLAR,
-        wallbox_mode_of,
-    )
-
-    _plugged = False
-    if (
-        _plugged is not None
-        and coord._wallbox_plugged is not None
-        and _plugged != coord._wallbox_plugged
-    ):
-        coord._wallbox_record("unplug")
-        if (
-            not _plugged
-            and coord.entry.options.get(CONF_WALLBOX_MODE_RESET, DEFAULT_WALLBOX_MODE_RESET)
-            and wallbox_mode_of(coord._params) == WALLBOX_MODE_NOW
-        ):
-            coord.update_param(CONF_WALLBOX_MODE, WALLBOX_MODE_SOLAR)
-            coord._log("Wallbox-Lademodus nach Abstecken auf Solar zurückgesetzt")
-            coord._wallbox_record("mode_reset")
-    coord._wallbox_plugged = _plugged
+    E3DCMaestroCoordinator._maybe_reset_wallbox_mode(coord, False)
+    coord._wallbox_plugged = False
 
 
 def test_unplug_resets_now_to_solar_when_enabled():
@@ -223,4 +203,18 @@ def test_unplug_leaves_solar_grid_unchanged():
 def test_unplug_keeps_now_when_reset_disabled():
     c = _CoordStub(mode="now", reset=False)
     _simulate_unplug(c)
+    assert c._params.wallbox_mode == "now"
+
+
+def test_unplugged_at_first_read_after_restart_resets_now():
+    c = _CoordStub(mode="now", reset=True)
+    c._wallbox_plugged = None
+    _simulate_unplug(c)
+    assert c._params.wallbox_mode == WALLBOX_MODE_SOLAR
+
+
+def test_staying_unplugged_does_not_reset_again():
+    c = _CoordStub(mode="now", reset=True)
+    c._wallbox_plugged = False
+    E3DCMaestroCoordinator._maybe_reset_wallbox_mode(c, False)
     assert c._params.wallbox_mode == "now"

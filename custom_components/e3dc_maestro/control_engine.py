@@ -1494,7 +1494,7 @@ def wallbox_status(
     return {
         "mode": mode,
         "wallbox_mode": wallbox_mode_of(params),
-        "from_grid": wb.from_grid,
+        "from_grid": wb.from_grid and state.wallbox_power > WALLBOX_CHARGING_W,
         "explanation": wb.reason,
         "control_enabled": bool(params.wallbox_enabled),
         "plugged": plugged,

@@ -122,7 +122,9 @@ def test_explanations():
 def test_status_fields():
     p = _params(wallbox_mode="now")
     st = wallbox_status(_state(), p, plugged=True, set_current=None)
-    assert st["wallbox_mode"] == "now" and st["from_grid"] is True
+    assert st["wallbox_mode"] == "now" and st["from_grid"] is False  # Auto zieht noch nichts
+    st = wallbox_status(_state(wallbox_power=3600), p, plugged=True, set_current=None)
+    assert st["from_grid"] is True
     assert st["target_current"] == 16 and st["explanation"].startswith("Sofort")
     plain = wallbox_status(_state(), _params(), plugged=True, set_current=None)
     assert plain["wallbox_mode"] == "solar" and plain["from_grid"] is False
