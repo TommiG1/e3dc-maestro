@@ -339,6 +339,7 @@ class E3DCMaestroCoordinator(
         # Last charge/discharge limits actually sent via e3dc_rscp (for debounce)
         self._last_sent_charge_limit: int | None = None
         self._last_sent_discharge_limit: int | None = None
+        self._last_sent_power_mode: str | None = None
 
         # A3: EWMA-geglättete Leistungswerte (anti-flapping)
         self._ewma_pv: float | None = None

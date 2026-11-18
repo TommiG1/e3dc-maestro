@@ -458,13 +458,39 @@ def test_forecast_target_date_zero_is_today():
 def test_rscp_retry_forced_when_last_act_failed():
     """Same decision must resend when previous RSCP act failed."""
     last_rscp_act_ok = False
-    prev_mode = POWER_MODE_NORMAL
+    last_sent_power_mode = POWER_MODE_NORMAL
     decision_mode = POWER_MODE_NORMAL
     needs_retry = not last_rscp_act_ok
-    mode_changed = prev_mode is None or prev_mode != decision_mode or needs_retry
+    mode_changed = (
+        last_sent_power_mode is None
+        or last_sent_power_mode != decision_mode
+        or needs_retry
+    )
     limits_changed = _limits_changed_vs_sent_values(100.0, None, 100, None) or needs_retry
     assert mode_changed is True
     assert limits_changed is True
+
+
+def test_mode_changed_uses_last_sent_not_last_decision():
+    """Coalesced act: last_decision may already be NORMAL while E3DC is still CHARGE."""
+    last_sent_power_mode = POWER_MODE_CHARGE
+    last_decision_mode = POWER_MODE_NORMAL
+    decision_mode = POWER_MODE_NORMAL
+    needs_retry = False
+
+    stale_last_decision = (
+        last_decision_mode is None
+        or last_decision_mode != decision_mode
+        or needs_retry
+    )
+    mode_changed = (
+        last_sent_power_mode is None
+        or last_sent_power_mode != decision_mode
+        or needs_retry
+    )
+
+    assert stale_last_decision is False
+    assert mode_changed is True
 
 
 def test_rscp_success_does_not_resend_identical_limits():

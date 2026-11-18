@@ -22,13 +22,25 @@ from custom_components.e3dc_maestro.coordinator_act import CoordinatorActMixin
 
 
 class _Fake(CoordinatorActMixin):
-    def __init__(self, prev: MaestroDecision, sent_charge: int | None, sent_discharge: int | None):
+    def __init__(
+        self,
+        prev: MaestroDecision,
+        sent_charge: int | None,
+        sent_discharge: int | None,
+        *,
+        last_sent_power_mode: str | None = None,
+    ):
         self._shutting_down = False
         self._params = MaestroParams()
         self.last_decision = prev
         self._last_rscp_act_ok = True
         self._last_sent_charge_limit = sent_charge
         self._last_sent_discharge_limit = sent_discharge
+        self._last_sent_power_mode = (
+            last_sent_power_mode
+            if last_sent_power_mode is not None
+            else (prev.power_mode if prev is not None else None)
+        )
         self._action_history: deque = deque(maxlen=8)
         self.last_action_info = None
         self.calls: list[tuple[str, dict]] = []
@@ -107,3 +119,20 @@ def test_clear_after_charge_mode_resets_power_mode():
         (SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}),
     ]
     assert c._last_sent_charge_limit is None
+
+
+def test_clear_after_charge_when_last_decision_already_normal():
+    """Race: last_decision schon NORMAL, E3DC noch CHARGE — SET_POWER_MODE Pflicht."""
+    stale_normal = MaestroDecision(
+        phase=PHASE_CORRIDOR, reason="x", power_mode=POWER_MODE_NORMAL
+    )
+    c = _Fake(
+        stale_normal,
+        sent_charge=9000,
+        sent_discharge=0,
+        last_sent_power_mode=POWER_MODE_CHARGE,
+    )
+    decision = MaestroDecision(phase=PHASE_CORRIDOR, reason="x", power_mode=POWER_MODE_NORMAL)
+    asyncio.run(c._async_act(decision, _state(), {}, None))
+
+    assert (SERVICE_SET_POWER_MODE, {"power_mode": POWER_MODE_NORMAL}) in c.calls

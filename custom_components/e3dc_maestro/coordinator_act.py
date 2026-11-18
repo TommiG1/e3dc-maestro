@@ -165,11 +165,14 @@ class CoordinatorActMixin:
         if self._shutting_down:
             return
 
-        prev = self.last_decision
         needs_retry = not self._last_rscp_act_ok
 
-        # Power mode / limits
-        mode_changed = prev is None or prev.power_mode != decision.power_mode or needs_retry
+        # Power mode / limits (vs. last RSCP send, not last_decision — async race)
+        mode_changed = (
+            self._last_sent_power_mode is None
+            or self._last_sent_power_mode != decision.power_mode
+            or needs_retry
+        )
         limits_changed = self._limits_changed_vs_sent(decision) or needs_retry
         act_attempted = False
         act_ok = True
@@ -188,6 +191,7 @@ class CoordinatorActMixin:
                 if ok:
                     self._last_sent_charge_limit = None
                     self._last_sent_discharge_limit = None
+                    self._last_sent_power_mode = POWER_MODE_NORMAL
                     self._log(f"[{decision.phase}] clear_power_limits → {decision.reason}")
             elif decision.power_mode == POWER_MODE_NORMAL and decision.charge_power_limit is None and decision.discharge_power_limit is not None:
                 # Nur Entladung begrenzen (z. B. EVCC Now-Modus) – kein Ladebefehl
@@ -215,6 +219,7 @@ class CoordinatorActMixin:
                     # passend zu decision.charge_power_limit is None.
                     self._last_sent_charge_limit = None
                     self._last_sent_discharge_limit = _max_discharge_w
+                    self._last_sent_power_mode = POWER_MODE_NORMAL
                     self._log(
                         f"[{decision.phase}] set_power_limits max_discharge={_max_discharge_w}W → {decision.reason}"
                     )
@@ -247,6 +252,8 @@ class CoordinatorActMixin:
                     power_mode_data,
                 )
                 act_ok = limits_ok and mode_ok
+                if mode_ok:
+                    self._last_sent_power_mode = decision.power_mode
                 if limits_ok:
                     if "max_charge" in limits_data:
                         self._last_sent_charge_limit = limits_data["max_charge"]
@@ -649,6 +656,7 @@ class CoordinatorActMixin:
             if clear_ok and mode_ok:
                 self._last_sent_charge_limit = None
                 self._last_sent_discharge_limit = None
+                self._last_sent_power_mode = POWER_MODE_NORMAL
                 self._last_rscp_act_ok = True
                 self._log(f"Limits freigegeben: {reason}")
         except Exception as err:
