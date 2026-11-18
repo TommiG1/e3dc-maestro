@@ -3055,31 +3055,35 @@ views:
           
           ### Offset zu Sonnenuntergang (h)
           
-          **Wirkung:** Wie viele Stunden vor dem Sonnenuntergang das Ladeende angesetzt
-          wird. Positiver Wert = Ladeende liegt vor Sonnenuntergang.
+          **Wirkung:** Versatz des Ladeendes zum Sonnenuntergang in Stunden. Maestro rechnet
+          Sonnenuntergang plus Offset. Negativer Wert = Ladeende liegt vor Sonnenuntergang,
+          positiver Wert = danach. Erlaubt sind -8 bis +2 h.
           
-          Beispiel: Offset = 2, Sonnenuntergang 20:30 → Ladeende 18:30.
+          Beispiel: Offset = -2, Sonnenuntergang 20:30 → Ladeende 18:30.
           
-          **Empfehlung:** 1–3 h. Größerer Wert = konservativerer Puffer für den Abend.
-          Zu groß → Akku wird früh voll, PV-Spitzen am Nachmittag gehen verloren.
+          **Empfehlung:** -1 bis -3 h. Je negativer der Wert, desto früher soll der Akku voll
+          sein und desto mehr Puffer bleibt für den Abend.
+          Zu negativ → Akku wird früh voll, PV-Spitzen am Nachmittag gehen verloren.
           
           **Wechselwirkung:** Überschreibt Ladeende Winter und Ladeende Sommer vollständig,
           solange Astro-Modus aktiv ist.
           
-          **Standard:** 2 h
+          **Standard:** -2 h
           
           ---
           
           ### Offset nach Sonnenaufgang (h)
           
-          **Wirkung:** Wie viele Stunden nach dem Sonnenaufgang der Ladestart frühestens
-          erlaubt ist. Verhindert, dass Maestro kurz nach Mitternacht lädt.
+          **Wirkung:** Wie viele Stunden nach dem Sonnenaufgang Maestro frühestens aus PV
+          lädt. Vorher ist die Ladung gesperrt, die Entladung fürs Haus bleibt frei.
+          Erlaubt sind -2 bis +8 h.
           
-          Beispiel: Offset = 1, Sonnenaufgang 05:45 → Ladestart frühestens 06:45.
+          Beispiel: Offset = 2, Sonnenaufgang 07:45 → Ladestart frühestens 09:45.
           
-          **Empfehlung:** 0.5–2 h. Notfallladungen (emergency) greifen trotzdem früher ein.
+          **Empfehlung:** 1–3 h. Notladung, eine geplante Netzladung im günstigen Fenster
+          und ein Akku unter „Mindest-SoC vor Verzögerung" laden trotzdem früher.
           
-          **Standard:** 1 h
+          **Standard:** 2 h
 
   - title: "Hilfe: HT/NT-Schutz"
     path: help-ht

@@ -109,8 +109,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Hours after sunrise before charging may start.",
   },
   charge_end_sunset_offset_h: {
-    de: "Stunden vor Sonnenuntergang, zu denen das Ladeende liegen soll.",
-    en: "Hours before sunset when charging should finish.",
+    de: "Versatz des Ladeendes zum Sonnenuntergang. Negativ heißt vorher: -2 endet zwei Stunden vor Sonnenuntergang.",
+    en: "Offset of the charge end from sunset. Negative means earlier: -2 ends two hours before sunset.",
   },
   morning_cap_enabled: {
     de: "Hält den SoC am Morgen unter einer Grenze, damit PV-Ertrag noch hineinpasst.",

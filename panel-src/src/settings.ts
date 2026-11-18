@@ -1411,6 +1411,14 @@ const fmt = (hass: Hass, key: string, digits = 0): string => {
   return value === undefined ? "–" : value.toLocaleString(hass.language, { maximumFractionDigits: digits });
 };
 
+const fmtSigned = (hass: Hass, key: string, digits = 0): string => {
+  const id = S[key];
+  const value = id ? num(hass.states[id]) : undefined;
+  return value === undefined
+    ? "–"
+    : value.toLocaleString(hass.language, { maximumFractionDigits: digits, signDisplay: "exceptZero" });
+};
+
 /** One sentence for a PV section, from the switches the engine actually reads. */
 function pvSummary(hass: Hass, i18n: I18n, title: Key): string {
   const { t } = i18n;
@@ -1425,8 +1433,8 @@ function pvSummary(hass: Hass, i18n: I18n, title: Key): string {
     const line =
       switchOn(hass, "astro_enabled") === true
         ? t("sumWindowAstro", {
-            start: fmt(hass, "charge_start_sunrise_offset_h", 1),
-            end: fmt(hass, "charge_end_sunset_offset_h", 1),
+            start: fmtSigned(hass, "charge_start_sunrise_offset_h", 1),
+            end: fmtSigned(hass, "charge_end_sunset_offset_h", 1),
           })
         : t("sumWindowHours", { winter: clock(hass, "winter_minimum_hour"), summer: clock(hass, "summer_charge_end") });
     return on("morning_cap_enabled")
