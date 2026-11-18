@@ -421,6 +421,16 @@ def _context_notes(
                 ),
             }
         )
+    if trace is not None and any(g.name == "post.wallbox_grid_battery_cap" for g in trace.gates):
+        notes.append(
+            {
+                "id": "wallbox_grid_battery_cap",
+                "text": (
+                    "Netzladung des Autos: Entladung wurde auf den Hausverbrauch "
+                    "begrenzt, der Akku versorgt nicht das Auto."
+                ),
+            }
+        )
     if hp_explanation:
         notes.append({"id": "heat_pump", "text": hp_explanation})
     return notes
@@ -488,6 +498,7 @@ _TERM_UNITS: dict[str, str] = {
     "fast_charge_floor_soc": "%", "delay_min_soc": "%", "fixed_reserve_soc": "%",
     "lower_corridor": "%", "morning_unload_start_soc": "%", "morning_unload_soc": "%",
     "min_charge_power": "W", "wallbox_discharge_guard_threshold_w": "W",
+    "wallbox_max_price": "€/kWh",
     "evcc_discharge_limit_w": "W", "morning_cap_until_h": "Uhr",
 }
 
@@ -981,6 +992,18 @@ TUNABLE_META: dict[str, dict[str, Any]] = {
     "wallbox_discharge_guard_threshold_w": {
         "min": 0, "max": 15000, "step": 100, "unit": "W",
         "label_de": "Wallbox Entladeschutz Schwelle", "label_en": "Wallbox discharge guard threshold",
+    },
+    "wallbox_max_price": {
+        "min": 0, "max": 1, "step": 0.005, "unit": "€/kWh",
+        "label_de": "Wallbox Preisgrenze", "label_en": "Wallbox price limit",
+    },
+    "wallbox_battery_to_car": {
+        "min": 0, "max": 1, "step": 1, "unit": "",
+        "label_de": "Akku darf Auto mitversorgen", "label_en": "Battery may supply the car",
+    },
+    "wallbox_mode": {
+        "min": 0, "max": 0, "step": 0, "unit": "",
+        "label_de": "Wallbox-Lademodus", "label_en": "Wallbox charging mode",
     },
     "price_plan_min_spread": {
         "min": 0, "max": 0.5, "step": 0.01, "unit": "€/kWh",

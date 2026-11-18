@@ -171,6 +171,10 @@
           "wallbox_phases": "Phasenanzahl",
           "wallbox_phases_entity": "Phasen-Sensor (optional)",
           "wallbox_min_surplus": "Mindest-PV-Überschuss (W)",
+          "wallbox_mode": "Wallbox-Lademodus",
+          "wallbox_max_price": "Wallbox Preisgrenze (€/kWh)",
+          "wallbox_battery_to_car": "Akku darf Auto mitversorgen",
+          "wallbox_mode_reset": "Wallbox: Sofort nach Abstecken zurücksetzen",
           "wallbox_current_entity": "Ladestrom setzen (number, nur generische Wallbox)",
           "wallbox_service_on": "Service: Laden starten",
           "wallbox_service_off": "Service: Laden stoppen"
@@ -516,6 +520,10 @@
           "wallbox_phases": "Phasenanzahl",
           "wallbox_phases_entity": "Phasen-Sensor (optional)",
           "wallbox_min_surplus": "Mindest-PV-Überschuss (W)",
+          "wallbox_mode": "Wallbox-Lademodus",
+          "wallbox_max_price": "Wallbox Preisgrenze (€/kWh)",
+          "wallbox_battery_to_car": "Akku darf Auto mitversorgen",
+          "wallbox_mode_reset": "Wallbox: Sofort nach Abstecken zurücksetzen",
           "wallbox_current_entity": "Ladestrom setzen (number, nur generische Wallbox)",
           "wallbox_service_on": "Service: Laden starten",
           "wallbox_service_off": "Service: Laden stoppen"
@@ -525,7 +533,8 @@
           "wallbox_current_entity": "Nur für generische Wallboxen: eine number- oder input_number-Entität für den Ladestrom in Ampere (z. B. von go-e oder openWB). Maestro setzt dort den Strom nach Überschuss. Ohne sie schaltet Maestro nur über die Services ein und aus.",
           "wallbox_min_current": "Mindestladestrom nach IEC 61851 (normalerweise 6 A). Darunter schaltet Maestro die Wallbox lieber ab.",
           "wallbox_included_in_house": "Nur aktivieren, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen, ihr eigener Leistungsmesser steckt nicht im Hausverbrauch. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan).",
-          "wallbox_phases_entity": "Entität mit der aktuellen Phasenzahl (1 oder 3). Bei der E3DC-Wallbox wird der Sensor automatisch gefunden. Ohne gültigen Wert gilt die feste Phasenzahl."
+          "wallbox_phases_entity": "Entität mit der aktuellen Phasenzahl (1 oder 3). Bei der E3DC-Wallbox wird der Sensor automatisch gefunden. Ohne gültigen Wert gilt die feste Phasenzahl.",
+          "wallbox_max_price": "Unter dieser Grenze lädt das Auto im Modus Solar + günstiges Netz mit vollem Strom aus dem Netz. 0 bedeutet: nur die günstigen Slots des Preisplans zählen."
         }
       },
       "evcc": {
@@ -800,6 +809,12 @@
       "wallbox_enabled": {
         "name": "Wallbox-Regelung"
       },
+      "wallbox_battery_to_car": {
+        "name": "Akku darf Auto mitversorgen"
+      },
+      "wallbox_mode_reset": {
+        "name": "Wallbox: Sofort nach Abstecken zurücksetzen"
+      },
       "hp_enabled": {
         "name": "Wärmepumpen-Regelung"
       },
@@ -858,6 +873,15 @@
     "select": {
       "wallbox_type": {
         "name": "Wallbox-Typ"
+      },
+      "wallbox_mode": {
+        "name": "Wallbox-Lademodus",
+        "state": {
+          "solar": "Solar",
+          "solar_grid": "Solar + günstiges Netz",
+          "now": "Sofort",
+          "off": "Aus"
+        }
       },
       "morning_discharge_mode": {
         "name": "Vorentladungs-Modus"
@@ -927,6 +951,9 @@
       },
       "fast_charge_floor_soc": {
         "name": "Schnelllade-Boden SoC"
+      },
+      "wallbox_max_price": {
+        "name": "Wallbox Preisgrenze"
       },
       "hp_off_surplus": {
         "name": "WP Aus-Schwelle"

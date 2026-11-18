@@ -50,7 +50,7 @@ from .control_engine import (
     hp_action_explanation,
     hp_desired_state,
     hp_surplus_w,
-    wallbox_desired_current,
+    wallbox_target,
 )
 from .coordinator_helpers import (
     E3DC_RSCP_POWER_MODE_MAP,
@@ -354,7 +354,13 @@ class CoordinatorActMixin:
 
 
     async def _async_act_wallbox(self, state: MaestroState, opts: dict) -> None:
-        desired_current, turn_off = wallbox_desired_current(state, self._params, self._last_wallbox_current or 0)
+        target = wallbox_target(
+            state,
+            self._params,
+            current_price=getattr(self, "current_price", None),
+            plan_charge_now=getattr(self, "_wallbox_plan_charge_now", False),
+        )
+        desired_current, turn_off = target.current, target.turn_off
         now = dt_util.utcnow()
         if self._wallbox_retry_after is not None and now < self._wallbox_retry_after:
             return
@@ -367,8 +373,13 @@ class CoordinatorActMixin:
             ok = await (self._e3dc_wallbox_stop() if e3dc else self._generic_wallbox_stop(opts))
             if ok:
                 self._last_wallbox_current = 0
-                self._log("Wallbox ausgeschaltet (kein Überschuss)")
-                self._wallbox_record("stop", surplus_w=_surplus_w(state))
+                self._log(f"Wallbox ausgeschaltet ({target.reason})")
+                self._wallbox_record(
+                    "stop",
+                    surplus_w=_surplus_w(state),
+                    reason=target.reason,
+                    from_grid=target.from_grid,
+                )
         elif desired_current is not None:
             if last and abs(desired_current - last) < 1.0:
                 return
@@ -379,11 +390,13 @@ class CoordinatorActMixin:
             )
             if ok:
                 self._last_wallbox_current = desired_current
-                self._log(f"Wallbox {desired_current:.0f}A (Überschuss)")
+                self._log(f"Wallbox {desired_current:.0f}A ({target.reason})")
                 self._wallbox_record(
                     "current" if last else "start",
                     current=int(desired_current),
                     surplus_w=_surplus_w(state),
+                    reason=target.reason,
+                    from_grid=target.from_grid,
                 )
         else:
             return

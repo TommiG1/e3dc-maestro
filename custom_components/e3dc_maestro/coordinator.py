@@ -32,8 +32,12 @@ from .const import (
     CONF_PRICE_SENSOR,
     CONF_PV_POWER_SENSOR,
     CONF_WALLBOX_INCLUDED_IN_HOUSE,
+    CONF_WALLBOX_MODE,
+    CONF_WALLBOX_MODE_RESET,
+    CONF_WALLBOX_MAX_PRICE,
     CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_POWER_SENSOR,
+    DEFAULT_WALLBOX_MODE_RESET,
     CONF_REGELUNG_AKTIV,
     CONF_REGELUNG_PAUSE_UNTIL,
     CONF_UPDATE_INTERVAL,
@@ -91,7 +95,12 @@ from .control_engine import (
     decide,
     forward_looking_charge_target as _forward_looking_charge_target,
     manual_reserve_soc,
+    price_plan_charge_slot,
+    wallbox_mode_of,
     wallbox_waiting_state,
+    WALLBOX_MODE_NOW,
+    WALLBOX_MODE_SOLAR,
+    WALLBOX_MODES,
     tariff_schedule_from_params as _tariff_schedule_from_params,
 )
 from .coordinator_act import CoordinatorActMixin
@@ -316,6 +325,8 @@ class E3DCMaestroCoordinator(
         self._wallbox_phases_latched: int | None = None
         self._wallbox_phases_source: str = "config"
         self._wallbox_phases_entity_effective: str | None = None
+        self.current_price: float | None = None
+        self._wallbox_plan_charge_now: bool = False
         # Riemann freeze guard: stuck power must not inflate daily kWh.
         self._wallbox_energy_last_power: float | None = None
         self._wallbox_energy_power_changed_at: datetime | None = None
@@ -605,8 +616,27 @@ class E3DCMaestroCoordinator(
         # Lat/lon come from HA config, not user entities
         if key in ("astro_latitude", "astro_longitude"):
             return
-        if hasattr(self._params, key):
+        new_options = dict(self.entry.options)
+        if key == CONF_WALLBOX_MAX_PRICE:
+            try:
+                stored = float(value)
+            except (TypeError, ValueError):
+                stored = 0.0
+            value = stored
+            setattr(self._params, "wallbox_max_price", None if stored <= 0 else stored)
+        elif key == CONF_WALLBOX_MODE:
+            if value not in WALLBOX_MODES:
+                value = WALLBOX_MODE_SOLAR
             setattr(self._params, key, value)
+        elif key == CONF_WALLBOX_MODE_RESET:
+            pass  # nur in entry.options, nicht auf MaestroParams
+        elif hasattr(self._params, key):
+            setattr(self._params, key, value)
+        if hasattr(self._params, key) or key in (
+            CONF_WALLBOX_MAX_PRICE,
+            CONF_WALLBOX_MODE,
+            CONF_WALLBOX_MODE_RESET,
+        ):
             self._log(f"Parameter '{key}' geändert → {value}")
             # F3: any manual param write invalidates the auto-mode override
             self.invalidate_auto_params()
@@ -614,7 +644,6 @@ class E3DCMaestroCoordinator(
         # Also persist to options so it survives restarts.
         # Set _skip_reload so the options-update listener doesn't trigger a
         # full integration reload for live entity changes.
-        new_options = dict(self.entry.options)
         new_options[key] = value
         # The cheap threshold of a stored slot schedule depends on these two
         # options → rebuild it so live changes take effect without a reload.
@@ -743,6 +772,12 @@ class E3DCMaestroCoordinator(
                 _plugged = _ps.state.lower() in ("on", "true", "1", "yes", "connected", "plugged")
         if _plugged is not None and self._wallbox_plugged is not None and _plugged != self._wallbox_plugged:
             self._wallbox_record("plug" if _plugged else "unplug")
+            if not _plugged and self.entry.options.get(
+                CONF_WALLBOX_MODE_RESET, DEFAULT_WALLBOX_MODE_RESET
+            ) and wallbox_mode_of(self._params) == WALLBOX_MODE_NOW:
+                self.update_param(CONF_WALLBOX_MODE, WALLBOX_MODE_SOLAR)
+                self._log("Wallbox-Lademodus nach Abstecken auf Solar zurückgesetzt")
+                self._wallbox_record("mode_reset")
         self._wallbox_plugged = _plugged
         _waiting, self._wallbox_idle_since = wallbox_waiting_state(
             plugged=_plugged,
@@ -840,6 +875,12 @@ class E3DCMaestroCoordinator(
                 self._log(f"Curtailment Guard deaktiviert (Floor {floor_w:.0f}W < {release_w:.0f}W)")
 
         active = self._active_params
+        self.current_price = current_price
+        self._wallbox_plan_charge_now = price_plan_charge_slot(
+            active,
+            self._price_plan_action(now),
+            self._curtailment_guard_active,
+        )
         # F1+: Forward-Looking – Ladeziel dynamisch anheben wenn morgen wenig
         # PV erwartet wird. Pure Funktion → kein Persist, nur Tick-Override.
         if active.forward_looking_enabled:

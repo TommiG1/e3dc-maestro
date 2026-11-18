@@ -45,9 +45,12 @@ from .const import (
     CONF_SEASONAL_RESERVE_ENABLED,
     CONF_FIXED_RESERVE_ENABLED,
     CONF_TWO_TIER_ENABLED,
+    CONF_WALLBOX_BATTERY_TO_CAR,
     CONF_WALLBOX_DISCHARGE_GUARD_ENABLED,
     CONF_WALLBOX_ENABLED,
+    CONF_WALLBOX_MODE_RESET,
     CONF_WALLBOX_PRIORITY_ENABLED,
+    DEFAULT_WALLBOX_MODE_RESET,
     DOMAIN,
 )
 from .coordinator import E3DCMaestroCoordinator
@@ -143,6 +146,22 @@ SWITCH_DESCRIPTIONS: tuple[MaestroSwitchDescription, ...] = (
         param_key=CONF_WALLBOX_PRIORITY_ENABLED,
         on_fn=lambda coord: coord.update_param(CONF_WALLBOX_PRIORITY_ENABLED, True),
         off_fn=lambda coord: coord.update_param(CONF_WALLBOX_PRIORITY_ENABLED, False),
+    ),
+    MaestroSwitchDescription(
+        key=CONF_WALLBOX_BATTERY_TO_CAR,
+        name="Akku darf Auto mitversorgen",
+        icon="mdi:battery-charging",
+        param_key=CONF_WALLBOX_BATTERY_TO_CAR,
+        on_fn=lambda coord: coord.update_param(CONF_WALLBOX_BATTERY_TO_CAR, True),
+        off_fn=lambda coord: coord.update_param(CONF_WALLBOX_BATTERY_TO_CAR, False),
+    ),
+    MaestroSwitchDescription(
+        key=CONF_WALLBOX_MODE_RESET,
+        name="Wallbox: Sofort nach Abstecken zurücksetzen",
+        icon="mdi:ev-plug-type2",
+        param_key=CONF_WALLBOX_MODE_RESET,
+        on_fn=lambda coord: coord.update_param(CONF_WALLBOX_MODE_RESET, True),
+        off_fn=lambda coord: coord.update_param(CONF_WALLBOX_MODE_RESET, False),
     ),
     MaestroSwitchDescription(
         key=CONF_HP_ENABLED,
@@ -454,7 +473,14 @@ class MaestroSwitch(CoordinatorEntity[E3DCMaestroCoordinator], SwitchEntity):
         if key == "debug":
             return self.coordinator.debug_enabled
         if self.entity_description.param_key:
-            return bool(getattr(self.coordinator._params, self.entity_description.param_key, False))
+            key = self.entity_description.param_key
+            if hasattr(self.coordinator._params, key):
+                return bool(getattr(self.coordinator._params, key, False))
+            return bool(
+                self.coordinator.entry.options.get(key, DEFAULT_WALLBOX_MODE_RESET)
+                if key == CONF_WALLBOX_MODE_RESET
+                else self.coordinator.entry.options.get(key, False)
+            )
         return False
 
     @property

@@ -13,6 +13,9 @@ from typing import Any
 from .const import (
     CONF_DYNAMIC_TARIFF_ENABLED,
     CONF_TARIFF_SLOTS,
+    CONF_WALLBOX_MAX_PRICE,
+    CONF_WALLBOX_MODE,
+    DEFAULT_WALLBOX_MODE,
     PHASE_CURTAILMENT_GUARD,
     PHASE_EMERGENCY,
     PHASE_EVCC_PAUSE,
@@ -35,6 +38,8 @@ from .control_engine import (
     TARIFF_HIGH,
     TARIFF_LOW,
     TARIFF_NORMAL,
+    WALLBOX_MODE_SOLAR,
+    WALLBOX_MODES,
     TariffSchedule,
     TariffSlot,
 )
@@ -379,6 +384,14 @@ def _params_from_options(options: dict[str, Any]) -> MaestroParams:
     if schedule is not None:
         p.tariff_schedule = schedule
     p.derived_tariff_slots = _derived_slots_from_options(options)
+    raw_price = options.get(CONF_WALLBOX_MAX_PRICE, p.wallbox_max_price)
+    try:
+        price_f = float(raw_price) if raw_price is not None else 0.0
+    except (TypeError, ValueError):
+        price_f = 0.0
+    p.wallbox_max_price = None if price_f <= 0 else price_f
+    mode = options.get(CONF_WALLBOX_MODE, p.wallbox_mode or DEFAULT_WALLBOX_MODE)
+    p.wallbox_mode = mode if mode in WALLBOX_MODES else WALLBOX_MODE_SOLAR
     return p
 
 

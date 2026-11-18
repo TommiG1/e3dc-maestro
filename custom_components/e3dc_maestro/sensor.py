@@ -52,6 +52,8 @@ def _wallbox_attrs(coord: E3DCMaestroCoordinator) -> dict[str, Any] | None:
         coord._params,
         plugged=coord._wallbox_plugged,
         set_current=coord._last_wallbox_current,
+        current_price=getattr(coord, "current_price", None),
+        plan_charge_now=getattr(coord, "_wallbox_plan_charge_now", False),
     )
     trace = getattr(coord.last_decision, "trace", None)
     fired = {g.name for g in trace.gates if g.result} if trace is not None else set()

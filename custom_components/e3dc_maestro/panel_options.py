@@ -27,6 +27,7 @@ from .const import (
     as_entity_list,
     sync_wallbox_energy_options,
 )
+from .control_engine import WALLBOX_MODES
 from .coordinator_helpers import refresh_tariff_runtime
 
 WS_PANEL_OPTIONS = f"{DOMAIN}/panel_options"
@@ -148,6 +149,10 @@ _SPECS: dict[str, _Spec] = {
     "wallbox_phases": ("select", ("1", "3")),
     "wallbox_phases_entity": _entity(),
     "wallbox_min_surplus": _n(0, 10000),
+    "wallbox_mode": ("select", tuple(WALLBOX_MODES)),
+    "wallbox_max_price": _n(0, 1),
+    "wallbox_battery_to_car": ("bool",),
+    "wallbox_mode_reset": ("bool",),
     "wallbox_current_entity": _entity(),
     "wallbox_service_on": ("action",),
     "wallbox_service_off": ("action",),

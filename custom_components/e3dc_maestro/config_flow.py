@@ -12,6 +12,7 @@ from homeassistant.const import PERCENTAGE, UnitOfPower
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er, selector
 
+from .control_engine import WALLBOX_MODES
 from .config_flow_selectors import entities_selector as _entities_selector
 from .config_flow_selectors import entity_selector as _entity_selector
 from .config_flow_selectors import number_selector as _number_selector
@@ -122,6 +123,14 @@ from .const import (
     CONF_WALLBOX_SOC_SENSOR,
     CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_TYPE,
+    CONF_WALLBOX_MODE,
+    CONF_WALLBOX_MAX_PRICE,
+    CONF_WALLBOX_BATTERY_TO_CAR,
+    CONF_WALLBOX_MODE_RESET,
+    DEFAULT_WALLBOX_MODE,
+    DEFAULT_WALLBOX_MAX_PRICE,
+    DEFAULT_WALLBOX_BATTERY_TO_CAR,
+    DEFAULT_WALLBOX_MODE_RESET,
     sync_wallbox_energy_options,
     CONF_WATCHDOG_TIMEOUT,
     CONF_WINTER_MINIMUM_HOUR,
@@ -1103,6 +1112,17 @@ STEP_WALLBOX_SCHEMA = vol.Schema(
             )
         ),
         vol.Optional(CONF_WALLBOX_MIN_SURPLUS, default=DEFAULT_WALLBOX_MIN_SURPLUS): _number_selector(0, 10000, 100, "W"),
+        vol.Optional(CONF_WALLBOX_MODE, default=DEFAULT_WALLBOX_MODE): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=list(WALLBOX_MODES),
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
+        vol.Optional(CONF_WALLBOX_MAX_PRICE, default=DEFAULT_WALLBOX_MAX_PRICE): _number_selector(
+            0, 1, 0.005, "€/kWh"
+        ),
+        vol.Optional(CONF_WALLBOX_BATTERY_TO_CAR, default=DEFAULT_WALLBOX_BATTERY_TO_CAR): selector.BooleanSelector(),
+        vol.Optional(CONF_WALLBOX_MODE_RESET, default=DEFAULT_WALLBOX_MODE_RESET): selector.BooleanSelector(),
         vol.Optional(CONF_WALLBOX_CURRENT_ENTITY): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["number", "input_number"])
         ),

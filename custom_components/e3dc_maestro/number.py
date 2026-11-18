@@ -59,6 +59,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_UPPER_CORRIDOR,
     CONF_WALLBOX_MAX_CURRENT,
+    CONF_WALLBOX_MAX_PRICE,
     CONF_WALLBOX_MIN_CURRENT,
     CONF_WALLBOX_MIN_SURPLUS,
     CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W,
@@ -394,6 +395,14 @@ NUMBER_DESCRIPTIONS: tuple[MaestroNumberDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         param_key=CONF_WALLBOX_PRIORITY_MIN_SOC,
         min_value=0, max_value=100, step_value=5,
+    ),
+    MaestroNumberDescription(
+        key=CONF_WALLBOX_MAX_PRICE,
+        name="Wallbox Preisgrenze",
+        icon="mdi:currency-eur",
+        native_unit_of_measurement="€/kWh",
+        param_key=CONF_WALLBOX_MAX_PRICE,
+        min_value=0, max_value=1.0, step_value=0.005,
     ),
     # ── Heat pump ─────────────────────────────────────────────────────────
     MaestroNumberDescription(
@@ -858,7 +867,10 @@ class MaestroNumber(CoordinatorEntity[E3DCMaestroCoordinator], NumberEntity):
         # Reading _params left this entity unknown, so the box could not keep a value.
         if key == CONF_UPDATE_INTERVAL:
             return self.coordinator.poll_interval_seconds()
-        return getattr(self.coordinator._params, key, None)
+        val = getattr(self.coordinator._params, key, None)
+        if key == CONF_WALLBOX_MAX_PRICE and val is None:
+            return 0.0
+        return val
 
     async def async_set_native_value(self, value: float) -> None:
         key = self.entity_description.param_key

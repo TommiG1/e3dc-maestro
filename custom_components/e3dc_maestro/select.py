@@ -10,7 +10,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     GRID_CHARGE_STRATEGIES,
     CONF_TARIFF_MODE,
+    CONF_WALLBOX_MODE,
     CONF_WALLBOX_TYPE,
+    DEFAULT_WALLBOX_MODE,
     DEFAULT_TARIFF_MODE,
     TARIFF_MODES,
     CONF_MORNING_DISCHARGE_MODE,
@@ -25,6 +27,7 @@ from .const import (
     WALLBOX_TYPE_E3DC,
     WALLBOX_TYPE_GENERIC,
 )
+from .control_engine import WALLBOX_MODES
 from .coordinator import E3DCMaestroCoordinator
 from .grid_charge_strategy import current_strategy
 from .sensor import _device_info
@@ -39,6 +42,7 @@ async def async_setup_entry(
     coordinator: E3DCMaestroCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
         MaestroWallboxTypeSelect(coordinator),
+        MaestroWallboxModeSelect(coordinator),
         MaestroMorningDischargeModeSelect(coordinator),
         MaestroAutoModeObjectiveSelect(coordinator),
         MaestroTariffModeSelect(coordinator),
@@ -64,6 +68,27 @@ class MaestroWallboxTypeSelect(CoordinatorEntity[E3DCMaestroCoordinator], Select
 
     async def async_select_option(self, option: str) -> None:
         self.coordinator.update_param(CONF_WALLBOX_TYPE, option)
+        self.async_write_ha_state()
+
+
+class MaestroWallboxModeSelect(CoordinatorEntity[E3DCMaestroCoordinator], SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "wallbox_mode"
+    _attr_icon = "mdi:ev-station"
+    _attr_options = list(WALLBOX_MODES)
+
+    def __init__(self, coordinator: E3DCMaestroCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_wallbox_mode"
+        self._attr_device_info = _device_info(coordinator)
+        set_stable_entity_id(self, "select")
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.entry.options.get(CONF_WALLBOX_MODE, DEFAULT_WALLBOX_MODE)
+
+    async def async_select_option(self, option: str) -> None:
+        self.coordinator.update_param(CONF_WALLBOX_MODE, option)
         self.async_write_ha_state()
 
 

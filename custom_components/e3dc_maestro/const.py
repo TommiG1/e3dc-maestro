@@ -245,6 +245,10 @@ CONF_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = "wallbox_discharge_guard_threshold_w"
 # die PV-Akkuladung so, dass der Überschuss zuerst bei der Wallbox ankommt.
 CONF_WALLBOX_PRIORITY_ENABLED = "wallbox_priority_enabled"        # bool
 CONF_WALLBOX_PRIORITY_MIN_SOC = "wallbox_priority_min_soc"        # %
+CONF_WALLBOX_MODE = "wallbox_mode"                                # solar | solar_grid | now | off
+CONF_WALLBOX_MAX_PRICE = "wallbox_max_price"                      # €/kWh in options; None in params
+CONF_WALLBOX_BATTERY_TO_CAR = "wallbox_battery_to_car"            # bool
+CONF_WALLBOX_MODE_RESET = "wallbox_mode_reset"                    # bool (options only)
 
 # Wallbox power source (separater Verbrauchszähler)
 # Trennt EV-Ladeverbrauch vom Hausverbrauch, damit Optimizer/EWMA/Forecast
@@ -522,6 +526,10 @@ DEFAULT_WALLBOX_DISCHARGE_GUARD_THRESHOLD_W = 1000
 # Wallbox-Vorrang ist opt-in; unter dem Mindest-SoC hat der Akku wieder Vorrang.
 DEFAULT_WALLBOX_PRIORITY_ENABLED = False
 DEFAULT_WALLBOX_PRIORITY_MIN_SOC = 20
+DEFAULT_WALLBOX_MODE = "solar"
+DEFAULT_WALLBOX_MAX_PRICE = 0.0
+DEFAULT_WALLBOX_BATTERY_TO_CAR = False
+DEFAULT_WALLBOX_MODE_RESET = True
 DEFAULT_HP_MIN_SURPLUS = 2000
 DEFAULT_HP_MAX_PRICE = 0.15
 DEFAULT_HP_MIN_RUN_MINUTES = 20
