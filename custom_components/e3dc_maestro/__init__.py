@@ -47,6 +47,46 @@ _ENTITY_ID_RENAMES: dict[str, str] = {
     "ht_sockel": "entladeschutz_sockel_aquinoktium",
 }
 
+# Object-ID-Slugs vor Dashboard-Renames (name= in alter Version) – nur diese
+# werden bei jedem Setup noch auf _ENTITY_ID_RENAMES umgezogen.
+_ENTITY_ID_LEGACY: dict[str, frozenset[str]] = {
+    "charge_power_limit": frozenset({"aktives_lade_limit"}),
+    "discharge_power_limit": frozenset({"aktives_entlade_limit"}),
+    "feed_in_avoided_today": frozenset({"abregelung_verhindert_heute"}),
+    "ht_enabled": frozenset({"ht_nt_schutz"}),
+    "ht_sat": frozenset({"ht_samstag"}),
+    "ht_sun": frozenset({"ht_sonntag"}),
+    "ht_protection_active": frozenset({"ht_schutz_aktiv"}),
+    "ht_on": frozenset({"hochtarif_beginn"}),
+    "ht_off": frozenset({"hochtarif_ende"}),
+    "ht_min": frozenset({"speicherreserve_winter"}),
+    "ht_sockel": frozenset({"speicherreserve_sommer", "ht_sockel"}),
+}
+
+
+def _maestro_object_suffixes(key: str) -> frozenset[str]:
+    """``e3dc_maestro_*``-Suffixe, die zur Integration gehören (Area-Strip)."""
+    suffixes: set[str] = {f"e3dc_maestro_{key}"}
+    target = _ENTITY_ID_RENAMES.get(key)
+    if target is not None:
+        suffixes.add(f"e3dc_maestro_{target}")
+    for legacy in _ENTITY_ID_LEGACY.get(key, ()):
+        suffixes.add(f"e3dc_maestro_{legacy}")
+    return frozenset(suffixes)
+
+
+def _entity_maestro_slug(entity_id: str) -> str | None:
+    """Teil nach ``e3dc_maestro_``, oder None wenn kein Maestro-Object-ID."""
+    try:
+        _domain, object_id = entity_id.split(".", 1)
+    except ValueError:
+        return None
+    prefix = "e3dc_maestro_"
+    if not object_id.startswith(prefix):
+        return None
+    return object_id[len(prefix) :]
+
+
 # Removing `entity_registry_enabled_default=False` from a description only
 # affects new installations: existing ones keep `disabled_by = "integration"` in
 # the registry and the entity stays gone forever. That left dashboard cards
@@ -70,7 +110,9 @@ def _is_disabled_by_integration(entity_entry: Any) -> bool:
     return getattr(disabled_by, "value", disabled_by) == "integration"
 
 
-def _strip_area_prefix(ent_reg: Any, entity_entry: Any) -> str:
+def _strip_area_prefix(
+    ent_reg: Any, entity_entry: Any, *, allowed_suffixes: frozenset[str] | None = None
+) -> str:
     """Rename ``sensor.keller_e3dc_maestro_x`` back to ``sensor.e3dc_maestro_x``.
 
     Installs whose device sits in an area got an area prefix from HA, which
@@ -79,6 +121,9 @@ def _strip_area_prefix(ent_reg: Any, entity_entry: Any) -> str:
     domain, object_id = entity_entry.entity_id.split(".", 1)
     idx = object_id.find("e3dc_maestro_")
     if idx <= 0:
+        return entity_entry.entity_id
+    suffix = object_id[idx:]
+    if allowed_suffixes is not None and suffix not in allowed_suffixes:
         return entity_entry.entity_id
     new_entity_id = f"{domain}.{object_id[idx:]}"
     if ent_reg.async_get(new_entity_id) is not None:
@@ -124,10 +169,20 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
             )
             ent_reg.async_update_entity(entity_entry.entity_id, disabled_by=None)
 
-        current_id = _strip_area_prefix(ent_reg, entity_entry)
+        allowed = _maestro_object_suffixes(key)
+        current_id = _strip_area_prefix(ent_reg, entity_entry, allowed_suffixes=allowed)
 
         new_object_id = _ENTITY_ID_RENAMES.get(key)
         if new_object_id is None:
+            continue
+
+        slug = _entity_maestro_slug(current_id)
+        if slug is None:
+            continue
+        legacy = _ENTITY_ID_LEGACY.get(key)
+        if slug == new_object_id:
+            continue
+        if legacy is None or slug not in legacy:
             continue
 
         domain = current_id.split(".", 1)[0]

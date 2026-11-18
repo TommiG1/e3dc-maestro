@@ -465,6 +465,55 @@ async def test_migrate_strips_area_prefix(monkeypatch):
     )
 
 
+@pytest.mark.asyncio
+async def test_migrate_entity_ids_skips_user_renamed(monkeypatch):
+    """Eigene Namen dürfen nicht auf Dashboard-Slugs zurückgebogen werden."""
+    entry = SimpleNamespace(entry_id="abc123")
+    user_named = _registry_entry(
+        "abc123_charge_power_limit", "sensor.e3dc_maestro_mein_lade_limit"
+    )
+
+    fake_registry = MagicMock()
+    fake_registry.async_get.return_value = None
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(return_value=[user_named]),
+        raising=False,
+    )
+
+    await _async_migrate_entity_ids(MagicMock(), entry)
+
+    fake_registry.async_update_entity.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_migrate_does_not_strip_unknown_user_prefix(monkeypatch):
+    """Area-ähnliche Präfixe nur bei Integration-Object-IDs entfernen."""
+    entry = SimpleNamespace(entry_id="abc123")
+    custom = _registry_entry(
+        "abc123_current_soc", "sensor.custom_e3dc_maestro_mein_soc"
+    )
+
+    fake_registry = MagicMock()
+    monkeypatch.setattr(
+        maestro_init.er, "async_get", MagicMock(return_value=fake_registry), raising=False
+    )
+    monkeypatch.setattr(
+        maestro_init.er,
+        "async_entries_for_config_entry",
+        MagicMock(return_value=[custom]),
+        raising=False,
+    )
+
+    await _async_migrate_entity_ids(MagicMock(), entry)
+
+    fake_registry.async_update_entity.assert_not_called()
+
+
 def test_dashboard_entity_ids_are_produced_by_the_integration():
     """Every `<domain>.e3dc_maestro_*` a dashboard references must be created."""
     import re

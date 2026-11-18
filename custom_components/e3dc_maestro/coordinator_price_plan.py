@@ -35,6 +35,8 @@ PRICE_PLAN_MAX_AGE_S = 20 * 60
 TIBBER_PRICE_REFRESH_S = 15 * 60
 # Energyforecast aktualisiert 2× täglich; sechs Stunden reichen laut Anbieter.
 ENERGYFORECAST_REFRESH_S = 6 * 60 * 60
+ENERGYFORECAST_RETRY_BASE_S = 60
+ENERGYFORECAST_RETRY_MAX_S = 30 * 60
 
 
 class CoordinatorPricePlanMixin:
@@ -49,6 +51,7 @@ class CoordinatorPricePlanMixin:
     _energyforecast_token: str | None = None
     _energyforecast_zone: str | None = None
     _energyforecast_warned: bool = False
+    _energyforecast_fail_count: int = 0
     _price_provider_until: datetime | None = None
     _price_plan_pv_sources: dict[str, Any] | None = None
 
@@ -314,6 +317,20 @@ class CoordinatorPricePlanMixin:
         ):
             return self._energyforecast_slots
 
+        cache_usable = (
+            self._energyforecast_slots is not None
+            and self._energyforecast_token == token
+            and self._energyforecast_zone == zone
+        )
+        if self._energyforecast_at is not None and not cache_usable:
+            exp = max(0, self._energyforecast_fail_count - 1)
+            retry_s = min(
+                ENERGYFORECAST_RETRY_MAX_S,
+                ENERGYFORECAST_RETRY_BASE_S * (2**exp or 1),
+            )
+            if (now - self._energyforecast_at).total_seconds() < retry_s:
+                return None
+
         from aiohttp import ClientTimeout
         from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -331,13 +348,10 @@ class CoordinatorPricePlanMixin:
             if not self._energyforecast_warned:
                 _LOGGER.warning("Energyforecast-Abruf fehlgeschlagen: %s", err)
                 self._energyforecast_warned = True
-            if (
-                self._energyforecast_slots is not None
-                and self._energyforecast_token == token
-                and self._energyforecast_zone == zone
-            ):
-                self._energyforecast_at = now
+            self._energyforecast_at = now
+            if cache_usable:
                 return self._energyforecast_slots
+            self._energyforecast_fail_count += 1
             return None
 
         slots = slots_from_payload(payload)
@@ -345,9 +359,14 @@ class CoordinatorPricePlanMixin:
             if not self._energyforecast_warned:
                 _LOGGER.warning("Energyforecast-Antwort ohne nutzbare Preis-Slots")
                 self._energyforecast_warned = True
+            self._energyforecast_at = now
+            if cache_usable:
+                return self._energyforecast_slots
+            self._energyforecast_fail_count += 1
             return None
 
         self._energyforecast_warned = False
+        self._energyforecast_fail_count = 0
         self._energyforecast_token = token
         self._energyforecast_zone = zone
         self._energyforecast_at = now

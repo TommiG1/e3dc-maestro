@@ -3,10 +3,21 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock
 
+import pytest
+
+from custom_components.e3dc_maestro.const import (
+    CONF_ENERGYFORECAST_MARKET_ZONE,
+    CONF_ENERGYFORECAST_TOKEN,
+)
 from custom_components.e3dc_maestro.control_engine import MaestroParams, MaestroState
-from custom_components.e3dc_maestro.coordinator_price_plan import CoordinatorPricePlanMixin
+from custom_components.e3dc_maestro.coordinator_price_plan import (
+    ENERGYFORECAST_RETRY_BASE_S,
+    CoordinatorPricePlanMixin,
+)
 
 TZ = dt.timezone(dt.timedelta(hours=2))
 NOW = dt.datetime(2026, 10, 9, 18, 5, tzinfo=TZ)
@@ -124,3 +135,52 @@ class TestPricePlanAction:
         f = _Fake()
         f._params.price_plan_active = True
         assert f._price_plan_action(NOW) is None
+
+
+@pytest.mark.asyncio
+async def test_energyforecast_failure_backoff_without_cache(monkeypatch):
+    """Ohne Cache nur ein Netzversuch pro Backoff-Fenster."""
+    calls = 0
+
+    class _Resp:
+        status = 500
+
+        async def json(self, content_type=None):
+            return {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    def _get(*_a, **_k):
+        nonlocal calls
+        calls += 1
+        return _Resp()
+
+    session = MagicMock()
+    session.get = MagicMock(side_effect=_get)
+    aiohttp_stub = ModuleType("aiohttp")
+    aiohttp_stub.ClientTimeout = MagicMock(return_value=object())
+    monkeypatch.setitem(sys.modules, "aiohttp", aiohttp_stub)
+    ha_aio = ModuleType("homeassistant.helpers.aiohttp_client")
+    ha_aio.async_get_clientsession = lambda _h: session
+    monkeypatch.setitem(sys.modules, "homeassistant.helpers.aiohttp_client", ha_aio)
+
+    fake = CoordinatorPricePlanMixin()
+    fake.hass = MagicMock()
+    fake.entry = SimpleNamespace(
+        options={
+            CONF_ENERGYFORECAST_TOKEN: "tok",
+            CONF_ENERGYFORECAST_MARKET_ZONE: "DE",
+        }
+    )
+    now = NOW
+    assert await fake._async_energyforecast_slots(now) is None
+    assert calls == 1
+    assert await fake._async_energyforecast_slots(now + dt.timedelta(seconds=10)) is None
+    assert calls == 1
+    later = now + dt.timedelta(seconds=ENERGYFORECAST_RETRY_BASE_S + 5)
+    assert await fake._async_energyforecast_slots(later) is None
+    assert calls == 2
