@@ -539,7 +539,7 @@ function numberField(c: ControlCtx, id: string, entity: HassEntity | undefined, 
       step: step ?? 1,
       value: shown ?? min,
       unit,
-      disabled: locked || c.pending.has(id),
+      disabled: locked,
       onCommit: (value) => c.onNumber(id, value),
     });
   }
@@ -551,7 +551,7 @@ function numberField(c: ControlCtx, id: string, entity: HassEntity | undefined, 
       min=${min ?? nothing}
       max=${max ?? nothing}
       step=${step ?? "any"}
-      ?disabled=${locked || c.pending.has(id)}
+      ?disabled=${locked}
       ${ref((el) => {
         if (el instanceof HTMLInputElement && !focused(el) && el.value !== text) el.value = text;
       })}

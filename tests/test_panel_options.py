@@ -18,6 +18,7 @@ from custom_components.e3dc_maestro.panel_options import (
     PanelOptionsError,
     apply_panel_options,
     panel_options_payload,
+    validate_panel_options,
 )
 from homeassistant.config_entries import ConfigEntryState
 
@@ -195,6 +196,45 @@ def test_additional_producers_accept_list_and_legacy_string():
     hass2, entry2, _, _ = _hass({}, {"sensor.a"}, params)
     apply_panel_options(hass2, {CONF_ADDITIONAL_GENERATION_SENSOR: "sensor.a"})
     assert entry2.options[CONF_ADDITIONAL_GENERATION_SENSOR] == ["sensor.a"]
+
+
+def test_lower_corridor_must_not_exceed_upper_including_existing():
+    hass, _, _, _ = _hass({"upper_corridor": 400, "lower_corridor": 200}, set(), SimpleNamespace())
+    _, errors = validate_panel_options(hass, {"lower_corridor": 500})
+    assert errors.get("lower_corridor") == "order"
+
+    _, errors = validate_panel_options(hass, {"upper_corridor": 100})
+    assert errors.get("lower_corridor") == "order"
+
+
+def test_wallbox_min_current_must_not_exceed_max_including_existing():
+    hass, _, _, _ = _hass(
+        {"wallbox_min_current": 6, "wallbox_max_current": 16},
+        set(),
+        SimpleNamespace(),
+    )
+    _, errors = validate_panel_options(hass, {"wallbox_min_current": 20})
+    assert errors.get("wallbox_min_current") == "order"
+
+    hass2, _, _, _ = _hass(
+        {"wallbox_min_current": 12, "wallbox_max_current": 16},
+        set(),
+        SimpleNamespace(),
+    )
+    _, errors = validate_panel_options(hass2, {"wallbox_max_current": 10})
+    assert errors.get("wallbox_min_current") == "order"
+
+
+def test_corridor_and_wallbox_order_ok_when_consistent():
+    hass, _, _, _ = _hass(
+        {"upper_corridor": 800, "lower_corridor": 200, "wallbox_min_current": 6, "wallbox_max_current": 16},
+        set(),
+        SimpleNamespace(),
+    )
+    cleaned, errors = validate_panel_options(hass, {"lower_corridor": 300, "wallbox_max_current": 32})
+    assert not errors
+    assert cleaned["lower_corridor"] == 300
+    assert cleaned["wallbox_max_current"] == 32
 
 
 def test_rejects_unknown_missing_and_range():

@@ -18,8 +18,12 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     AUTO_MODE_OBJECTIVES,
     CONF_EVCC_NOW_VALUE,
+    CONF_LOWER_CORRIDOR,
     CONF_SIZING_WALLBOX_ENERGY_SENSOR,
+    CONF_UPPER_CORRIDOR,
     CONF_WALLBOX_ENERGY_SENSOR,
+    CONF_WALLBOX_MAX_CURRENT,
+    CONF_WALLBOX_MIN_CURRENT,
     DEFAULT_EVCC_NOW_VALUE,
     DOMAIN,
     MAX_ADDITIONAL_PRODUCERS,
@@ -465,6 +469,26 @@ def validate_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> tuple
             errors[key] = reason
         else:
             cleaned[key] = value
+
+    entry = _loaded_entry(hass)
+    merged = {**(entry.options if entry is not None else {}), **cleaned}
+    if (
+        CONF_LOWER_CORRIDOR not in errors
+        and CONF_UPPER_CORRIDOR not in errors
+        and (low := merged.get(CONF_LOWER_CORRIDOR)) is not None
+        and (high := merged.get(CONF_UPPER_CORRIDOR)) is not None
+        and low > high
+    ):
+        errors[CONF_LOWER_CORRIDOR] = "order"
+    if (
+        CONF_WALLBOX_MIN_CURRENT not in errors
+        and CONF_WALLBOX_MAX_CURRENT not in errors
+        and (min_a := merged.get(CONF_WALLBOX_MIN_CURRENT)) is not None
+        and (max_a := merged.get(CONF_WALLBOX_MAX_CURRENT)) is not None
+        and min_a > max_a
+    ):
+        errors[CONF_WALLBOX_MIN_CURRENT] = "order"
+
     return cleaned, errors
 
 

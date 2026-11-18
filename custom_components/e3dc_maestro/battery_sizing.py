@@ -541,46 +541,38 @@ def simulate_scenario(
         total_clipping += clipping
         total_extra_pv += extra_pv
 
-        # ── Step 2: Net energy balance with extended PV (pre-virtual-batt) ──
-        # net = (grid_out - grid_in) + extra_pv
-        #   > 0: surplus going to grid  (can charge virtual batt)
-        #   < 0: deficit from grid      (virtual batt can help)
-        old_net = rec.grid_out_kwh - rec.grid_in_kwh
-        net = old_net + extra_pv
-
-        # ── Step 3: Virtual battery ─────────────────────────────────────────
+        # ── Step 2+3: Extra PV then virtual battery (no import/export netting) ──
         if additional_kwh == 0 and additional_kwp == 0:
-            # Null-Szenario = Baseline: keine Veränderung
             reduced_feedin = 0.0
             post_grid_in = rec.grid_in_kwh
             post_grid_out = rec.grid_out_kwh
-        elif additional_kwh > 0:
-            if net >= 0:
-                # Surplus → charge virtual battery
-                available = net                   # includes extra PV and original surplus
-                charge = min(available, c_rate_kwh, additional_kwh - virt_soc)
-                charge = max(0.0, charge)
-                stored = charge * sqrt_eta
-                virt_soc += stored
-                total_charged_cycles += stored
-                reduced_feedin = charge           # this export goes to battery instead
-                post_grid_in = 0.0
-                post_grid_out = net - charge
-            else:
-                # Deficit → discharge virtual battery
-                deficit = -net
-                discharge = min(deficit, c_rate_kwh, virt_soc)
-                discharge = max(0.0, discharge)
-                delivered = discharge * sqrt_eta
-                virt_soc -= discharge
-                reduced_feedin = 0.0
-                post_grid_in = deficit - delivered
-                post_grid_out = 0.0
         else:
-            # No virtual battery
             reduced_feedin = 0.0
-            post_grid_in = max(0.0, -net)
-            post_grid_out = max(0.0, net)
+            post_grid_in = rec.grid_in_kwh
+            post_grid_out = rec.grid_out_kwh
+
+            if extra_pv > 0:
+                offset = min(extra_pv, post_grid_in)
+                post_grid_in -= offset
+                post_grid_out += extra_pv - offset
+
+            if additional_kwh > 0:
+                if post_grid_out > 0:
+                    charge = min(post_grid_out, c_rate_kwh, additional_kwh - virt_soc)
+                    charge = max(0.0, charge)
+                    stored = charge * sqrt_eta
+                    virt_soc += stored
+                    total_charged_cycles += stored
+                    reduced_feedin = charge
+                    post_grid_out -= charge
+
+                if post_grid_in > 0 and virt_soc > 0:
+                    deficit = post_grid_in
+                    discharge = min(deficit, c_rate_kwh, virt_soc)
+                    discharge = max(0.0, discharge)
+                    delivered = discharge * sqrt_eta
+                    virt_soc -= discharge
+                    post_grid_in = deficit - delivered
 
         # ── Step 4: FiT-limit on post-battery export ────────────────────────
         # If post_grid_out exceeds the extended FiT limit and there's still

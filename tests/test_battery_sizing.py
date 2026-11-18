@@ -254,6 +254,19 @@ class TestPVScaling:
         result = simulate_scenario(records=records, additional_kwh=0.0, additional_kwp=1.0, **sim_kwargs)
         assert result.inverter_upgrade_needed is False
 
+    def test_simultaneous_import_export_not_fully_net_by_tiny_pv(self) -> None:
+        """Extra PV may only offset import hour-by-hour, not net against export."""
+        # import 0.3, export 1.0, +10% PV on 1.0 kWh/h → extra_pv 0.1 → avoid 0.1 only
+        records = [_rec(g_in=0.3, g_out=1.0, pv=1.0, house=1.0)]
+        result = simulate_scenario(
+            records=records,
+            additional_kwh=0.0,
+            additional_kwp=1.0,
+            **_SIM_KWARGS,
+        )
+        assert result.avoided_grid_import_kwh == pytest.approx(0.1 * 365.0, rel=0.01)
+        assert result.avoided_grid_import_kwh < 0.2 * 365.0
+
 
 # ---------------------------------------------------------------------------
 # simulate_scenario – investment calculation
