@@ -2595,6 +2595,9 @@ export const styles = css`
   .wb-log .tl-item[data-kind="error"]::before {
     border-color: var(--grid-in);
   }
+  .wb-log .tl-item[data-kind="mode_reset"]::before {
+    background: var(--primary-color);
+  }
   .wb-log .tl-item[data-kind="plug"]::before,
   .wb-log .tl-item[data-kind="unplug"]::before {
     border-color: var(--pv);

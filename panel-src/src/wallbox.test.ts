@@ -42,6 +42,29 @@ describe("parseWallboxStatus", () => {
     expect(s.history).toHaveLength(1);
     expect(s.history[0]).toMatchObject({ kind: "start", current: 7, surplusW: 5000 });
   });
+
+  it("reads charge mode, grid flag, explanation and history details", () => {
+    const s = parseWallboxStatus(
+      attrs({
+        wallbox_mode: "now",
+        from_grid: true,
+        explanation: "Sofort: Volllast aus dem Netz",
+        phases_source: "sensor",
+        phases_entity: "sensor.wallbox_phases",
+        history: [
+          { timestamp: "2026-11-15T12:00:00+01:00", kind: "mode_reset" },
+          { timestamp: "2026-11-15T12:01:00+01:00", kind: "start", current: 16, reason: "Sofort", from_grid: true },
+        ],
+      }),
+    )!;
+    expect(s.chargeMode).toBe("now");
+    expect(s.fromGrid).toBe(true);
+    expect(s.explanation).toBe("Sofort: Volllast aus dem Netz");
+    expect(s.phasesSource).toBe("sensor");
+    expect(s.phasesEntity).toBe("sensor.wallbox_phases");
+    expect(s.history).toHaveLength(2);
+    expect(s.history[1]).toMatchObject({ kind: "start", reason: "Sofort", fromGrid: true });
+  });
 });
 
 describe("wallboxSentence", () => {
@@ -57,12 +80,22 @@ describe("wallboxSentence", () => {
     expect(charging).toContain("10 A");
     expect(charging).toContain(t("wbSayGuard"));
   });
+
+  it("prefers the backend explanation when present", () => {
+    const line = "Solar + Netz: Preis 24,9 ct unter Grenze 28 ct, 16 A × 1 Phase";
+    expect(wallboxSentence(parseWallboxStatus(attrs({ explanation: line }))!, t, fmt)).toBe(line);
+  });
 });
 
 describe("wallboxEventText", () => {
   it("formats start and stop", () => {
     expect(wallboxEventText({ ts: 0, kind: "start", current: 7, surplusW: 5000 }, t, fmt)).toBe("Ladung mit 7 A gestartet, Überschuss 5,0 kW");
     expect(wallboxEventText({ ts: 0, kind: "stop", surplusW: 800 }, t, fmt)).toContain("800 W");
+  });
+
+  it("appends reason and handles mode reset", () => {
+    expect(wallboxEventText({ ts: 0, kind: "start", current: 16, reason: "Sofort" }, t, fmt)).toContain("Sofort");
+    expect(wallboxEventText({ ts: 0, kind: "mode_reset" }, t, fmt)).toBe(t("wbEvModeReset"));
   });
 });
 
@@ -97,6 +130,12 @@ describe("e3dcConflicts", () => {
       "wbConflictDischarge",
     ]);
     expect(e3dcConflicts({ sun: false, mixedLock: true }, all)).toEqual(["wbConflictDischarge"]);
+  });
+
+  it("uses the grid-charging sun conflict for Now and Solar + grid", () => {
+    expect(e3dcConflicts({ sun: true }, { ...all, mode: "now" })).toEqual(["wbConflictSunGrid"]);
+    expect(e3dcConflicts({ sun: true }, { ...all, mode: "solar_grid" })).toEqual(["wbConflictSunGrid"]);
+    expect(e3dcConflicts({ sun: true }, { ...all, mode: "solar" })).toEqual(["wbConflictSun"]);
   });
 
   it("stays quiet when Maestro does not control or the feature is off", () => {

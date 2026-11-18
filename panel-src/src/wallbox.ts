@@ -1,4 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit";
+import { ref } from "lit/directives/ref.js";
 import "./maestro-chart";
 import { batteryGlyph } from "./battery-glyph";
 import { wallboxDayOptions, wallboxDaysOptions } from "./charts";
@@ -19,13 +20,18 @@ const MODES: readonly WallboxMode[] = ["charging", "unplugged", "full", "waiting
 
 export interface WallboxEvent {
   ts: number;
-  kind: "start" | "current" | "stop" | "error" | "plug" | "unplug";
+  kind: "start" | "current" | "stop" | "error" | "plug" | "unplug" | "mode_reset";
   current?: number;
   surplusW?: number;
+  reason?: string;
+  fromGrid?: boolean;
 }
+
+export type WallboxChargeMode = "solar" | "solar_grid" | "now" | "off";
 
 export interface WallboxStatus {
   mode: WallboxMode;
+  chargeMode: WallboxChargeMode;
   controlEnabled: boolean;
   surplusW: number;
   startW: number;
@@ -34,7 +40,11 @@ export interface WallboxStatus {
   minCurrent: number;
   maxCurrent: number;
   phases: number;
+  phasesSource?: "sensor" | "config";
+  phasesEntity?: string;
   setCurrent?: number;
+  fromGrid: boolean;
+  explanation?: string;
   priorityActive: boolean;
   guardActive: boolean;
   controller: string;
@@ -52,7 +62,8 @@ export interface WallboxData {
 }
 
 const fin = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-const KINDS = new Set(["start", "current", "stop", "error", "plug", "unplug"]);
+const CHARGE_MODES = new Set<WallboxChargeMode>(["solar", "solar_grid", "now", "off"]);
+const KINDS = new Set(["start", "current", "stop", "error", "plug", "unplug", "mode_reset"]);
 
 /** Attributes of the Maestro wallbox power sensor → typed status (undefined before the first cycle). */
 export function parseWallboxStatus(attrs: Record<string, unknown> | undefined): WallboxStatus | undefined {
@@ -61,11 +72,24 @@ export function parseWallboxStatus(attrs: Record<string, unknown> | undefined): 
     const row = raw as Record<string, unknown>;
     const ts = typeof row.timestamp === "string" ? Date.parse(row.timestamp) : Number.NaN;
     if (!Number.isFinite(ts) || !KINDS.has(row.kind as string)) return [];
-    return [{ ts, kind: row.kind as WallboxEvent["kind"], current: fin(row.current), surplusW: fin(row.surplus_w) }];
+    return [
+      {
+        ts,
+        kind: row.kind as WallboxEvent["kind"],
+        current: fin(row.current),
+        surplusW: fin(row.surplus_w),
+        reason: typeof row.reason === "string" ? row.reason : undefined,
+        fromGrid: row.from_grid === true,
+      },
+    ];
   });
   const setCurrent = fin(attrs.set_current);
+  const rawMode = attrs.wallbox_mode;
+  const chargeMode = typeof rawMode === "string" && CHARGE_MODES.has(rawMode as WallboxChargeMode) ? (rawMode as WallboxChargeMode) : "solar";
+  const phasesSource = attrs.phases_source === "sensor" || attrs.phases_source === "config" ? attrs.phases_source : undefined;
   return {
     mode: attrs.mode as WallboxMode,
+    chargeMode,
     controlEnabled: attrs.control_enabled === true,
     surplusW: fin(attrs.surplus_w) ?? 0,
     startW: fin(attrs.start_w) ?? 0,
@@ -74,7 +98,11 @@ export function parseWallboxStatus(attrs: Record<string, unknown> | undefined): 
     minCurrent: fin(attrs.min_current) ?? 6,
     maxCurrent: fin(attrs.max_current) ?? 16,
     phases: fin(attrs.phases) ?? 1,
+    phasesSource,
+    phasesEntity: typeof attrs.phases_entity === "string" ? attrs.phases_entity : undefined,
     setCurrent: setCurrent && setCurrent > 0 ? setCurrent : undefined,
+    fromGrid: attrs.from_grid === true,
+    explanation: typeof attrs.explanation === "string" && attrs.explanation ? attrs.explanation : undefined,
     priorityActive: attrs.priority_active === true,
     guardActive: attrs.guard_active === true,
     controller: typeof attrs.controller === "string" ? attrs.controller : "e3dc",
@@ -113,7 +141,8 @@ export const wallboxModeLabel = (mode: WallboxMode, t: Translate): string => t(M
 export function wallboxSentence(s: WallboxStatus, t: Translate, fmt: Fmt): string {
   const vars = { surplus: fmt.w(Math.max(0, s.surplusW)), start: fmt.w(s.startW), gap: fmt.w(Math.max(0, s.startW - s.surplusW)), a: s.setCurrent ?? 0 };
   let main: string;
-  if (s.mode === "charging") main = !s.controlEnabled ? t("wbSayChargingManual") : s.setCurrent ? t("wbSayCharging", vars) : t("wbSayChargingNoSet");
+  if (s.explanation) main = s.explanation;
+  else if (s.mode === "charging") main = !s.controlEnabled ? t("wbSayChargingManual") : s.setCurrent ? t("wbSayCharging", vars) : t("wbSayChargingNoSet");
   else if (!s.controlEnabled) main = t("wbSayOff");
   else if (s.mode === "waiting") main = t("wbSayWaiting", vars);
   else if (s.mode === "ready") main = t("wbSayReady", vars);
@@ -124,21 +153,25 @@ export function wallboxSentence(s: WallboxStatus, t: Translate, fmt: Fmt): strin
   return [main, ...extra].join(" ");
 }
 
+const withReason = (base: string, reason?: string) => (reason ? `${base} ${reason}` : base);
+
 export function wallboxEventText(e: WallboxEvent, t: Translate, fmt: Fmt): string {
   const surplus = e.surplusW !== undefined ? fmt.w(Math.max(0, e.surplusW)) : "";
   switch (e.kind) {
     case "start":
-      return t("wbEvStart", { a: e.current ?? "?", surplus });
+      return withReason(t("wbEvStart", { a: e.current ?? "?", surplus }), e.reason);
     case "current":
-      return t("wbEvCurrent", { a: e.current ?? "?", surplus });
+      return withReason(t("wbEvCurrent", { a: e.current ?? "?", surplus }), e.reason);
     case "stop":
-      return t("wbEvStop", { surplus });
+      return withReason(t("wbEvStop", { surplus }), e.reason);
     case "error":
       return t("wbEvError");
     case "plug":
       return t("wbEvPlug");
     case "unplug":
       return t("wbEvUnplug");
+    case "mode_reset":
+      return t("wbEvModeReset");
   }
 }
 
@@ -151,10 +184,16 @@ export interface E3dcWallboxSwitches {
 }
 
 /** E3DC settings that work against the Maestro wallbox control. */
-export function e3dcConflicts(sw: E3dcWallboxSwitches, on: { control: boolean; priority: boolean; guard: boolean }): Key[] {
+export function e3dcConflicts(
+  sw: E3dcWallboxSwitches,
+  on: { control: boolean; priority: boolean; guard: boolean; mode?: string },
+): Key[] {
   if (!on.control) return [];
   const out: Key[] = [];
-  if (sw.sun) out.push("wbConflictSun");
+  if (sw.sun) {
+    if (on.mode === "now" || on.mode === "solar_grid") out.push("wbConflictSunGrid");
+    else out.push("wbConflictSun");
+  }
   if (on.priority && sw.batteryFirst) out.push("wbConflictBatteryFirst");
   if (on.guard && (sw.sun ? sw.batteryToCar === false : sw.mixedLock)) out.push("wbConflictDischarge");
   return out;
@@ -176,7 +215,15 @@ const QUICK = [
   { key: "wallbox_enabled", label: "wbSwControl", hint: "wbSwControlHint" },
   { key: "wallbox_priority_enabled", label: "wbSwPriority", hint: "wbSwPriorityHint" },
   { key: "wallbox_discharge_guard_enabled", label: "wbSwGuard", hint: "wbSwGuardHint" },
+  { key: "wallbox_battery_to_car", label: "wbSwBatteryToCar", hint: "wbSwBatteryToCarHint" },
+  { key: "wallbox_mode_reset", label: "wbSwModeReset", hint: "wbSwModeResetHint" },
 ] as const;
+
+const wbInputFocused = (el: HTMLInputElement): boolean => {
+  const root = el.getRootNode();
+  const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+  return active === el;
+};
 
 export function wallboxView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
@@ -199,10 +246,12 @@ export function wallboxView(c: Ctx): TemplateResult {
 
   const hero = status ? heroCard(c, status, power, data) : nothing;
 
+  const chargeMode = c.hass.states[S.wallbox_mode ?? ""]?.state;
   const conflicts = e3dcConflicts(e3dcSwitches(c), {
     control: isOn(c.hass.states[S.wallbox_enabled ?? ""]),
     priority: isOn(c.hass.states[S.wallbox_priority_enabled ?? ""]),
     guard: isOn(c.hass.states[S.wallbox_discharge_guard_enabled ?? ""]),
+    mode: chargeMode,
   });
   const conflict = conflicts.length
     ? html`<section class="card wb-setup wb-conflict" role="note">
@@ -214,11 +263,60 @@ export function wallboxView(c: Ctx): TemplateResult {
       </section>`
     : nothing;
 
+  const modeId = S.wallbox_mode;
+  const modeEntity = modeId ? c.hass.states[modeId] : undefined;
+  const modeOptions = Array.isArray(modeEntity?.attributes.options) ? (modeEntity.attributes.options as string[]) : [];
+  const priceId = S.wallbox_max_price;
+  const priceEntity = priceId ? c.hass.states[priceId] : undefined;
+  const showPrice = chargeMode === "solar_grid" || status?.chargeMode === "solar_grid";
+  const priceShown = num(priceEntity);
+  const priceText = priceShown === undefined ? "" : String(priceShown);
+  const priceMin = typeof priceEntity?.attributes.min === "number" ? priceEntity.attributes.min : 0;
+  const priceMax = typeof priceEntity?.attributes.max === "number" ? priceEntity.attributes.max : 1;
+  const priceStep = typeof priceEntity?.attributes.step === "number" ? priceEntity.attributes.step : 0.005;
+
   const switches = html`<div class="card wb-switches">
     <div class="card-head">
       <div><h3>${t("wbSwitches")}</h3><div class="sub">${t("wbSwitchesSub")}</div></div>
       <button type="button" class="btn ghost" @click=${() => c.onOpenGroup("loads")}>${t("wbAllSettings")}</button>
     </div>
+    ${modeId && modeEntity
+      ? html`<div class="ctrl setting-row stack">
+          <div class="txt"><span class="name"><b>${t("wbSwChargeMode")}</b></span><span>${t("wbSwChargeModeHint")}</span></div>
+          <select
+            .value=${modeEntity.state ?? ""}
+            aria-label=${t("wbSwChargeMode")}
+            ?disabled=${modeEntity.state === "unavailable" || !modeOptions.length || c.pending.has(modeId)}
+            @change=${(e: Event) => c.onSelect(modeId, (e.target as HTMLSelectElement).value)}
+          >
+            ${modeOptions.map((option) => html`<option value=${option} ?selected=${option === modeEntity.state}>${c.i18n.option(option)}</option>`)}
+          </select>
+        </div>`
+      : nothing}
+    ${showPrice && priceId && priceEntity
+      ? html`<div class="ctrl setting-row stack">
+          <div class="txt"><span class="name"><b>${t("wbSwMaxPrice")}</b></span><span>${t("wbSwMaxPriceHint")}</span></div>
+          <label class="setting-num">
+            <input
+              type="number"
+              inputmode="decimal"
+              aria-label=${t("wbSwMaxPrice")}
+              min=${priceMin}
+              max=${priceMax}
+              step=${priceStep}
+              ?disabled=${priceEntity.state === "unavailable" || c.pending.has(priceId)}
+              ${ref((el) => {
+                if (el instanceof HTMLInputElement && !wbInputFocused(el) && el.value !== priceText) el.value = priceText;
+              })}
+              @change=${(e: Event) => {
+                const value = Number.parseFloat((e.target as HTMLInputElement).value);
+                if (Number.isFinite(value)) c.onNumber(priceId, value);
+              }}
+            />
+            <span>€/kWh</span>
+          </label>
+        </div>`
+      : nothing}
     ${QUICK.map(({ key, label, hint }) => {
       const id = S[key];
       const entity = id ? c.hass.states[id] : undefined;
@@ -295,10 +393,17 @@ function heroCard(c: Ctx, s: WallboxStatus, power: number, data: WallboxData): T
   const scaleMax = Math.max(s.maxW, s.startW, s.surplusW, power, 1000) * 1.1;
   const amps = Array.from({ length: Math.max(0, Math.round(s.maxCurrent - s.minCurrent) + 1) }, (_, i) => s.minCurrent + i);
   const active = s.mode === "charging" && s.setCurrent !== undefined;
+  const phaseChip =
+    s.phasesSource === "sensor"
+      ? t("wbPhasesSensor", { n: s.phases })
+      : s.phasesSource === "config"
+        ? t("wbPhasesFixed", { n: s.phases })
+        : t("wbPhases", { n: s.phases });
   const chips: [string, boolean, "on" | "warn" | ""][] = [
     [plugged === undefined ? t("wbPlugUnknown") : plugged ? t("wbPlugged") : t("wbUnplugged"), plugged === true, plugged ? "on" : ""],
-    [t("wbPhases", { n: s.phases }), false, ""],
+    [phaseChip, false, ""],
     [s.controller === "generic" ? t("wbCtrlGeneric") : t("wbCtrlE3dc"), false, ""],
+    [t("wbChipFromGrid"), s.fromGrid, "warn"],
     [t("wbChipPriority"), s.priorityActive, "on"],
     [t("wbChipGuard"), s.guardActive, "warn"],
   ];

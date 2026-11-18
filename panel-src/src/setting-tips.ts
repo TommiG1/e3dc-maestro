@@ -332,6 +332,26 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     de: "Welche Wallbox Maestro anspricht. Die Leistungswerte hängen davon ab.",
     en: "Which wallbox Maestro talks to. The power figures depend on it.",
   },
+  wallbox_mode: {
+    de: "Solar lädt nur aus Überschuss. Solar + Netz holt bei günstigem Strom den vollen Ladestrom aus dem Netz. Sofort lädt immer mit Höchststrom. Aus pausiert die Wallbox-Regelung.",
+    en: "Solar charges from surplus only. Solar + grid pulls full charge current from the grid when power is cheap. Now always charges at maximum current. Off pauses wallbox control.",
+  },
+  wallbox_max_price: {
+    de: "Unter dieser Grenze gilt Strom im Modus Solar + Netz als günstig. 0 heißt: nur die günstigen Slots des Preisplans zählen.",
+    en: "Below this limit, power is treated as cheap in Solar + grid mode. 0 means only cheap slots from the price plan count.",
+  },
+  wallbox_battery_to_car: {
+    de: "Bei Netzladung darf der Hausakku das Auto mitversorgen. Aus ist der Standard, damit der Akku nur das Haus deckt und nicht ins Auto entlädt.",
+    en: "While charging from the grid, the home battery may help power the car. Off is the default so the battery only covers the house.",
+  },
+  wallbox_mode_reset: {
+    de: "Nach dem Abstecken wechselt Maestro vom Modus Sofort zurück auf Solar, wenn der Schalter an ist.",
+    en: "After unplugging, Maestro switches from Now back to Solar when this is on.",
+  },
+  wallbox_phases_entity: {
+    de: "Optionaler Sensor für die Phasenzahl. Bei E3DC-Wallbox kann Maestro den RSCP-Sensor nutzen, sonst gilt der feste Wert unter Phasen.",
+    en: "Optional sensor for the phase count. With an E3DC wallbox Maestro can use the RSCP sensor; otherwise the fixed value under Phases applies.",
+  },
   wallbox_included_in_house: {
     de: "Nur anschalten, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen: Ihr eigener Leistungsmesser steckt nicht im Hausverbrauch.",
     en: "Turn on only if the house consumption sensor already counts the wallbox (e.g. openWB at the utility meter). Leave it off for an original E3DC wallbox: its own power meter is not part of the house consumption.",
