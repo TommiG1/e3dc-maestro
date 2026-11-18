@@ -99,6 +99,8 @@ class MaestroParams:
     # System
     inverter_power: float = 12000
     max_charge_power: float = 3000
+    # Entlade-Obergrenze (RSCP system-battery-discharge-max); None → max_charge_power.
+    max_discharge_power: float | None = None
     min_charge_power: float = 300
     installed_kwp: float = 10.0
     feed_in_limit_percent: float = 70.0
@@ -1093,7 +1095,7 @@ def _morning_discharge_decision(
     1. mode != "off"
     2. soc >= morning_unload_start_soc  (high enough to bother)
     3. soc >  morning_unload_soc        (still above target floor)
-    4. now < charge_end_h - pre_discharge_offset_h  (enough time before charging starts)
+    4. charge_begin - offset <= now < charge_end_h - offset  (Fenster = Offset lang)
     5. PV forecast gating: pv_forecast_remaining_kwh >= needed * safety_factor
     """
     from .const import (
@@ -1103,7 +1105,6 @@ def _morning_discharge_decision(
         MORNING_DISCHARGE_PASSIVE,
         PHASE_MORNING_DISCHARGE,
         POWER_MODE_DISCHARGE,
-        POWER_MODE_IDLE,
         POWER_MODE_NORMAL,
     )
 
@@ -1130,6 +1131,8 @@ def _morning_discharge_decision(
     # Condition 4: Time window – must be before (charge_end_h - offset)
     charge_end_h = seasonal_charge_end_hour(now, params)
     charge_begin_h = charge_end_h - params.pre_discharge_offset_h
+    # Untere Grenze: Fenster ist genauso lang wie der Offset, nicht ab Mitternacht.
+    window_start_h = max(0.0, charge_begin_h - params.pre_discharge_offset_h)
     hour_now = now.hour + now.minute / 60
 
     # Ein aktiver Schnelllade-Boden würde alles wieder auffüllen, was unter ihm
@@ -1150,6 +1153,7 @@ def _morning_discharge_decision(
             setting_key="morning_unload_soc",
         ),
         term("hour_now", hour_now, op=not_ge, expected=charge_begin_h),
+        term("hour_now_in_window", hour_now, op=not_lt, expected=window_start_h),
     ]
     if params.pv_forecast_enabled and state.pv_forecast_remaining_kwh is not None:
         needed_kwh = (
@@ -1177,21 +1181,22 @@ def _morning_discharge_decision(
     rate_w = min(rate_w, params.pre_discharge_max_power_w)
     rate_w = max(100.0, rate_w)  # minimum meaningful discharge
 
-    if mode == MORNING_DISCHARGE_PASSIVE:
-        # Only block charging – let house load drain the battery naturally
+    if mode in (MORNING_DISCHARGE_PASSIVE, MORNING_DISCHARGE_ACTIVE_HOUSE):
+        # Nur Laden sperren, Entladung frei: E3DC deckt das Haus (kein IDLE).
         return MaestroDecision(
             phase=PHASE_MORNING_DISCHARGE,
             reason=(
-                f"Vorentladung passiv: SoC {state.soc:.0f}% → {unload_soc:.0f}% "
+                f"Vorentladung {'passiv' if mode == MORNING_DISCHARGE_PASSIVE else 'active_house'}: "
+                f"SoC {state.soc:.0f}% → {unload_soc:.0f}% "
                 f"(Ladestart {charge_begin_h:.1f} Uhr)"
             ),
-            power_mode=POWER_MODE_IDLE,
+            power_mode=POWER_MODE_NORMAL,
             charge_power_limit=0.0,
             target_soc=target,
             trace=trace,
         )
     else:
-        # active_house or active_grid: actively discharge
+        # active_grid: aktiv mit festem Takt entladen
         return MaestroDecision(
             phase=PHASE_MORNING_DISCHARGE,
             reason=(
@@ -1329,7 +1334,10 @@ def _apply_wallbox_discharge_guard(
         return decision
 
     # Voll freigeben: Akku darf Haus + Auto decken → kein Netzbezug.
-    open_w = max(0.0, float(params.max_charge_power))
+    open_w = max(0.0, float(
+        params.max_discharge_power if params.max_discharge_power is not None
+        else params.max_charge_power
+    ))
     if decision.discharge_power_limit is not None and decision.discharge_power_limit >= open_w:
         return decision
 

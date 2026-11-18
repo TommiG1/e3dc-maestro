@@ -425,8 +425,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Minimum pause between two heat-pump runs.",
   },
   morning_discharge_mode: {
-    de: "Wie der Akku vor dem PV-Tag geleert wird: aus, fest oder nach Preis.",
-    en: "How the battery is emptied before the PV day: off, fixed, or by price.",
+    de: "Wie der Akku vor dem PV-Tag geleert wird: aus, passiv und active_house (nur Ladung sperren, Haus läuft über den Akku) oder active_grid (aktiv, auch ins Netz).",
+    en: "How the battery is emptied before the PV day: off, passive and active_house (block charging only, battery covers the house), or active_grid (active, may export).",
   },
   morning_unload_soc: {
     de: "SoC, auf den die Vorentladung am Morgen hinuntergeht. Nie unter einem aktiven Schnellboden.",

@@ -228,6 +228,21 @@ class CoordinatorSensorsMixin:
         cache[suffix] = found
         return found or None
 
+    def _refresh_max_discharge_power(self) -> float:
+        """Entlade-Obergrenze (W) aus RSCP system-battery-discharge-max, sonst inverter_power."""
+        value: float | None = None
+        entity_id = self._rscp_sensor_by_suffix("_system_maximum_discharge")
+        if entity_id:
+            value = self._read_float(entity_id)
+            state = self.hass.states.get(entity_id)
+            unit = (state.attributes.get("unit_of_measurement") or "").lower() if state else ""
+            if value is not None and unit == "kw":
+                value *= 1000.0
+        if value is None or value <= 0:
+            value = float(self._params.inverter_power)
+        self._max_discharge_power_w = value
+        return value
+
     def _read_native_today_kwh(self, opts: dict, conf_key: str, suffix: str) -> float | None:
         """Day counter in kWh: configured entity, else RSCP suffix, else None."""
         entity_id = opts.get(conf_key) or self._rscp_sensor_by_suffix(suffix)

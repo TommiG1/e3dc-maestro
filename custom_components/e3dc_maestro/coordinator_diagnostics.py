@@ -284,7 +284,7 @@ class CoordinatorDiagnosticsMixin:
         if self.last_decision is None:
             return None
         return _effective_discharge_limit_w(
-            self.last_decision, self._params.max_charge_power
+            self.last_decision, self._discharge_ceiling_w()
         )
 
 

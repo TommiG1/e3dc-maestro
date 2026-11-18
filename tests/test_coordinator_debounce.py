@@ -251,6 +251,28 @@ def test_effective_discharge_free_with_active_charge():
     assert _effective_discharge_limit_w(d, 9000) == 9000
 
 
+def test_effective_discharge_open_uses_discharge_ceiling_not_charge_max():
+    d = _decision(charge_power_limit=500.0, discharge_power_limit=None)
+    assert _effective_discharge_limit_w(d, 3000) == 3000
+
+
+def test_discharge_ceiling_rscp_and_inverter_fallback():
+    from types import SimpleNamespace
+    from custom_components.e3dc_maestro.coordinator_sensors import CoordinatorSensorsMixin
+
+    class _C(CoordinatorSensorsMixin):
+        def __init__(self, eid, state, unit="W"):
+            self._params = SimpleNamespace(inverter_power=9000)
+            self._rscp_suffix_cache = {"_system_maximum_discharge": eid}
+            st = SimpleNamespace(state=state, attributes={"unit_of_measurement": unit})
+            self.hass = SimpleNamespace(states=SimpleNamespace(get=lambda e: st if e == "sensor.x" else None))
+
+    assert _C("sensor.x", "3000")._refresh_max_discharge_power() == 3000
+    assert _C("sensor.x", "3", "kW")._refresh_max_discharge_power() == 3000
+    assert _C("sensor.x", "unavailable")._refresh_max_discharge_power() == 9000
+    assert _C("", "3000")._refresh_max_discharge_power() == 9000
+
+
 def test_effective_discharge_none_without_charge():
     d = _decision(charge_power_limit=None, discharge_power_limit=None)
     assert _effective_discharge_limit_w(d, 9000) is None

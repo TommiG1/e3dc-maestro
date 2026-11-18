@@ -90,6 +90,7 @@ RSCP_TRANSLATION_BY_SUFFIX: dict[str, str] = {
     "_installed_peak_power": "system-battery-installed-peak",
     "_maximum_ac_power": "system-ac-maxpower",
     "_system_maximum_charge": "system-battery-charge-max",
+    "_system_maximum_discharge": "system-battery-discharge-max",
     "_derate_feed_above": "system-derate-percent",
     "_installed_battery_capacity": "system-battery-installed-capacity",
 }
@@ -263,6 +264,8 @@ CONF_WALLBOX_INCLUDED_IN_HOUSE = "wallbox_included_in_house"  # bool: True = Hau
 WALLBOX_POWER_FREEZE_SECONDS = 900
 # Nach einem fehlgeschlagenen Wallbox-Befehl erst so spät erneut versuchen.
 WALLBOX_RETRY_SECONDS = 120
+# Unter der Startschwelle erst nach so vielen Sekunden stoppen (Cloud-Flackern).
+WALLBOX_STOP_HYSTERESIS_SECONDS = 120
 # e3dc_rscp meldet "Laden abgebrochen" erst beim nächsten Poll: so lange nicht erneut toggeln.
 WALLBOX_TOGGLE_COOLDOWN_SECONDS = 120
 

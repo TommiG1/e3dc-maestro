@@ -97,6 +97,13 @@ def test_discharge_guard_keeps_tariff_phases():
     assert _apply_wallbox_discharge_guard(idle, s, p).discharge_power_limit == p.max_charge_power
 
 
+def test_discharge_guard_uses_discharge_ceiling():
+    p = _params(wallbox_discharge_guard_enabled=True, wallbox_discharge_guard_threshold_w=1000,
+                max_charge_power=500, max_discharge_power=3000)
+    idle = MaestroDecision(phase=PHASE_IDLE, reason="t", discharge_power_limit=0.0)
+    assert _apply_wallbox_discharge_guard(idle, _state(0, wallbox_power=11000), p).discharge_power_limit == 3000
+
+
 # ── Ansteuerung ───────────────────────────────────────────────────────────
 
 class _Fake(CoordinatorActMixin):
@@ -106,6 +113,7 @@ class _Fake(CoordinatorActMixin):
         self._e3dc_wallbox = None
         self._wallbox_toggled_at = None
         self._wallbox_retry_after = None
+        self._wallbox_below_since = None
         self._wallbox_history = deque(maxlen=30)
         self._e3dc_device_id = "hub"
         self._consecutive_rscp_failures = 0
@@ -170,6 +178,29 @@ def test_e3dc_stop_uses_toggle_once():
     _run(c, _state(1000), E3DC)
     assert len(c.calls) == 1
     assert [e["kind"] for e in c._wallbox_history] == ["stop"]
+
+
+def test_stop_waits_for_hysteresis_while_on():
+    c = _Fake({"binary_sensor.wb_canceled": "off"})
+    c._last_wallbox_current = 7
+    _run(c, _state(1000), E3DC)  # erster Tick unter Schwelle: nur Zeit merken
+    assert c.calls == [] and c._last_wallbox_current == 7
+    assert c._wallbox_below_since is not None
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=30)
+    _run(c, _state(1000), E3DC)
+    assert c.calls == [] and c._last_wallbox_current == 7
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=120)
+    _run(c, _state(1000), E3DC)
+    assert c.calls == [("button", "press", {"entity_id": "button.wb_toggle"})]
+    assert c._last_wallbox_current == 0 and c._wallbox_below_since is None
+
+
+def test_surplus_recovery_resets_stop_hold():
+    c = _Fake({"binary_sensor.wb_canceled": "off"})
+    c._last_wallbox_current = 7
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=100)
+    _run(c, _state(4700), E3DC)  # Überschuss wieder da
+    assert c._wallbox_below_since is None
 
 
 def test_history_records_start_change_and_single_error():

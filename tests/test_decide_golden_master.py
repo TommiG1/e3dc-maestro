@@ -471,7 +471,7 @@ _EXPECTED: dict[str, Snapshot] = {
     "reserve_protection_winter": ("reserve_protection", "normal", None, 0.0, 85.0, None, False),
     "ht_protection_in_window": ("ht_protection", "normal", None, 0.0, 68.15, None, False),
     "evcc_pause_now_charging": ("evcc_pause", "normal", None, 0.0, 40.86, None, False),
-    "morning_discharge_active_house": ("morning_discharge", "discharge", None, 880.0, 33.03, None, False),
+    "morning_discharge_active_house": ("morning_discharge", "normal", 0.0, None, 33.03, None, False),
     "astro_wait_before_sunrise": ("astro_wait", "normal", 1.0, None, 20.0, None, False),
     "morning_cap_blocks_charge": ("morning_cap", "normal", 1.0, None, 25.33, None, False),
     "hard_soc_limit_at_cap": ("hard_soc_limit", "normal", 1.0, None, 51.28, None, False),

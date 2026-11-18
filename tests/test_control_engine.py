@@ -1939,19 +1939,29 @@ class TestMorningPreDischarge:
         assert d.phase != PHASE_MORNING_DISCHARGE
 
     def test_morning_discharge_passive_mode_power_mode(self):
-        """Passive mode returns POWER_MODE_IDLE (no active discharge)."""
+        """Passive: NORMAL + Ladesperre, nie IDLE; Entladung bleibt frei."""
         p = self._md_params(morning_discharge_mode="passive")
-        state = self._high_soc_state()
-        d = decide(state, p, _now(6, 15, 8))
+        d = decide(self._high_soc_state(), p, _now(6, 15, 8))
         assert d.phase == PHASE_MORNING_DISCHARGE
-        assert d.power_mode == POWER_MODE_IDLE
+        assert d.power_mode == POWER_MODE_NORMAL
         assert d.charge_power_limit == 0.0
+        assert d.discharge_power_limit is None
+        assert "passiv" in d.reason
 
-    def test_morning_discharge_active_mode_discharges(self):
-        """active_house mode returns POWER_MODE_DISCHARGE with a positive rate."""
+    def test_morning_discharge_active_house_like_passive(self):
+        """active_house: wie passiv NORMAL + 0 W Laden, eigener Reason-Text."""
         p = self._md_params(morning_discharge_mode="active_house")
-        state = self._high_soc_state()
-        d = decide(state, p, _now(6, 15, 8))
+        d = decide(self._high_soc_state(), p, _now(6, 15, 8))
+        assert d.phase == PHASE_MORNING_DISCHARGE
+        assert d.power_mode == POWER_MODE_NORMAL
+        assert d.charge_power_limit == 0.0
+        assert d.discharge_power_limit is None
+        assert "active_house" in d.reason
+
+    def test_morning_discharge_active_grid_discharges(self):
+        """active_grid entlädt aktiv mit positiver Rate."""
+        p = self._md_params(morning_discharge_mode="active_grid")
+        d = decide(self._high_soc_state(), p, _now(6, 15, 8))
         assert d.phase == PHASE_MORNING_DISCHARGE
         assert d.power_mode == POWER_MODE_DISCHARGE
         assert d.discharge_power_limit is not None
@@ -1959,11 +1969,16 @@ class TestMorningPreDischarge:
 
     def test_morning_discharge_rate_capped_at_max_power(self):
         """Discharge rate should not exceed pre_discharge_max_power_w."""
-        p = self._md_params(pre_discharge_max_power_w=1500.0)
-        state = self._high_soc_state()
-        d = decide(state, p, _now(6, 15, 8))
+        p = self._md_params(morning_discharge_mode="active_grid", pre_discharge_max_power_w=1500.0)
+        d = decide(self._high_soc_state(), p, _now(6, 15, 8))
         assert d.discharge_power_limit is not None
         assert d.discharge_power_limit <= 1500.0
+
+    def test_morning_discharge_not_before_window_start(self):
+        """02:00 liegt vor charge_begin - offset (8:00): Phase feuert nicht."""
+        p = self._md_params()  # charge_begin 12:00, Fenster 08:00-12:00
+        assert decide(self._high_soc_state(), p, _now(6, 15, 2)).phase != PHASE_MORNING_DISCHARGE
+        assert decide(self._high_soc_state(), p, _now(6, 15, 9)).phase == PHASE_MORNING_DISCHARGE
 
     def test_morning_discharge_forecast_gate_blocks_if_insufficient(self):
         """If PV forecast is insufficient, pre-discharge should NOT activate."""

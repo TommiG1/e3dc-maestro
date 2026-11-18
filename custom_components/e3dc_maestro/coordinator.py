@@ -317,6 +317,8 @@ class E3DCMaestroCoordinator(
         self._e3dc_wallbox: dict[str, str] | None = None
         self._wallbox_toggled_at: datetime | None = None
         self._wallbox_retry_after: datetime | None = None
+        self._wallbox_below_since: datetime | None = None
+        self._max_discharge_power_w: float | None = None
         # Panel: Steckerstatus und letzte Wallbox-Ereignisse (neueste zuerst)
         self._wallbox_plugged: bool | None = None
         self._wallbox_history: deque[dict[str, Any]] = deque(maxlen=30)
@@ -886,7 +888,10 @@ class E3DCMaestroCoordinator(
                 self._curtailment_guard_active = False
                 self._log(f"Curtailment Guard deaktiviert (Floor {floor_w:.0f}W < {release_w:.0f}W)")
 
-        active = self._active_params
+        active = dataclasses.replace(
+            self._active_params,
+            max_discharge_power=self._refresh_max_discharge_power(),
+        )
         self.current_price = current_price
         self._wallbox_plan_charge_now = price_plan_charge_slot(
             active,

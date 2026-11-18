@@ -41,6 +41,7 @@ from .const import (
     SERVICE_SET_POWER_MODE,
     SERVICE_SET_WALLBOX_CURRENT,
     WALLBOX_RETRY_SECONDS,
+    WALLBOX_STOP_HYSTERESIS_SECONDS,
     WALLBOX_TOGGLE_COOLDOWN_SECONDS,
     WALLBOX_TYPE_E3DC,
 )
@@ -144,11 +145,16 @@ class CoordinatorActMixin:
         self._act_task.add_done_callback(_done)
 
 
+    def _discharge_ceiling_w(self) -> float:
+        """Offene Entlade-Obergrenze (W): RSCP-Wert, sonst inverter_power."""
+        cached = getattr(self, "_max_discharge_power_w", None)
+        return float(cached) if cached else float(self._params.inverter_power)
+
     def _limits_changed_vs_sent(self, decision: MaestroDecision) -> bool:
         """True when decision limits differ enough from last RSCP call to resend."""
         return _limits_changed_vs_sent_values(
             decision.charge_power_limit,
-            _effective_discharge_limit_w(decision, self._params.max_charge_power),
+            _effective_discharge_limit_w(decision, self._discharge_ceiling_w()),
             self._last_sent_charge_limit,
             self._last_sent_discharge_limit,
         )
@@ -232,7 +238,7 @@ class CoordinatorActMixin:
                 if decision.charge_power_limit is not None:
                     limits_data["max_charge"] = max(0, int(decision.charge_power_limit))
                 _effective_discharge = _effective_discharge_limit_w(
-                    decision, self._params.max_charge_power
+                    decision, self._discharge_ceiling_w()
                 )
                 if _effective_discharge is not None:
                     limits_data["max_discharge"] = _effective_discharge
@@ -376,10 +382,17 @@ class CoordinatorActMixin:
 
         if turn_off:
             if last == 0:
+                self._wallbox_below_since = None
                 return
+            if last:
+                if self._wallbox_below_since is None:
+                    self._wallbox_below_since = now
+                if (now - self._wallbox_below_since).total_seconds() < WALLBOX_STOP_HYSTERESIS_SECONDS:
+                    return
             ok = await (self._e3dc_wallbox_stop() if e3dc else self._generic_wallbox_stop(opts))
             if ok:
                 self._last_wallbox_current = 0
+                self._wallbox_below_since = None
                 self._log(f"Wallbox ausgeschaltet ({target.reason})")
                 self._wallbox_record(
                     "stop",
@@ -388,6 +401,7 @@ class CoordinatorActMixin:
                     from_grid=target.from_grid,
                 )
         elif desired_current is not None:
+            self._wallbox_below_since = None
             if last and abs(desired_current - last) < 1.0:
                 return
             ok = await (
@@ -406,6 +420,7 @@ class CoordinatorActMixin:
                     from_grid=target.from_grid,
                 )
         else:
+            self._wallbox_below_since = None
             return
         if not ok and self._wallbox_retry_after is None:
             self._wallbox_record("error")
