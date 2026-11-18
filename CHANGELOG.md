@@ -11,6 +11,20 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.12] – Morgen-Entladung, Sicherheit und Statistik-Korrekturen (2026-11-18)
+
+Beta nach 0.5.9-beta.11. Ausführlich: [docs/release-notes/v0.5.9-beta.12.md](docs/release-notes/v0.5.9-beta.12.md).
+
+### Geändert
+- **Morgen-Vorentladung:** Passiv und active_house sperren nur die Ladung (kein IDLE mehr), nur active_grid entlädt aktiv. Das Fenster beginnt erst die eingestellten Stunden vor dem Ladestart.
+- **Entlade-Obergrenze** kommt aus dem E3DC (RSCP). **Wallbox-Stopp** erst nach 2 Minuten unter dem Mindeststrom.
+
+### Sicherheit
+- Pause und Debug-Dump nur für Admins, Panel-Optionen für Nicht-Admins geschwärzt, nur noch ein Config-Eintrag.
+
+### Behoben
+- Verlorener Moduswechsel bei zusammengefassten Entscheidungen, Sofortladen-Standardwert, Eingabeprüfung der Reihenfolge, Energyforecast-Backoff, sicherere Entity-ID-Migration, PV-Zähler und PV-Ersparnis mit Wallbox, Warum-Texte, Akku-Berater, Regler im Einstellungs-Tab, Offset-Anzeige beim Sonnenuntergang.
+
 ## [0.5.9-beta.11] – Hotfix für die Auswahlfelder (2026-11-18)
 
 Beta nach 0.5.9-beta.10. Ausführlich: [docs/release-notes/v0.5.9-beta.11.md](docs/release-notes/v0.5.9-beta.11.md).
