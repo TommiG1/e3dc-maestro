@@ -6,8 +6,10 @@ from dataclasses import replace
 from custom_components.e3dc_maestro.control_engine import MaestroParams, decide
 from custom_components.e3dc_maestro.warum import (
     build_warum_payload,
+    decide_kwargs_from_coordinator,
     energy_balance,
     explain_why_not,
+    format_term_text,
     run_what_if,
 )
 from test_decide_golden_master import _golden_cases
@@ -337,6 +339,54 @@ def test_tunables_from_setting_keys():
     tun = payload["answer"]["tunables"]
     assert tun
     assert any(t["key"] == "hard_soc_limit" for t in tun)
+
+
+def test_decide_kwargs_prefers_last_stored_tick():
+    from types import SimpleNamespace
+
+    stored = {
+        "regelung_aktiv": True,
+        "curtailment_guard_active": False,
+        "current_price": 0.31,
+        "grid_charged_today_kwh": 1.5,
+        "hp_running": True,
+        "hp_last_change_minutes": 12.0,
+        "force_discharge": False,
+        "discharge_lock": False,
+        "previous_phase": "idle",
+        "previous_phase_since": None,
+        "previous_battery_priority": False,
+        "price_plan": None,
+    }
+    coord = SimpleNamespace(_last_decide_kwargs=stored, last_decision=None)
+    assert decide_kwargs_from_coordinator(coord) == stored
+
+
+def test_format_term_text_uses_setting_key_for_templates():
+    text = format_term_text(
+        {
+            "name": "soc",
+            "setting_key": "morning_cap_soc",
+            "actual": 42,
+            "expected": 50,
+            "passed": True,
+        },
+        lang="de",
+    )
+    assert "Morgengrenze" in text
+    assert "42" in text
+
+
+def test_format_term_text_unary_without_expected_omits_erwartet():
+    text = format_term_text(
+        {
+            "name": "some_flag",
+            "actual": True,
+            "passed": False,
+        },
+        lang="de",
+    )
+    assert "erwartet" not in text
 
 
 def test_what_if_includes_diff_when_override_changes_outcome():

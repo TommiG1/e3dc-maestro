@@ -6,7 +6,7 @@ The panel websocket handler builds the payload via ``build_warum_payload``.
 from __future__ import annotations
 
 from dataclasses import fields, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .const import ALL_PHASES
@@ -568,6 +568,11 @@ _GENERIC_TERM: dict[str, tuple[str, str]] = {
     "en": ("{n}: currently {a}, expected {e}", "{n}: currently {a}, expected {e}, fits"),
 }
 
+_GENERIC_UNARY_TERM: dict[str, tuple[str, str]] = {
+    "de": ("{n}: {a}", "{n}: {a}, passt"),
+    "en": ("{n}: {a}", "{n}: {a}, fits"),
+}
+
 
 def _fmt_value(value: Any, unit: str, lang: str) -> str:
     if value is None:
@@ -590,12 +595,22 @@ def format_term_text(term: Term | dict[str, Any], lang: str = "de") -> str:
         term = term_to_dict(term)
     lang = lang if lang in WARUM_LANGS else "de"
     name = str(term.get("name") or "")
-    unit = _TERM_UNITS.get(name, "")
+    key = str(term.get("setting_key") or name)
+    unit = _TERM_UNITS.get(key) or _TERM_UNITS.get(name, "")
     a = _fmt_value(term.get("actual"), unit, lang)
-    e = _fmt_value(term.get("expected"), unit, lang)
-    pair = (TERM_TEXT.get(name) or {}).get(lang) or _GENERIC_TERM[lang]
+    expected = term.get("expected")
+    text_entry = TERM_TEXT.get(key) or TERM_TEXT.get(name)
+    if text_entry:
+        pair = text_entry.get(lang) or _GENERIC_TERM[lang]
+    elif expected is None:
+        pair = _GENERIC_UNARY_TERM[lang]
+    else:
+        pair = _GENERIC_TERM[lang]
     template = pair[1] if term.get("passed") else pair[0]
-    return template.format(a=a, e=e, n=name.replace("_", " "))
+    e = _fmt_value(expected, unit, lang) if expected is not None else "?"
+    if expected is None and "{e}" not in template:
+        return template.format(a=a, n=key.replace("_", " "))
+    return template.format(a=a, e=e, n=key.replace("_", " "))
 
 
 _STR = {
@@ -1495,19 +1510,39 @@ def _build_base_payload(
 
 def decide_kwargs_from_coordinator(coord: Any) -> dict[str, Any]:
     """Rebuild the kwargs the coordinator passes into ``decide()``."""
+    last = getattr(coord, "_last_decide_kwargs", None)
+    if isinstance(last, dict):
+        return dict(last)
     previous_battery_priority = False
     if getattr(coord, "last_decision", None) is not None:
         previous_battery_priority = bool(coord.last_decision.battery_priority)
+    hp_last = getattr(coord, "_hp_last_change", None)
+    if hp_last is not None:
+        if hp_last.tzinfo is None:
+            hp_last = hp_last.replace(tzinfo=UTC)
+        hp_last_change_minutes = (datetime.now(UTC) - hp_last).total_seconds() / 60
+    else:
+        hp_last_change_minutes = 0.0
+    price_plan = None
+    ppa = getattr(coord, "_price_plan_action", None)
+    if callable(ppa):
+        try:
+            price_plan = ppa(datetime.now(UTC))
+        except Exception:  # noqa: BLE001
+            price_plan = None
     return {
         "regelung_aktiv": getattr(coord, "regelung_aktiv", True),
         "curtailment_guard_active": getattr(coord, "_curtailment_guard_active", False),
-        "current_price": getattr(coord, "current_price", None),
+        "current_price": getattr(coord, "_last_current_price", None),
         "grid_charged_today_kwh": float(
             (getattr(coord, "stats", None) or {}).get("grid_to_battery_today_kwh", 0.0)
         ),
+        "hp_running": getattr(coord, "_hp_running", False),
+        "hp_last_change_minutes": hp_last_change_minutes,
         "force_discharge": getattr(coord, "force_discharge", False),
         "discharge_lock": getattr(coord, "discharge_lock", False),
         "previous_phase": getattr(coord, "last_phase", None),
         "previous_phase_since": getattr(coord, "_last_phase_changed_at", None),
         "previous_battery_priority": previous_battery_priority,
+        "price_plan": price_plan,
     }

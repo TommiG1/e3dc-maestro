@@ -255,6 +255,8 @@ class E3DCMaestroCoordinator(
         self._last_stats_date: str | None = None
         # Per-entity midnight bases for additional lifetime energy totals.
         self._additional_bases: dict[str, float] = {}
+        # Last good per-producer day delta while a lifetime total is unavailable.
+        self._additional_last_delta: dict[str, float] = {}
         # Main PV day-counter end-of-day value; used to hold PV-today at 0 after
         # midnight until the native meter resets (avoids LTS double-count).
         self._pv_main_last_kwh: float | None = None
@@ -296,6 +298,10 @@ class E3DCMaestroCoordinator(
 
         # Manual charge rate-limit
         self._last_manual_charge: datetime | None = None
+
+        # Last decide() kwargs (what-if / Warum reuse exact tick inputs).
+        self._last_decide_kwargs: dict[str, Any] | None = None
+        self._last_current_price: float | None = None
 
         # Heat pump tracking
         self._hp_running: bool = False
@@ -811,6 +817,7 @@ class E3DCMaestroCoordinator(
             current_price = self._read_float(price_entity)
             if current_price is None:
                 current_price = self._current_price_from_sensor(price_entity, now)
+        self._last_current_price = current_price
 
         # Phase D / F1: refresh rolling consumption stats (≤1×/h).
         # Always run when the sensor is configured – the forecast also needs it,
@@ -911,27 +918,25 @@ class E3DCMaestroCoordinator(
                 self._fwd_looking_target = active.charge_target
         else:
             self._fwd_looking_target = None
-        decision = decide(
-            state_data,
-            active,
-            now,
-            regelung_aktiv=self.regelung_aktiv,
-            curtailment_guard_active=self._curtailment_guard_active,
-            current_price=current_price,
-            grid_charged_today_kwh=self.stats.get("grid_to_battery_today_kwh", 0.0),
-            hp_running=hp_running,
-            hp_last_change_minutes=hp_last_change_min,
-            force_discharge=self.force_discharge,
-            discharge_lock=self.discharge_lock,
-            previous_phase=self.last_phase,
-            previous_phase_since=self._last_phase_changed_at,
-            previous_battery_priority=(
+        self._last_decide_kwargs = {
+            "regelung_aktiv": self.regelung_aktiv,
+            "curtailment_guard_active": self._curtailment_guard_active,
+            "current_price": current_price,
+            "grid_charged_today_kwh": self.stats.get("grid_to_battery_today_kwh", 0.0),
+            "hp_running": hp_running,
+            "hp_last_change_minutes": hp_last_change_min,
+            "force_discharge": self.force_discharge,
+            "discharge_lock": self.discharge_lock,
+            "previous_phase": self.last_phase,
+            "previous_phase_since": self._last_phase_changed_at,
+            "previous_battery_priority": (
                 self.last_decision.battery_priority
                 if self.last_decision is not None
                 else False
             ),
-            price_plan=self._price_plan_action(now),
-        )
+            "price_plan": self._price_plan_action(now),
+        }
+        decision = decide(state_data, active, now, **self._last_decide_kwargs)
 
         # Act on decision (debounced)
         # A2: Charge-power ramp – limit how fast charge power rises
@@ -1107,15 +1112,26 @@ class E3DCMaestroCoordinator(
             _wear_per_kwh = _capex / (_cycles * 2.0 * _cap)
             self.stats[STAT_BATTERY_WEAR_TODAY_EUR] += throughput_kwh * _wear_per_kwh
 
-            # PV self-consumption = min(pv, house) per interval (nur direkter PV→Haus-Anteil)
-            pv_self_w = min(state_data.pv_power, state_data.house_power)
+            # PV self-consumption = min(pv, house + wallbox) per interval
+            pv_w_self = (
+                state_data.pv_power_instant
+                if state_data.pv_power_instant is not None
+                else state_data.pv_power
+            )
+            house_load_self_w = state_data.house_power + max(0.0, state_data.wallbox_power)
+            pv_self_w = min(pv_w_self, house_load_self_w)
             if pv_self_w > 0:
                 pv_self_kwh = pv_self_w / 1000 * interval_h
                 self.stats[STAT_PV_SELF_CONSUMPTION_TODAY] += pv_self_kwh
 
             # Ersparnis = vermiedener Netzbezug durch Eigenversorgung (PV + Akku-Entladung).
+            house_load_w = state_data.house_power + max(0.0, state_data.wallbox_power)
+            battery_charge_w = max(0.0, state_data.battery_power)
             grid_draw_w_for_savings = max(0.0, -state_data.grid_power)
-            self_supplied_w = max(0.0, state_data.house_power - grid_draw_w_for_savings)
+            self_supplied_w = max(
+                0.0,
+                house_load_w + battery_charge_w - grid_draw_w_for_savings,
+            )
             if self_supplied_w > 0:
                 self_supplied_kwh = self_supplied_w / 1000 * interval_h
                 self.stats[STAT_PV_SAVINGS_TODAY_EUR] += self_supplied_kwh * _buy_price
@@ -1185,6 +1201,7 @@ class E3DCMaestroCoordinator(
         main_end = self._pv_main_last_kwh
         self.stats = {k: 0.0 for k in self.stats}
         self._additional_bases = {}
+        self._additional_last_delta = {}
         self._wallbox_energy_last_power = None
         self._wallbox_energy_power_changed_at = None
         self._pv_main_end_kwh = main_end
@@ -1312,6 +1329,9 @@ class E3DCMaestroCoordinator(
         for entity_id in total_ids:
             total_now = self._read_energy_total_kwh(entity_id)
             if total_now is None:
+                deltas += self._additional_last_delta.get(entity_id, 0.0)
+                if entity_id in self._additional_bases:
+                    totals_ok += 1
                 continue
             if entity_id not in self._additional_bases:
                 change = await self._async_today_stat_change(entity_id)
@@ -1320,7 +1340,9 @@ class E3DCMaestroCoordinator(
                 else:
                     # Kein Recorder: ab jetzt zählen (Vormittag geht verloren).
                     self._additional_bases[entity_id] = total_now
-            deltas += max(0.0, total_now - self._additional_bases[entity_id])
+            day_delta = max(0.0, total_now - self._additional_bases[entity_id])
+            self._additional_last_delta[entity_id] = day_delta
+            deltas += day_delta
             totals_ok += 1
 
         # Leistung ohne passenden Energiezähler (Index ≥ Anzahl Totals) integrieren.
