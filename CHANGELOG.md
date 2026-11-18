@@ -11,6 +11,19 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.10] – Wallbox-Lademodi und Phasenzahl zur Laufzeit (2026-11-18)
+
+Beta nach 0.5.9-beta.9. Ausführlich: [docs/release-notes/v0.5.9-beta.10.md](docs/release-notes/v0.5.9-beta.10.md).
+
+### Neu
+- **Lademodus für die Wallbox.** Solar, Solar + günstiges Netz (Preisgrenze oder Preisplan-Slot), Sofort und Aus, als Select im Wallbox-Tab (Discussion #59).
+- **Phasenzahl zur Laufzeit.** Bei der E3DC-Wallbox automatisch aus e3dc_rscp, sonst über eine wählbare Entität.
+- **Akku darf Auto mitversorgen.** Standardmäßig aus: bei Netzladung des Autos versorgt der Akku nur das Haus.
+- **Sofort nach Abstecken zurücksetzen.** Der Modus Sofort springt nach dem Abstecken auf Solar.
+- **Erklärung je Modus** im Wallbox-Tab.
+
+---
+
 ## [0.5.9-beta.9] – Preisplan im Support-Dump (2026-11-18)
 
 Beta nach 0.5.9-beta.8. Ausführlich: [docs/release-notes/v0.5.9-beta.9.md](docs/release-notes/v0.5.9-beta.9.md).
