@@ -194,7 +194,7 @@ class MaestroParams:
     wallbox_priority_enabled: bool = False
     wallbox_priority_min_soc: float = 20.0
     # Lademodus (Maestro-gesteuert): solar | solar_grid | now | off. Preisgrenze
-    # (EUR/kWh) für "solar_grid"; None = nur der Preisplan-Slot zählt als günstig.
+    # (EUR/kWh) für "solar_grid"; None = keine Netzladung.
     # ``wallbox_battery_to_car``: Akku darf bei Netzladung des Autos mitversorgen.
     wallbox_mode: str = "solar"
     wallbox_max_price: float | None = None
@@ -1245,31 +1245,16 @@ def _price_plan_on(
     )
 
 
-def price_plan_charge_slot(
-    params: MaestroParams,
-    price_plan: PricePlanAction | None,
-    curtailment_guard_active: bool = False,
-) -> bool:
-    """Hat der aktive Preisplan gerade einen Ladeslot (``_plan_on and charge_now``)?"""
-    return bool(
-        _price_plan_on(params, price_plan, curtailment_guard_active)
-        and price_plan.charge_now
-    )
+def wallbox_grid_cheap(params: MaestroParams, current_price: float | None) -> bool:
+    """Ist Netzstrom für das Auto günstig? Nur Preis <= Grenze.
 
-
-def wallbox_grid_cheap(
-    params: MaestroParams,
-    current_price: float | None,
-    plan_charge_now: bool,
-) -> bool:
-    """Ist Netzstrom für das Auto günstig? Preis <= Grenze oder Preisplan-Ladeslot."""
+    Preisplan-Slots zählen bewusst nicht: Sie sagen nur, dass der Hausakku
+    nachladen will (oft 1 bis 2 % in 15 Minuten), nicht dass Strom günstig ist.
+    """
     return bool(
-        (
-            params.wallbox_max_price is not None
-            and current_price is not None
-            and current_price <= params.wallbox_max_price
-        )
-        or plan_charge_now
+        params.wallbox_max_price is not None
+        and current_price is not None
+        and current_price <= params.wallbox_max_price
     )
 
 
@@ -1278,7 +1263,6 @@ def wallbox_grid_charging(
     params: MaestroParams,
     *,
     current_price: float | None = None,
-    plan_charge_now: bool = False,
 ) -> bool:
     """Lädt das Auto gerade per Maestro-Modus aus dem Netz ohne Akku-Mitversorgung?
 
@@ -1288,9 +1272,7 @@ def wallbox_grid_charging(
     """
     if params.wallbox_battery_to_car or state.wallbox_power <= WALLBOX_CHARGING_W:
         return False
-    return wallbox_target(
-        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
-    ).from_grid
+    return wallbox_target(state, params, current_price=current_price).from_grid
 
 
 # Phasen, deren Entladegrenze der Wallbox-Netzschutz nicht öffnet. Netzladung,
@@ -1474,7 +1456,6 @@ def wallbox_status(
     plugged: bool | None,
     set_current: float | None,
     current_price: float | None = None,
-    plan_charge_now: bool = False,
 ) -> dict[str, Any]:
     """Momentaufnahme der Wallbox-Regelung für Panel und Attribute.
 
@@ -1495,9 +1476,7 @@ def wallbox_status(
         mode = "waiting" if plugged else "idle"
     else:
         mode = "ready" if plugged else "idle"
-    wb = wallbox_target(
-        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
-    )
+    wb = wallbox_target(state, params, current_price=current_price)
     target = wb.current
     return {
         "mode": mode,
@@ -1643,11 +1622,7 @@ def decide(
         price_plan=price_plan,
     )
     decision = _apply_wallbox_priority(decision, state, params)
-    grid_mode = wallbox_grid_charging(
-        state, params,
-        current_price=current_price,
-        plan_charge_now=price_plan_charge_slot(params, price_plan, curtailment_guard_active),
-    )
+    grid_mode = wallbox_grid_charging(state, params, current_price=current_price)
     decision = _apply_wallbox_discharge_guard(
         decision, state, params, grid_mode_active=grid_mode,
     )
@@ -3179,12 +3154,10 @@ def wallbox_target(
     params: MaestroParams,
     *,
     current_price: float | None = None,
-    plan_charge_now: bool = False,
 ) -> WallboxTarget:
     """Soll-Ladestrom je Modus (siehe ``WALLBOX_MODES``) mit deutscher Begründung.
 
-    ``current_price`` in EUR/kWh. ``plan_charge_now`` kommt aus
-    :func:`price_plan_charge_slot`. ``current=None, turn_off=False`` heißt:
+    ``current_price`` in EUR/kWh. ``current=None, turn_off=False`` heißt:
     Maestro fasst die Wallbox nicht an.
     """
     mode = wallbox_mode_of(params)
@@ -3198,21 +3171,24 @@ def wallbox_target(
         return WallboxTarget(max_a, False, True, f"Sofort: {max_txt}")
 
     prefix = "Solar + Netz" if mode == WALLBOX_MODE_SOLAR_GRID else "Solar"
-    if mode == WALLBOX_MODE_SOLAR_GRID and wallbox_grid_cheap(
-        params, current_price, plan_charge_now,
-    ):
-        if (
-            params.wallbox_max_price is not None
-            and current_price is not None
-            and current_price <= params.wallbox_max_price
-        ):
-            why = (
-                f"Preis {_de_num(current_price * 100)} ct unter Grenze "
-                f"{_de_num(params.wallbox_max_price * 100)} ct"
+    limit = params.wallbox_max_price
+    grid_note = ""
+    if mode == WALLBOX_MODE_SOLAR_GRID:
+        if wallbox_grid_cheap(params, current_price):
+            return WallboxTarget(
+                max_a, False, True,
+                f"{prefix}: Preis {_de_num(current_price * 100)} ct unter Grenze "
+                f"{_de_num(limit * 100)} ct, {max_txt}",
             )
+        if limit is None:
+            grid_note = ", keine Preisgrenze gesetzt"
+        elif current_price is None:
+            grid_note = ", kein Strompreis verfügbar"
         else:
-            why = "Preisplan-Slot"
-        return WallboxTarget(max_a, False, True, f"{prefix}: {why}, {max_txt}")
+            grid_note = (
+                f", Preis {_de_num(current_price * 100)} ct über Grenze "
+                f"{_de_num(limit * 100)} ct"
+            )
 
     surplus = state.pv_power - state.house_power - max(state.battery_power, 0)
     desired = surplus / (230.0 * float(params.wallbox_phases))
@@ -3222,11 +3198,12 @@ def wallbox_target(
         return WallboxTarget(
             None, True, False,
             f"{prefix}: Überschuss {_de_num(surplus / 1000)} kW unter Start "
-            f"{_de_num(start_w / 1000)} kW ({phases_s})",
+            f"{_de_num(start_w / 1000)} kW ({phases_s}){grid_note}",
         )
     return WallboxTarget(
         desired, False, False,
-        f"{prefix}: Überschuss {_de_num(surplus / 1000)} kW, {int(desired)} A × {phases_s}",
+        f"{prefix}: Überschuss {_de_num(surplus / 1000)} kW, "
+        f"{int(desired)} A × {phases_s}{grid_note}",
     )
 
 
@@ -3236,12 +3213,9 @@ def wallbox_desired_current(
     current_wallbox_current: float = 0,
     *,
     current_price: float | None = None,
-    plan_charge_now: bool = False,
 ) -> tuple[float | None, bool]:
     """Return (desired_current_A, turn_off); Dünner Wrapper um :func:`wallbox_target`."""
-    t = wallbox_target(
-        state, params, current_price=current_price, plan_charge_now=plan_charge_now,
-    )
+    t = wallbox_target(state, params, current_price=current_price)
     return t.current, t.turn_off
 
 

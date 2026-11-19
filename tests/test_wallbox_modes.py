@@ -11,7 +11,6 @@ from custom_components.e3dc_maestro.control_engine import (
     _apply_wallbox_grid_battery_cap,
     _apply_wallbox_priority,
     decide,
-    price_plan_charge_slot,
     wallbox_desired_current,
     wallbox_grid_cheap,
     wallbox_status,
@@ -62,7 +61,7 @@ def test_now_ignores_surplus_and_price():
 
 def test_off_and_disabled():
     for p in (_params(wallbox_mode="off"), _params(wallbox_enabled=False, wallbox_mode="now")):
-        t = wallbox_target(_solar_state(), p, current_price=0.0, plan_charge_now=True)
+        t = wallbox_target(_solar_state(), p, current_price=0.0)
         assert (t.current, t.turn_off, t.from_grid) == (None, False, False)
         assert t.reason == "Aus: Maestro steuert die Wallbox nicht"
 
@@ -80,27 +79,18 @@ def test_solar_grid_above_limit_behaves_like_solar():
     assert not t.from_grid and t.current < 16.0 + 1e-9
 
 
-def test_solar_grid_plan_slot_without_price():
+def test_solar_grid_without_limit_never_charges_from_grid():
     p = _params(wallbox_mode="solar_grid")
-    t = wallbox_target(_state(), p, plan_charge_now=True)
-    assert (t.current, t.from_grid) == (16.0, True)
-    assert t.reason == "Solar + Netz: Preisplan-Slot, 16 A × 1 Phase"
+    t = wallbox_target(_state(), p, current_price=-0.05)
+    assert (t.current, t.turn_off, t.from_grid) == (None, True, False)
+    assert t.reason.endswith(", keine Preisgrenze gesetzt")
 
 
-def test_solar_grid_no_price_no_plan_is_solar():
+def test_solar_grid_no_price_is_solar():
     p = _params(wallbox_mode="solar_grid", wallbox_max_price=0.28)
     assert wallbox_desired_current(_state(), p) == (None, True)
-    assert not wallbox_grid_cheap(p, None, False)
-
-
-def test_price_plan_charge_slot_freshness():
-    on = _params(price_plan_enabled=True, price_plan_active=True)
-    assert price_plan_charge_slot(on, SLOT)
-    assert not price_plan_charge_slot(on, None)  # veraltet/fehlend
-    assert not price_plan_charge_slot(_params(price_plan_enabled=True, price_plan_active=False), SLOT)
-    assert not price_plan_charge_slot(_params(price_plan_enabled=False, price_plan_active=True), SLOT)
-    assert not price_plan_charge_slot(on, SLOT, curtailment_guard_active=True)
-    assert not price_plan_charge_slot(on, PricePlanAction(charge_now=False))
+    assert not wallbox_grid_cheap(p, None)
+    assert wallbox_target(_state(), p).reason.endswith(", kein Strompreis verfügbar")
 
 
 def test_explanations():
@@ -110,6 +100,11 @@ def test_explanations():
     )
     assert wallbox_target(_state(pv_power=2000, house_power=900), _params()).reason == (
         "Solar: Überschuss 1,1 kW unter Start 1,4 kW (1 Phase)"
+    )
+    night = _state(pv_power=0, house_power=500)
+    assert wallbox_target(night, p, current_price=0.36).reason == (
+        "Solar + Netz: Überschuss -0,5 kW unter Start 1,4 kW (1 Phase), "
+        "Preis 36 ct über Grenze 28 ct"
     )
     assert wallbox_target(_state(), _params(wallbox_mode="now", wallbox_phases=3)).reason == (
         "Sofort: 16 A × 3 Phasen"
@@ -168,10 +163,16 @@ def test_solar_grid_cheap_caps_and_expensive_does_not():
     assert "Wallbox-Netzschutz" in dear.reason
 
 
-def test_solar_grid_plan_slot_via_decide():
-    p = _params(wallbox_mode="solar_grid", price_plan_enabled=True, price_plan_active=True)
-    out = _decide(_charging(), p, price_plan=PricePlanAction(charge_now=True))
-    assert out.discharge_power_limit == 800.0
+def test_price_plan_slot_does_not_count_as_cheap():
+    # Discussion #59: Grenze 25 ct, Preis 36 ct, Hausakku-Slot aktiv -> kein Netzladen.
+    p = _params(
+        wallbox_mode="solar_grid", wallbox_max_price=0.25,
+        price_plan_enabled=True, price_plan_active=True,
+    )
+    t = wallbox_target(_state(pv_power=0), p, current_price=0.36)
+    assert (t.current, t.turn_off, t.from_grid) == (None, True, False)
+    out = _decide(_charging(), p, current_price=0.36, price_plan=SLOT)
+    assert not any(g.name == "post.wallbox_grid_battery_cap" for g in out.trace.gates)
 
 
 def test_battery_to_car_keeps_guard():

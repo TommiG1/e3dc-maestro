@@ -535,7 +535,7 @@
           "wallbox_min_current": "Mindestladestrom nach IEC 61851 (normalerweise 6 A). Darunter schaltet Maestro die Wallbox lieber ab.",
           "wallbox_included_in_house": "Nur aktivieren, wenn der Hausverbrauchssensor die Wallbox schon mitzählt (z. B. openWB am EVU-Zähler). Bei einer originalen E3DC-Wallbox aus lassen, ihr eigener Leistungsmesser steckt nicht im Hausverbrauch. Dann zieht Maestro die Wallbox live und aus dem gelernten Verbrauchsprofil (Prognose/Preisplan).",
           "wallbox_phases_entity": "Entität mit der aktuellen Phasenzahl (1 oder 3). Bei der E3DC-Wallbox wird der Sensor automatisch gefunden. Ohne gültigen Wert gilt die feste Phasenzahl.",
-          "wallbox_max_price": "Unter dieser Grenze lädt das Auto im Modus Solar + günstiges Netz mit vollem Strom aus dem Netz. 0 bedeutet: nur die günstigen Slots des Preisplans zählen."
+          "wallbox_max_price": "Unter dieser Grenze lädt das Auto im Modus Solar + günstiges Netz mit vollem Strom aus dem Netz. Bei 0 lädt es nur aus Überschuss."
         }
       },
       "evcc": {

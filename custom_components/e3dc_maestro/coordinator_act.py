@@ -371,7 +371,6 @@ class CoordinatorActMixin:
             state,
             self._params,
             current_price=getattr(self, "current_price", None),
-            plan_charge_now=getattr(self, "_wallbox_plan_charge_now", False),
         )
         desired_current, turn_off = target.current, target.turn_off
         now = dt_util.utcnow()

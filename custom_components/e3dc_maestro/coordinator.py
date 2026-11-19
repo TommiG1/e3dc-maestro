@@ -95,7 +95,6 @@ from .control_engine import (
     decide,
     forward_looking_charge_target as _forward_looking_charge_target,
     manual_reserve_soc,
-    price_plan_charge_slot,
     wallbox_mode_of,
     wallbox_waiting_state,
     WALLBOX_MODE_NOW,
@@ -334,7 +333,6 @@ class E3DCMaestroCoordinator(
         self._wallbox_phases_source: str = "config"
         self._wallbox_phases_entity_effective: str | None = None
         self.current_price: float | None = None
-        self._wallbox_plan_charge_now: bool = False
         # Riemann freeze guard: stuck power must not inflate daily kWh.
         self._wallbox_energy_last_power: float | None = None
         self._wallbox_energy_power_changed_at: datetime | None = None
@@ -900,11 +898,6 @@ class E3DCMaestroCoordinator(
             max_discharge_power=self._refresh_max_discharge_power(),
         )
         self.current_price = current_price
-        self._wallbox_plan_charge_now = price_plan_charge_slot(
-            active,
-            self._price_plan_action(now),
-            self._curtailment_guard_active,
-        )
         # F1+: Forward-Looking – Ladeziel dynamisch anheben wenn morgen wenig
         # PV erwartet wird. Pure Funktion → kein Persist, nur Tick-Override.
         if active.forward_looking_enabled:

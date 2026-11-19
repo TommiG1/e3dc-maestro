@@ -337,8 +337,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Solar charges from surplus only. Solar + grid pulls full charge current from the grid when power is cheap. Now always charges at maximum current. Off pauses wallbox control.",
   },
   wallbox_max_price: {
-    de: "Unter dieser Grenze gilt Strom im Modus Solar + Netz als günstig. 0 heißt: nur die günstigen Slots des Preisplans zählen.",
-    en: "Below this limit, power is treated as cheap in Solar + grid mode. 0 means only cheap slots from the price plan count.",
+    de: "Unter dieser Grenze gilt Strom im Modus Solar + Netz als günstig. Bei 0 lädt das Auto nur aus Überschuss.",
+    en: "Below this limit, power is treated as cheap in Solar + grid mode. At 0 the car only charges from surplus.",
   },
   wallbox_battery_to_car: {
     de: "Bei Netzladung darf der Hausakku das Auto mitversorgen. Aus ist der Standard, damit der Akku nur das Haus deckt und nicht ins Auto entlädt.",

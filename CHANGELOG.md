@@ -11,6 +11,13 @@ einen eigenen Versionsabschnitt verschieben.
 
 ---
 
+## [0.5.9-beta.13] – Wallbox nur noch nach Preisgrenze (2026-11-19)
+
+Beta nach 0.5.9-beta.12. Ausführlich: [docs/release-notes/v0.5.9-beta.13.md](docs/release-notes/v0.5.9-beta.13.md).
+
+### Geändert
+- **Wallbox Solar + Netz:** Günstig heißt nur noch Preis unter der Grenze. Preisplan-Slots zählen nicht mehr fürs Auto (Discussion #59). Bei Grenze 0 lädt nur noch Überschuss. Der Erklärsatz nennt den Preisgrund.
+
 ## [0.5.9-beta.12] – Morgen-Entladung, Sicherheit und Statistik-Korrekturen (2026-11-18)
 
 Beta nach 0.5.9-beta.11. Ausführlich: [docs/release-notes/v0.5.9-beta.12.md](docs/release-notes/v0.5.9-beta.12.md).

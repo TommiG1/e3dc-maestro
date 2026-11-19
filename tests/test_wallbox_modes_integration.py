@@ -74,7 +74,6 @@ class _Fake(CoordinatorActMixin):
         self._consecutive_rscp_failures = 0
         self._rscp_watchdog_notified = False
         self.current_price = None
-        self._wallbox_plan_charge_now = False
         self.calls: list[tuple[str, str, dict]] = []
         self.logs: list[str] = []
         st = {k: SimpleNamespace(state=v) for k, v in (states or {}).items()}
