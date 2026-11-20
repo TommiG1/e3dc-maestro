@@ -15,7 +15,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -35,6 +34,7 @@ from .const import (
     CONF_WALLBOX_MODE,
     CONF_WALLBOX_MODE_RESET,
     CONF_WALLBOX_MAX_PRICE,
+    CONF_WALLBOX_ENABLED,
     CONF_WALLBOX_PLUG_ENTITY,
     CONF_WALLBOX_POWER_SENSOR,
     DEFAULT_WALLBOX_MODE_RESET,
@@ -102,7 +102,7 @@ from .control_engine import (
     WALLBOX_MODES,
     tariff_schedule_from_params as _tariff_schedule_from_params,
 )
-from .coordinator_act import CoordinatorActMixin
+from .coordinator_act import CoordinatorActMixin, parse_plug_state
 from .coordinator_diagnostics import CoordinatorDiagnosticsMixin
 from .coordinator_forecast import CoordinatorForecastMixin
 from .coordinator_helpers import (
@@ -787,12 +787,15 @@ class E3DCMaestroCoordinator(
         self._wallbox_power_instant = _instant_wallbox
 
         # Wallbox-Vorrang: wartet ein angestecktes Auto auf Solarstrom?
-        _plug_eid = opts.get(CONF_WALLBOX_PLUG_ENTITY)
+        _plug_eid = (
+            self._wallbox_plug_entity_id(opts)
+            if opts.get(CONF_WALLBOX_ENABLED)
+            else opts.get(CONF_WALLBOX_PLUG_ENTITY)
+        )
         _plugged: bool | None = None
         if _plug_eid:
             _ps = self.hass.states.get(_plug_eid)
-            if _ps is not None and _ps.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                _plugged = _ps.state.lower() in ("on", "true", "1", "yes", "connected", "plugged")
+            _plugged = parse_plug_state(_ps.state if _ps is not None else None)
         if _plugged is not None and self._wallbox_plugged is not None and _plugged != self._wallbox_plugged:
             self._wallbox_record("plug" if _plugged else "unplug")
         self._maybe_reset_wallbox_mode(_plugged)

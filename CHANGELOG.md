@@ -9,6 +9,11 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Behoben
+- **Wallbox stoppt auch, wenn die Box von selbst lädt.** Maestro prüft beim Abschalten die echte Wallbox-Leistung und den Ladestatus statt nur den eigenen letzten Befehl. Lädt die Box nach dem Anstecken selbst, sendet Maestro nach den 2 Minuten Hysterese erneut den Stopp und trägt ihn im Verlauf ein (Discussion #59). Dadurch versorgt der Hausakku das Auto nicht mehr stundenlang mit.
+- **Kein Start und kein Toggle ohne Auto.** Ist kein Auto angesteckt (oder der Steckerstatus nicht verfügbar), startet Maestro die Wallbox nicht und drückt keinen Lade-Toggle. Bei der E3DC-Wallbox wird der Steckersensor aus e3dc_rscp automatisch genutzt.
+- **Kein blinder Toggle nach dem HA-Neustart.** Maestro übernimmt zuerst den echten Zustand der Box und schaltet erst dann.
+
 ---
 
 ## [0.5.9-beta.13] – Wallbox nur noch nach Preisgrenze (2026-11-19)
