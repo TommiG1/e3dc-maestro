@@ -1,15 +1,27 @@
 {
   "domain": "e3dc_maestro",
   "name": "E3DC Maestro",
-  "after_dependencies": ["lovelace", "energy", "recorder"],
-  "codeowners": ["@TommiG1"],
+  "after_dependencies": [
+    "lovelace",
+    "energy",
+    "recorder"
+  ],
+  "codeowners": [
+    "@TommiG1"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "lovelace", "panel_custom", "websocket_api"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "lovelace",
+    "panel_custom",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/TommiG1/e3dc-maestro",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/TommiG1/e3dc-maestro/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.5.9-beta.13"
+  "version": "0.6.0-rc.1"
 }

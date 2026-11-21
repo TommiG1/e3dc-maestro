@@ -9,6 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+---
+
+## [0.6.0-rc.1] – Wallbox-Stopp und Akku-Schutz (2026-11-21)
+
+Erster Release Candidate für 0.6.0. Enthält die 0.5.9-Betas bis beta.13 plus die Wallbox-Korrekturen aus Discussion #59. Ausführlich: [docs/release-notes/v0.6.0-rc.1.md](docs/release-notes/v0.6.0-rc.1.md).
+
 ### Geändert
 - **Wallbox-Tab: Vorrang-SoC direkt beim Schalter.** Ist der Wallbox-Vorrang an, steht „Vorrang ab Akku-SoC“ als Zahlenfeld gleich darunter. Die Erklärungen zu Vorrang, Netzschutz und „Akku darf Auto mitversorgen“ sagen jetzt, in welchen Modi sie gelten und wie Netzschutz und Akku-Mitversorgung zusammenspielen.
 
@@ -17,8 +23,6 @@ einen eigenen Versionsabschnitt verschieben.
 - **Kein Start und kein Toggle ohne Auto.** Ist kein Auto angesteckt (oder der Steckerstatus nicht verfügbar), startet Maestro die Wallbox nicht und drückt keinen Lade-Toggle. Bei der E3DC-Wallbox wird der Steckersensor aus e3dc_rscp automatisch genutzt.
 - **Kein blinder Toggle nach dem HA-Neustart.** Maestro übernimmt zuerst den echten Zustand der Box und schaltet erst dann.
 - **Akku versorgt das Auto auch bis zum Stopp nicht mit.** Lädt die Box im Modus Solar + Netz, obwohl Maestro sie gerade stoppen will, öffnet der Netzschutz den Akku nicht mehr fürs Auto, solange „Akku darf Auto mitversorgen“ aus ist. Der Akku deckt dann nur das Haus. Im reinen Solar-Modus bleibt der Netzschutz wie bisher.
-
----
 
 ## [0.5.9-beta.13] – Wallbox nur noch nach Preisgrenze (2026-11-19)
 
