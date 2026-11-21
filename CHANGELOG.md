@@ -9,8 +9,20 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+_(nichts offen)_
+
+---
+
+## [0.6.0-rc.2] – Preisplan und Entladesperre (2026-11-21)
+
+Zweiter Release Candidate für 0.6.0 mit zwei Preisplan-Korrekturen aus Discussion #50 und Issue #62. Ausführlich: [docs/release-notes/v0.6.0-rc.2.md](docs/release-notes/v0.6.0-rc.2.md).
+
 ### Neu
 - **Wallbox-Tab: Empfohlene Einstellungen.** Eine Karte beschreibt für drei Fälle genau, was du wo einstellst: E3DC-Wallbox mit Maestro-Regelung, openWB, go-e oder andere Wallbox mit Ladestrom über Maestro, und eine Wallbox, die selbst regelt. Jeder Schritt nennt zuerst den Ort (Einstellungen, Wallbox-Anbindung oder Schnellschalter im Tab) und dann die Einstellung. Der zur Einrichtung passende Fall ist aufgeklappt.
+
+### Behoben
+- **Preisplan: Akku entlädt nicht mehr zwischen zwei Ladeslots.** Sagte die Prognose für die aktuelle Viertelstunde PV-Überschuss voraus, konnte der Preisplan dort nie „Entladung halten“ setzen. Kam dann eine große Last oder weniger Sonne, deckte der Akku das Haus und wurde im nächsten günstigen Slot mit Verlust wieder aus dem Netz geladen. Jetzt hält Maestro auch in diesem Fall, sobald die Akku-Energie später mehr wert ist als der Strom jetzt. Ist Nachladen später deutlich günstiger, bleibt die Entladung frei (Discussion #50).
+- **Entladesperre blockiert keine geplante Netzladung mehr.** Mit eingeschalteter Entladesperre lief eine vom Preisplan geplante Netzladung nicht an. Jetzt lädt der Preisplan trotz Sperre bis zu seinem Ziel, danach greift die Sperre wieder.
 
 ---
 

@@ -1872,7 +1872,12 @@ def _decide_core(
     # ── 1.6 Manuelle Entladesperre (Dashboard-Schalter) ─────────────────────
     # NORMAL + Entlade-Cap: PV darf laden, Entladung nur bis zur eingestellten
     # Leistung (0 W = voll sperren). Gegenstück zur erzwungenen Entladung.
-    gate = eval_gate("1.6.discharge_lock", term("discharge_lock", discharge_lock, op=is_true))
+    # Geplante Netzladung des Preisplans entlädt nicht und läuft daher weiter.
+    gate = eval_gate(
+        "1.6.discharge_lock",
+        term("discharge_lock", discharge_lock, op=is_true),
+        term("plan_charge", _plan_charge, op=is_false),
+    )
     trace.record(gate)
     if gate.result:
         limit_w = max(0.0, min(float(params.discharge_lock_power_w), params.max_charge_power))

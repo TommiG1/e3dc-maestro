@@ -4515,6 +4515,22 @@ class TestPricePlanActive:
         assert d.discharge_power_limit == 0.0
         assert d.charge_power_limit is None
 
+    def test_manual_discharge_lock_lets_plan_charge_run(self):
+        d = decide(
+            self._s(40), self._p(), _now(1, 15, 2), discharge_lock=True,
+            price_plan=PricePlanAction(charge_now=True, target_soc=70.0),
+        )
+        assert d.phase == PHASE_GRID_CHARGE
+
+    def test_manual_discharge_lock_after_plan_target(self):
+        from custom_components.e3dc_maestro.const import PHASE_DISCHARGE_LOCK
+
+        d = decide(
+            self._s(70), self._p(), _now(1, 15, 2), discharge_lock=True,
+            price_plan=PricePlanAction(charge_now=True, target_soc=70.0),
+        )
+        assert d.phase == PHASE_DISCHARGE_LOCK
+
     def test_inactive_switch_is_shadow_only(self):
         d = decide(
             self._s(40), self._p(price_plan_active=False), _now(1, 15, 2),

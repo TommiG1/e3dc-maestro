@@ -172,6 +172,29 @@ class TestPricePlanHold:
         plan = _plan(_day_30_60(), 0.5, soc_pct=30.0, floor_pct=5.0)
         assert plan.hold_now == plan.hold_discharge[0]
 
+    def test_holds_now_despite_forecast_surplus_before_grid_charge(self):
+        """Discussion #50: Prognose sagt jetzt PV-Überschuss, gleich teuer wird
+        nachgeladen. Eine reale Last darf den Akku nicht ungeplant leeren."""
+        prices = [0.37, 0.37, 0.39, 0.45, 0.45, 0.45]
+        plan = _plan(
+            prices, [0.1, 0.5, 0.5, 1.5, 1.5, 1.5], pv=[0.3, 0.0, 0.0, 0.0, 0.0, 0.0],
+            soc_pct=40.0, floor_pct=5.0, ceiling_pct=95.0,
+            efficiency=0.9, min_spread=0.03,
+        )
+        assert plan.total_grid_charge_kwh > 0
+        assert plan.hold_now is True
+        assert plan.hold_discharge[0] and not plan.release[0]
+
+    def test_no_hold_on_forecast_surplus_when_refill_is_cheaper(self):
+        """Nachts billig nachladen: Entladung jetzt (40 ct) bleibt frei."""
+        prices = [0.40] * 4 + [0.15] * 4 + [0.40] * 16
+        plan = _plan(
+            prices, [0.0] * 4 + [0.5] * 20, pv=[1.0] * 4 + [0.0] * 20,
+            soc_pct=20.0, floor_pct=5.0,
+        )
+        assert plan.total_grid_charge_kwh > 0
+        assert plan.hold_now is False
+
     def test_no_hold_on_flat_prices(self):
         plan = _plan([0.30] * 24, 0.5, soc_pct=30.0)
         assert not any(plan.hold_discharge)

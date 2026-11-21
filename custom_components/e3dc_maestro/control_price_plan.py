@@ -174,6 +174,7 @@ class _Model:
         grid: list[float] = []
         rel_flags: list[bool] = []
         hold_flags: list[bool] = []
+        dis_flags: list[bool] = []
         imports: list[float] = []
         stored_end: list[float] = []
         cost_real = 0.0
@@ -198,6 +199,7 @@ class _Model:
             grid.append(a)
             rel_flags.append(rel)
             hold_flags.append(held and not rel)
+            dis_flags.append(rel and self.net[i] < 0.0 and imp < -self.net[i] - _EPS)
             imports.append(imp)
             cost_real += cost
             budget_left -= a
@@ -207,11 +209,20 @@ class _Model:
             "grid": grid,
             "release": rel_flags,
             "hold": hold_flags,
+            "discharge": dis_flags,
             "imports": imports,
             "stored_end": stored_end,
             "cost": cost_real,
             "total": sum(grid),
         }
+
+    def stored_worth_more_than_now(self, v: list[list[float]], s_end: float) -> bool:
+        """Kostet eine aus Slot 0 entnommene kWh danach mehr als der Bezug jetzt?"""
+        d = min(self.q, s_end - self.floor)
+        if self.n == 0 or d <= _EPS:
+            return False
+        marginal = (self.interp(v[1], s_end - d) - self.interp(v[1], s_end)) / d
+        return marginal > self.p[0] + _TIE
 
     def baseline(self, stored0: float) -> tuple[float, list[float], float]:
         """Verhalten ohne Plan: keine Netzladung, Entladung immer freigegeben."""
@@ -303,7 +314,8 @@ def plan_price_charging(
     # Lösung ohne Budgetdruck; reicht das Budget nicht, wird per Schattenpreis
     # (Strafe je geladener Netz-kWh) auf das Budget heruntergeregelt.
     penalty = min_spread
-    result = model.forward(model.backward(penalty, budget), stored0, penalty, budget)
+    values = model.backward(penalty, budget)
+    result = model.forward(values, stored0, penalty, budget)
     if result["total"] > budget + _EPS:
         lo, hi = penalty, penalty + 1.0
         for _ in range(_BISECTION_ITERATIONS):
@@ -313,7 +325,17 @@ def plan_price_charging(
                 lo = mid
             else:
                 hi = mid
-        result = model.forward(model.backward(hi, budget), stored0, hi, budget)
+        values = model.backward(hi, budget)
+        result = model.forward(values, stored0, hi, budget)
+
+    # Die Prognose kennt im aktuellen Slot oft keinen Verbrauch über der PV, real
+    # kommen Wolken oder eine große Last. Entladung, die der Plan hier nicht
+    # vorsieht, nur zulassen, wenn die Akku-Energie später weniger wert ist als
+    # der Bezug jetzt – sonst wird sie teurer nachgeladen oder fehlt im Halten.
+    if not result["hold"][0] and not result["discharge"][0]:
+        if model.stored_worth_more_than_now(values, result["stored_end"][0]):
+            result["hold"][0] = True
+            result["release"][0] = False
 
     grid = result["grid"]
     total = result["total"]
