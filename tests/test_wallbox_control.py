@@ -11,6 +11,8 @@ from unittest.mock import patch
 from custom_components.e3dc_maestro import coordinator_act
 from custom_components.e3dc_maestro.const import (
     CONF_WALLBOX_CURRENT_ENTITY,
+    CONF_WALLBOX_PLUG_ENTITY,
+    CONF_WALLBOX_POWER_SENSOR,
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
     CONF_WALLBOX_TYPE,
@@ -136,7 +138,7 @@ class _Fake(CoordinatorActMixin):
         self.logs.append(msg)
 
 
-def _registry():
+def _registry(full: bool = False):
     def ent(entity_id, key, device="wb1"):
         return SimpleNamespace(entity_id=entity_id, platform=E3DC_RSCP_DOMAIN, disabled_by=None,
                                device_id=device, translation_key=key)
@@ -145,11 +147,14 @@ def _registry():
         "b": ent("button.wb_toggle", "wallbox-toggle-wallbox-charging"),
         "c": ent("binary_sensor.wb_canceled", "wallbox-charging-canceled"),
     }
+    if full:
+        entities["d"] = ent("binary_sensor.wb_plug", "wallbox-plug")
+        entities["e"] = ent("binary_sensor.wb_charging", "wallbox-charging")
     return SimpleNamespace(entities=entities)
 
 
-def _run(c: _Fake, state: MaestroState, opts: dict) -> None:
-    with patch.object(coordinator_act.er, "async_get", return_value=_registry(), create=True):
+def _run(c: _Fake, state: MaestroState, opts: dict, *, full: bool = False) -> None:
+    with patch.object(coordinator_act.er, "async_get", return_value=_registry(full), create=True):
         asyncio.run(c._async_act_wallbox(state, opts))
 
 
@@ -172,6 +177,8 @@ def test_e3dc_resumes_canceled_charging():
 
 def test_e3dc_stop_uses_toggle_once():
     c = _Fake({"binary_sensor.wb_canceled": "off"})
+    c._last_wallbox_current = 7
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=120)
     _run(c, _state(1000), E3DC)
     assert c.calls == [("button", "press", {"entity_id": "button.wb_toggle"})]
     assert c._last_wallbox_current == 0
@@ -217,6 +224,8 @@ def test_history_records_start_change_and_single_error():
 
 def test_e3dc_stop_skips_toggle_when_already_canceled():
     c = _Fake({"binary_sensor.wb_canceled": "on"})
+    c._last_wallbox_current = 7
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=120)
     _run(c, _state(1000), E3DC)
     assert c.calls == []
     assert c._last_wallbox_current == 0
@@ -276,3 +285,129 @@ def test_generic_service_formats():
     asyncio.run(c._call_generic_service("switch.turn_on"))
     asyncio.run(c._call_generic_service({"domain": "switch", "service": "turn_off", "data": {"entity_id": "switch.x"}}))
     assert c.calls == [("switch", "turn_on", {}), ("switch", "turn_off", {"entity_id": "switch.x"})]
+
+
+# ── Ist-Zustand der Box statt nur letzter Maestro-Befehl (Discussion #59) ──
+
+TOGGLE = ("button", "press", {"entity_id": "button.wb_toggle"})
+E3DC_POWER = {CONF_WALLBOX_TYPE: WALLBOX_TYPE_E3DC, CONF_WALLBOX_POWER_SENSOR: "sensor.wb_power"}
+
+
+def _box(power: float, plug: str = "on", canceled: str = "off", **extra: str) -> _Fake:
+    c = _Fake({
+        "binary_sensor.wb_canceled": canceled,
+        "binary_sensor.wb_plug": plug,
+        "sensor.wb_power": str(power),
+        **extra,
+    })
+    c._wallbox_power_instant = power
+    return c
+
+
+def _expire_hysteresis(c: _Fake) -> None:
+    c._wallbox_below_since = dt_util.utcnow() - timedelta(seconds=120)
+
+
+def test_stop_resent_when_last_off_but_box_charges_by_itself():
+    # Maestro hatte schon gestoppt (last=0), Auto angesteckt, Box lädt selbst 3,4 kW.
+    c = _box(3400)
+    c._last_wallbox_current = 0
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == [] and c._wallbox_below_since is not None  # Hysterese bleibt
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == [TOGGLE]
+    assert c._last_wallbox_current == 0
+    assert [e["kind"] for e in c._wallbox_history] == ["stop"]
+
+
+def test_stop_resent_from_e3dc_charging_status_without_power_sensor():
+    c = _box(0, **{"binary_sensor.wb_charging": "on"})
+    c._last_wallbox_current = 0
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC, full=True)
+    assert c.calls == [TOGGLE]
+
+
+def test_no_action_when_last_off_and_box_idle():
+    c = _box(0)
+    c._last_wallbox_current = 0
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == [] and c._wallbox_below_since is None
+    assert c._wallbox_history == deque()
+
+
+def test_no_retoggle_while_stop_already_set_and_power_lags():
+    # Nach dem Stopp-Toggle ist "Laden abgebrochen" an, die Leistung hängt nach.
+    c = _box(3400, canceled="on")
+    c._last_wallbox_current = 0
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == [] and c._wallbox_history == deque()
+
+
+def test_no_start_or_toggle_without_car():
+    for params, price in (
+        (_params(), None),  # Solar mit Überschuss
+        (_params(wallbox_mode="now"), None),
+        (_params(wallbox_mode="solar_grid", wallbox_max_price=0.30), 0.08),  # 00:30 günstig
+    ):
+        for plug in ("off", "unavailable"):
+            c = _box(0, plug=plug, canceled="on")
+            c._params = params
+            c.current_price = price
+            _run(c, _state(6000), E3DC_POWER, full=True)
+            assert c.calls == [], (params.wallbox_mode, plug)
+            assert c._last_wallbox_current is None
+            assert c._wallbox_history == deque()
+
+
+def test_start_with_car_plugged():
+    c = _box(0, plug="on", canceled="on")
+    _run(c, _state(6000), E3DC_POWER, full=True)
+    assert c.calls == [
+        (E3DC_RSCP_DOMAIN, SERVICE_SET_WALLBOX_CURRENT, {"device_id": "wb1", "max_charge_current": 7}),
+        TOGGLE,
+    ]
+
+
+def test_configured_plug_entity_blocks_generic_start():
+    opts = {
+        CONF_WALLBOX_TYPE: WALLBOX_TYPE_GENERIC,
+        CONF_WALLBOX_PLUG_ENTITY: "binary_sensor.goe_plug",
+        CONF_WALLBOX_SERVICE_ON: "switch.turn_on",
+    }
+    c = _Fake({"binary_sensor.goe_plug": "off"})
+    _run(c, _state(6000), opts)
+    assert c.calls == []
+
+
+def test_restart_without_car_adopts_off_without_toggle():
+    c = _box(0, plug="off")
+    assert c._last_wallbox_current is None
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == []
+    assert c._last_wallbox_current == 0
+    assert any("übernommen" in log for log in c.logs)
+    # Folgeticks bleiben ruhig.
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == []
+
+
+def test_restart_with_unknown_box_state_never_toggles_blind():
+    c = _Fake({"binary_sensor.wb_canceled": "off"})
+    _run(c, _state(0), E3DC)
+    assert c.calls == [] and c._last_wallbox_current is None
+
+
+def test_restart_with_car_charging_and_target_off_stops_after_hysteresis():
+    c = _box(3400)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == []  # erst Ist-Zustand übernehmen, nicht sofort toggeln
+    _expire_hysteresis(c)
+    _run(c, _state(0), E3DC_POWER, full=True)
+    assert c.calls == [TOGGLE]
+    assert c._last_wallbox_current == 0
+    assert [e["kind"] for e in c._wallbox_history] == ["stop"]

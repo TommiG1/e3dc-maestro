@@ -154,13 +154,27 @@ def test_grid_mode_skips_guard_and_caps_to_house():
     assert any(g.name == "post.wallbox_grid_battery_cap" for g in out.trace.gates)
 
 
-def test_solar_grid_cheap_caps_and_expensive_does_not():
+def test_solar_grid_cheap_and_expensive_both_cap():
     p = _params(wallbox_mode="solar_grid", wallbox_max_price=0.28)
     cheap = _decide(_charging(), p, current_price=0.20)
     assert cheap.discharge_power_limit == 800.0
+    # Discussion #59: Box lädt selbst, Maestro will aus -> Akku nicht ins Auto.
     dear = _decide(_charging(), p, current_price=0.40)
-    assert dear.discharge_power_limit == 3000.0  # Netzschutz wie bisher
-    assert "Wallbox-Netzschutz" in dear.reason
+    assert dear.discharge_power_limit == 800.0
+    assert "Wallbox-Netzschutz" not in dear.reason
+
+
+def test_solar_grid_expensive_with_surplus_keeps_guard():
+    p = _params(wallbox_mode="solar_grid", wallbox_max_price=0.28)
+    sunny = _state(soc=60, pv_power=6000, house_power=1000, wallbox_power=3600)
+    out = _decide(sunny, p, current_price=0.40)
+    assert not any(g.name == "post.wallbox_grid_battery_cap" for g in out.trace.gates)
+
+
+def test_solar_mode_turn_off_keeps_guard():
+    out = _decide(_charging(), _params())
+    assert out.discharge_power_limit == 3000.0
+    assert "Wallbox-Netzschutz" in out.reason
 
 
 def test_price_plan_slot_does_not_count_as_cheap():

@@ -341,8 +341,8 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Below this limit, power is treated as cheap in Solar + grid mode. At 0 the car only charges from surplus.",
   },
   wallbox_battery_to_car: {
-    de: "Bei Netzladung darf der Hausakku das Auto mitversorgen. Aus ist der Standard, damit der Akku nur das Haus deckt und nicht ins Auto entlädt.",
-    en: "While charging from the grid, the home battery may help power the car. Off is the default so the battery only covers the house.",
+    de: "Bei Netzladung darf der Hausakku das Auto mitversorgen. Das gilt auch, wenn die Box in Solar + Netz noch lädt, während Maestro sie stoppt, etwa weil sie nach dem Anstecken von selbst gestartet ist. Aus ist der Standard, damit der Akku nur das Haus deckt und nicht ins Auto entlädt.",
+    en: "While charging from the grid, the home battery may help power the car. This also applies while the box is still charging in Solar + grid as Maestro stops it, for example after it started on its own when plugged in. Off is the default so the battery only covers the house.",
   },
   wallbox_mode_reset: {
     de: "Nach dem Abstecken wechselt Maestro vom Modus Sofort zurück auf Solar, wenn der Schalter an ist.",
@@ -373,16 +373,16 @@ export const SETTING_TIPS: Record<string, { de: string; en: string }> = {
     en: "Generic wallbox only: entity Maestro writes the charge current in amps to.",
   },
   wallbox_priority_enabled: {
-    de: "Wartet ein angestecktes Auto auf Solarstrom, bekommt es den Überschuss zuerst. Maestro begrenzt dafür die Akku-Ladung.",
-    en: "When a plugged-in car waits for solar power it gets the surplus first. Maestro limits battery charging for that.",
+    de: "Wartet ein angestecktes Auto auf Solarstrom, bekommt es den Überschuss zuerst. Maestro begrenzt dafür die Akku-Ladung. Gilt in Solar und Solar + Netz, nicht bei Sofort.",
+    en: "When a plugged-in car waits for solar power it gets the surplus first. Maestro limits battery charging for that. Applies in Solar and Solar + grid, not in Now.",
   },
   wallbox_priority_min_soc: {
-    de: "Unter diesem Akku-Ladestand lädt der Akku wieder zuerst.",
-    en: "Below this battery level the battery charges first again.",
+    de: "Unter diesem Akku-Ladestand lädt der Akku wieder zuerst und das Auto wartet. Bei 80 % bekommt das Auto den Überschuss also erst, wenn der Akku mindestens 80 % hat.",
+    en: "Below this battery level the battery charges first again and the car waits. At 80 % the car only gets the surplus once the battery is at least 80 %.",
   },
   wallbox_discharge_guard_enabled: {
-    de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt. Hält der Preisplan oder der HT-Schutz den Akku für teure Stunden zurück, bleibt die Entladung gesperrt.",
-    en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped. When the price plan or HT protection saves the battery for expensive hours, discharge stays locked.",
+    de: "Gibt die Akku-Entladung frei, solange das Auto lädt, damit kein Strom aus dem Netz kommt. Die Wallbox wird nicht gestoppt. Hält der Preisplan oder der HT-Schutz den Akku für teure Stunden zurück, bleibt die Entladung gesperrt. Bei Netzladung und während Maestro die Box in Solar + Netz stoppt, bleibt der Akku ebenfalls draußen, außer „Akku darf Auto mitversorgen“ ist an.",
+    en: "Opens battery discharge while the car charges so nothing is drawn from the grid. The wallbox is not stopped. When the price plan or HT protection saves the battery for expensive hours, discharge stays locked. During grid charging and while Maestro is stopping the box in Solar + grid, the battery also stays out unless “Battery may supply the car” is on.",
   },
   wallbox_discharge_guard_threshold_w: {
     de: "Ab dieser Wallbox-Leistung gibt der Netzschutz die Akku-Entladung frei.",

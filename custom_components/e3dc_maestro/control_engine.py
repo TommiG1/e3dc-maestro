@@ -1268,11 +1268,15 @@ def wallbox_grid_charging(
 
     Wahr bei Modus ``now`` oder ``solar_grid`` (günstig), Auto zieht Strom und
     ``wallbox_battery_to_car`` ist aus. Dann bleibt der Netzschutz zu und die
-    Entladung wird auf den Hausverbrauch begrenzt.
+    Entladung wird auf den Hausverbrauch begrenzt. Ebenso in ``solar_grid``,
+    wenn Maestro die Box stoppen will, sie aber noch lädt (z. B. selbst gestartet).
     """
     if params.wallbox_battery_to_car or state.wallbox_power <= WALLBOX_CHARGING_W:
         return False
-    return wallbox_target(state, params, current_price=current_price).from_grid
+    target = wallbox_target(state, params, current_price=current_price)
+    if target.from_grid:
+        return True
+    return target.turn_off and wallbox_mode_of(params) == WALLBOX_MODE_SOLAR_GRID
 
 
 # Phasen, deren Entladegrenze der Wallbox-Netzschutz nicht öffnet. Netzladung,

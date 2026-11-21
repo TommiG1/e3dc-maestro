@@ -9,6 +9,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components import persistent_notification
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -28,6 +29,8 @@ from .const import (
     CONF_WALLBOX_SERVICE_OFF,
     CONF_WALLBOX_SERVICE_ON,
     CONF_WALLBOX_PHASES_ENTITY,
+    CONF_WALLBOX_PLUG_ENTITY,
+    CONF_WALLBOX_POWER_SENSOR,
     CONF_WALLBOX_TYPE,
     CONF_WATCHDOG_TIMEOUT,
     DEFAULT_WATCHDOG_TIMEOUT,
@@ -46,6 +49,7 @@ from .const import (
     WALLBOX_TYPE_E3DC,
 )
 from .control_engine import (
+    WALLBOX_CHARGING_W,
     MaestroDecision,
     MaestroState,
     hp_action_explanation,
@@ -74,7 +78,18 @@ _E3DC_WALLBOX_ROLES = {
     "wallbox-toggle-wallbox-charging": "toggle",
     "wallbox-charging-canceled": "canceled",
     "wallbox-phases": "phases",
+    "wallbox-plug": "plug",
+    "wallbox-charging": "charging",
 }
+
+_PLUGGED_STATES = ("on", "true", "1", "yes", "connected", "plugged")
+
+
+def parse_plug_state(raw: str | None) -> bool | None:
+    """Steckerstatus aus einem Entity-State; None wenn unbekannt/nicht verfügbar."""
+    if raw is None or raw in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return None
+    return raw.lower() in _PLUGGED_STATES
 
 
 class CoordinatorActMixin:
@@ -378,12 +393,30 @@ class CoordinatorActMixin:
             return
         last = self._last_wallbox_current
         e3dc = opts.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC) == WALLBOX_TYPE_E3DC
+        plugged, plug_sensor = self._wallbox_plug_now(opts)
+        charging = self._wallbox_charging_now(state, opts, e3dc=e3dc, plugged=plugged)
 
         if turn_off:
-            if last == 0:
+            # ``last`` ist nur Maestros eigener Befehl; die Box kann von selbst
+            # laden (Auto angesteckt) oder nach einem Neustart unbekannt sein.
+            if charging is False or (charging is None and last == 0):
+                if charging is False and last != 0:
+                    self._last_wallbox_current = 0
+                    self._log(
+                        "Wallbox lädt nicht, Zustand übernommen"
+                        + (" (nach Neustart)" if last is None else "")
+                    )
                 self._wallbox_below_since = None
                 return
-            if last:
+            if charging is None and last is None and e3dc:
+                # Blinder Toggle nach Neustart könnte eine leere Box einschalten.
+                self._wallbox_below_since = None
+                return
+            if e3dc and last == 0 and self._e3dc_canceled_now() is True:
+                # Stopp ist schon gesetzt; ein weiterer Toggle würde wieder freigeben.
+                self._wallbox_below_since = None
+                return
+            if last or charging:
                 if self._wallbox_below_since is None:
                     self._wallbox_below_since = now
                 if (now - self._wallbox_below_since).total_seconds() < WALLBOX_STOP_HYSTERESIS_SECONDS:
@@ -401,6 +434,8 @@ class CoordinatorActMixin:
                 )
         elif desired_current is not None:
             self._wallbox_below_since = None
+            if plugged is False or (plugged is None and plug_sensor):
+                return
             if last and abs(desired_current - last) < 1.0:
                 return
             ok = await (
@@ -497,6 +532,51 @@ class CoordinatorActMixin:
         if st is None or st.state not in ("on", "off"):
             return None
         return st.state == "on"
+
+    def _e3dc_canceled_now(self) -> bool | None:
+        wb = self._e3dc_wallbox_entities()
+        return self._e3dc_wallbox_canceled(wb) if wb is not None else None
+
+    def _wallbox_plug_entity_id(self, opts: dict) -> str | None:
+        """Configured plug entity or the E3DC wallbox-plug sensor when type is e3dc."""
+        eid = opts.get(CONF_WALLBOX_PLUG_ENTITY)
+        if eid:
+            return eid
+        if opts.get(CONF_WALLBOX_TYPE, WALLBOX_TYPE_E3DC) != WALLBOX_TYPE_E3DC:
+            return None
+        wb = self._e3dc_wallbox_entities()
+        return wb.get("plug") if wb is not None else None
+
+    def _wallbox_plug_now(self, opts: dict) -> tuple[bool | None, bool]:
+        """(angesteckt, Steckersensor vorhanden); angesteckt ist None wenn unbekannt."""
+        eid = self._wallbox_plug_entity_id(opts)
+        if not eid:
+            return None, False
+        st = self.hass.states.get(eid)
+        return parse_plug_state(st.state if st is not None else None), True
+
+    def _wallbox_charging_now(
+        self, state: MaestroState, opts: dict, *, e3dc: bool, plugged: bool | None
+    ) -> bool | None:
+        """Lädt die Box wirklich (Leistung/Ladestatus)? None wenn nicht messbar."""
+        readings: list[bool] = []
+        if e3dc:
+            wb = self._e3dc_wallbox_entities()
+            st = self.hass.states.get(wb.get("charging", "")) if wb is not None else None
+            if st is not None and st.state in ("on", "off"):
+                readings.append(st.state == "on")
+        power_entity = opts.get(CONF_WALLBOX_POWER_SENSOR)
+        st = self.hass.states.get(power_entity) if power_entity else None
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            power = getattr(self, "_wallbox_power_instant", None)
+            if power is None:
+                power = state.wallbox_power
+            readings.append(power > WALLBOX_CHARGING_W)
+        if any(readings):
+            return True
+        if readings or plugged is False:
+            return False
+        return None
 
     async def _e3dc_wallbox_toggle(self, wb: dict[str, str]) -> bool:
         """Lade-Toggle drücken; nie zweimal kurz hintereinander (Status hängt nach)."""

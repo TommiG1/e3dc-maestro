@@ -225,6 +225,44 @@ const wbInputFocused = (el: HTMLInputElement): boolean => {
   return active === el;
 };
 
+function numberRow(
+  c: Ctx,
+  id: string | undefined,
+  label: Key,
+  hint: Key,
+  unit: string,
+  fallback: { min: number; max: number; step: number },
+): TemplateResult | typeof nothing {
+  const entity = id ? c.hass.states[id] : undefined;
+  if (!id || !entity) return nothing;
+  const { t } = c.i18n;
+  const attr = (k: "min" | "max" | "step") => (typeof entity.attributes[k] === "number" ? (entity.attributes[k] as number) : fallback[k]);
+  const shown = num(entity);
+  const text = shown === undefined ? "" : String(shown);
+  return html`<div class="ctrl setting-row stack">
+    <div class="txt"><span class="name"><b>${t(label)}</b></span><span>${t(hint)}</span></div>
+    <label class="setting-num">
+      <input
+        type="number"
+        inputmode="decimal"
+        aria-label=${t(label)}
+        min=${attr("min")}
+        max=${attr("max")}
+        step=${attr("step")}
+        ?disabled=${entity.state === "unavailable" || c.pending.has(id)}
+        ${ref((el) => {
+          if (el instanceof HTMLInputElement && !wbInputFocused(el) && el.value !== text) el.value = text;
+        })}
+        @change=${(e: Event) => {
+          const value = Number.parseFloat((e.target as HTMLInputElement).value);
+          if (Number.isFinite(value)) c.onNumber(id, value);
+        }}
+      />
+      <span>${unit}</span>
+    </label>
+  </div>`;
+}
+
 export function wallboxView(c: Ctx): TemplateResult {
   const { t } = c.i18n;
   const { fmt } = c;
@@ -266,14 +304,7 @@ export function wallboxView(c: Ctx): TemplateResult {
   const modeId = S.wallbox_mode;
   const modeEntity = modeId ? c.hass.states[modeId] : undefined;
   const modeOptions = Array.isArray(modeEntity?.attributes.options) ? (modeEntity.attributes.options as string[]) : [];
-  const priceId = S.wallbox_max_price;
-  const priceEntity = priceId ? c.hass.states[priceId] : undefined;
   const showPrice = chargeMode === "solar_grid" || status?.chargeMode === "solar_grid";
-  const priceShown = num(priceEntity);
-  const priceText = priceShown === undefined ? "" : String(priceShown);
-  const priceMin = typeof priceEntity?.attributes.min === "number" ? priceEntity.attributes.min : 0;
-  const priceMax = typeof priceEntity?.attributes.max === "number" ? priceEntity.attributes.max : 1;
-  const priceStep = typeof priceEntity?.attributes.step === "number" ? priceEntity.attributes.step : 0.005;
 
   const switches = html`<div class="card wb-switches">
     <div class="card-head">
@@ -293,39 +324,19 @@ export function wallboxView(c: Ctx): TemplateResult {
           </select>
         </div>`
       : nothing}
-    ${showPrice && priceId && priceEntity
-      ? html`<div class="ctrl setting-row stack">
-          <div class="txt"><span class="name"><b>${t("wbSwMaxPrice")}</b></span><span>${t("wbSwMaxPriceHint")}</span></div>
-          <label class="setting-num">
-            <input
-              type="number"
-              inputmode="decimal"
-              aria-label=${t("wbSwMaxPrice")}
-              min=${priceMin}
-              max=${priceMax}
-              step=${priceStep}
-              ?disabled=${priceEntity.state === "unavailable" || c.pending.has(priceId)}
-              ${ref((el) => {
-                if (el instanceof HTMLInputElement && !wbInputFocused(el) && el.value !== priceText) el.value = priceText;
-              })}
-              @change=${(e: Event) => {
-                const value = Number.parseFloat((e.target as HTMLInputElement).value);
-                if (Number.isFinite(value)) c.onNumber(priceId, value);
-              }}
-            />
-            <span>€/kWh</span>
-          </label>
-        </div>`
-      : nothing}
+    ${showPrice ? numberRow(c, S.wallbox_max_price, "wbSwMaxPrice", "wbSwMaxPriceHint", "€/kWh", { min: 0, max: 1, step: 0.005 }) : nothing}
     ${QUICK.map(({ key, label, hint }) => {
       const id = S[key];
       const entity = id ? c.hass.states[id] : undefined;
       if (!id || !entity) return nothing;
       const locked = entity.state === "unavailable" || c.pending.has(id);
       return html`<div class="ctrl setting-row">
-        <div class="txt"><span class="name"><b>${t(label)}</b></span><span>${t(hint)}</span></div>
-        <button class="switch ${isOn(entity) ? "on" : ""}" role="switch" aria-checked=${isOn(entity)} aria-label=${t(label)} ?disabled=${locked} @click=${() => c.onToggle(id)}></button>
-      </div>`;
+          <div class="txt"><span class="name"><b>${t(label)}</b></span><span>${t(hint)}</span></div>
+          <button class="switch ${isOn(entity) ? "on" : ""}" role="switch" aria-checked=${isOn(entity)} aria-label=${t(label)} ?disabled=${locked} @click=${() => c.onToggle(id)}></button>
+        </div>
+        ${key === "wallbox_priority_enabled" && isOn(entity)
+          ? numberRow(c, S.wallbox_priority_min_soc, "wbSwPrioritySoc", "wbSwPrioritySocHint", "%", { min: 0, max: 100, step: 5 })
+          : nothing}`;
     })}
   </div>`;
 
