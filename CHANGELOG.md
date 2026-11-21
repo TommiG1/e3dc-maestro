@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Geändert
+- **Wallbox-Tab: Vorrang-SoC direkt beim Schalter.** Ist der Wallbox-Vorrang an, steht „Vorrang ab Akku-SoC“ als Zahlenfeld gleich darunter. Die Erklärungen zu Vorrang, Netzschutz und „Akku darf Auto mitversorgen“ sagen jetzt, in welchen Modi sie gelten und wie Netzschutz und Akku-Mitversorgung zusammenspielen.
+
 ### Behoben
 - **Wallbox stoppt auch, wenn die Box von selbst lädt.** Maestro prüft beim Abschalten die echte Wallbox-Leistung und den Ladestatus statt nur den eigenen letzten Befehl. Lädt die Box nach dem Anstecken selbst, sendet Maestro nach den 2 Minuten Hysterese erneut den Stopp und trägt ihn im Verlauf ein (Discussion #59). Dadurch versorgt der Hausakku das Auto nicht mehr stundenlang mit.
 - **Kein Start und kein Toggle ohne Auto.** Ist kein Auto angesteckt (oder der Steckerstatus nicht verfügbar), startet Maestro die Wallbox nicht und drückt keinen Lade-Toggle. Bei der E3DC-Wallbox wird der Steckersensor aus e3dc_rscp automatisch genutzt.
