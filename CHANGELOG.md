@@ -13,6 +13,7 @@ einen eigenen Versionsabschnitt verschieben.
 - **Wallbox stoppt auch, wenn die Box von selbst lädt.** Maestro prüft beim Abschalten die echte Wallbox-Leistung und den Ladestatus statt nur den eigenen letzten Befehl. Lädt die Box nach dem Anstecken selbst, sendet Maestro nach den 2 Minuten Hysterese erneut den Stopp und trägt ihn im Verlauf ein (Discussion #59). Dadurch versorgt der Hausakku das Auto nicht mehr stundenlang mit.
 - **Kein Start und kein Toggle ohne Auto.** Ist kein Auto angesteckt (oder der Steckerstatus nicht verfügbar), startet Maestro die Wallbox nicht und drückt keinen Lade-Toggle. Bei der E3DC-Wallbox wird der Steckersensor aus e3dc_rscp automatisch genutzt.
 - **Kein blinder Toggle nach dem HA-Neustart.** Maestro übernimmt zuerst den echten Zustand der Box und schaltet erst dann.
+- **Akku versorgt das Auto auch bis zum Stopp nicht mit.** Lädt die Box im Modus Solar + Netz, obwohl Maestro sie gerade stoppen will, öffnet der Netzschutz den Akku nicht mehr fürs Auto, solange „Akku darf Auto mitversorgen“ aus ist. Der Akku deckt dann nur das Haus. Im reinen Solar-Modus bleibt der Netzschutz wie bisher.
 
 ---
 
