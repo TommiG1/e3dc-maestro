@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { makeFmt } from "./format";
 import { energyPeriodSums } from "./history";
-import { makeI18n } from "./i18n";
-import { e3dcConflicts, parseWallboxStatus, surplusPoints, wallboxEventText, wallboxSentence } from "./wallbox";
+import { makeI18n, type Key } from "./i18n";
+import { e3dcConflicts, parseWallboxStatus, recommendedCase, surplusPoints, wallboxEventText, wallboxSentence } from "./wallbox";
 
 const { t } = makeI18n("de");
 const fmt = makeFmt("de");
@@ -143,5 +143,27 @@ describe("e3dcConflicts", () => {
     expect(e3dcConflicts(sw, { ...all, control: false })).toEqual([]);
     expect(e3dcConflicts({ batteryFirst: true, mixedLock: true }, { control: true, priority: false, guard: false })).toEqual([]);
     expect(e3dcConflicts({}, all)).toEqual([]);
+  });
+});
+
+describe("Empfohlene Einstellungen", () => {
+  it("wählt den Fall nach Regelung und Typ", () => {
+    expect(recommendedCase(false, "e3dc")).toBe("self");
+    expect(recommendedCase(false, "generic")).toBe("self");
+    expect(recommendedCase(true, "generic")).toBe("generic");
+    expect(recommendedCase(true, "e3dc")).toBe("e3dc");
+  });
+
+  it("nennt je Schritt Ort und Anweisung in beiden Sprachen", () => {
+    for (const lang of ["de", "en"]) {
+      const { t: tr } = makeI18n(lang);
+      for (const [name, count] of [["wbRecE3dc", 5], ["wbRecGeneric", 6], ["wbRecSelf", 4]] as const) {
+        for (let i = 1; i <= count; i++) {
+          const [where, text] = tr(`${name}${i}` as Key).split("|");
+          expect(where.length).toBeGreaterThan(3);
+          expect(text?.length).toBeGreaterThan(10);
+        }
+      }
+    }
   });
 });

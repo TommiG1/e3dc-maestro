@@ -225,6 +225,40 @@ const wbInputFocused = (el: HTMLInputElement): boolean => {
   return active === el;
 };
 
+type RecCase = "e3dc" | "generic" | "self";
+
+const REC_CASES: readonly { id: RecCase; title: Key; steps: readonly Key[] }[] = [
+  { id: "e3dc", title: "wbRecE3dcTitle", steps: ["wbRecE3dc1", "wbRecE3dc2", "wbRecE3dc3", "wbRecE3dc4", "wbRecE3dc5"] },
+  { id: "generic", title: "wbRecGenericTitle", steps: ["wbRecGeneric1", "wbRecGeneric2", "wbRecGeneric3", "wbRecGeneric4", "wbRecGeneric5", "wbRecGeneric6"] },
+  { id: "self", title: "wbRecSelfTitle", steps: ["wbRecSelf1", "wbRecSelf2", "wbRecSelf3", "wbRecSelf4"] },
+];
+
+/** Welcher Fall zur Einrichtung passt: Maestro regelt nicht, E3DC-Box oder generische Box. */
+export function recommendedCase(controlEnabled: boolean, controller: string): RecCase {
+  if (!controlEnabled) return "self";
+  return controller === "generic" ? "generic" : "e3dc";
+}
+
+/** Jeder Schritt heißt "Ort|Text": der Ort steht fett vor der Anweisung. */
+function recommendations(c: Ctx, current: RecCase): TemplateResult {
+  const { t } = c.i18n;
+  return html`<section class="card wb-rec">
+    <h3>${t("wbRecTitle")}</h3>
+    <div class="sub">${t("wbRecSub")}</div>
+    ${REC_CASES.map(
+      ({ id, title, steps }) => html`<details class="wb-rec-case" ?open=${id === current}>
+        <summary>${t(title)}</summary>
+        <ol>
+          ${steps.map((key) => {
+            const [where, ...rest] = t(key).split("|");
+            return html`<li><b>${where}</b><span>${rest.join("|")}</span></li>`;
+          })}
+        </ol>
+      </details>`,
+    )}
+  </section>`;
+}
+
 function numberRow(
   c: Ctx,
   id: string | undefined,
@@ -389,8 +423,10 @@ export function wallboxView(c: Ctx): TemplateResult {
   </div>`;
 
   const devices = plantWallboxBody(c);
+  const rec = data.configured ? recommendations(c, recommendedCase(status?.controlEnabled ?? false, status?.controller ?? "e3dc")) : nothing;
   return html`${setup}${hero}${conflict}
     <div class="grid wb-row">${dayChart}${switches}</div>
+    ${rec}
     ${energy}
     <div class="grid wb-row">${log}${devices === nothing
       ? nothing

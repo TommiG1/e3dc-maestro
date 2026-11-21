@@ -2385,6 +2385,36 @@ export const styles = css`
   .wb-conflict .sub + .sub {
     margin-top: 6px;
   }
+  .wb-rec h3 {
+    margin: 0 0 4px;
+  }
+  .wb-rec .sub {
+    margin-bottom: 10px;
+  }
+  .wb-rec-case {
+    border-top: 1px solid var(--line, color-mix(in srgb, var(--muted) 25%, transparent));
+    padding: 10px 0;
+  }
+  .wb-rec-case summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .wb-rec-case ol {
+    margin: 10px 0 0;
+    padding-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .wb-rec-case li b {
+    display: block;
+    color: var(--wb);
+  }
+  .wb-rec-case li span {
+    color: var(--muted);
+  }
   .wb-hero-main {
     display: grid;
     grid-template-columns: 1fr auto;

@@ -9,6 +9,9 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+### Neu
+- **Wallbox-Tab: Empfohlene Einstellungen.** Eine Karte beschreibt für drei Fälle genau, was du wo einstellst: E3DC-Wallbox mit Maestro-Regelung, openWB, go-e oder andere Wallbox mit Ladestrom über Maestro, und eine Wallbox, die selbst regelt. Jeder Schritt nennt zuerst den Ort (Einstellungen, Wallbox-Anbindung oder Schnellschalter im Tab) und dann die Einstellung. Der zur Einrichtung passende Fall ist aufgeklappt.
+
 ---
 
 ## [0.6.0-rc.1] – Wallbox-Stopp und Akku-Schutz (2026-11-21)
