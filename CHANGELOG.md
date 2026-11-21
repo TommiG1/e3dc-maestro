@@ -13,7 +13,7 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [0.6.0-rc.1] – Wallbox-Stopp und Akku-Schutz (2026-11-21)
 
-Erster Release Candidate für 0.6.0. Enthält die 0.5.9-Betas bis beta.13 plus die Wallbox-Korrekturen aus Discussion #59. Ausführlich: [docs/release-notes/v0.6.0-rc.1.md](docs/release-notes/v0.6.0-rc.1.md).
+Erster Release Candidate für 0.6.0. Enthält alles seit 0.5.8 (0.5.9-Betas 1 bis 13) plus die Wallbox-Korrekturen aus Discussion #59. Die Release Notes fassen Wallbox, Modul 3, Preisplan und Regelung thematisch zusammen. Ausführlich: [docs/release-notes/v0.6.0-rc.1.md](docs/release-notes/v0.6.0-rc.1.md).
 
 ### Geändert
 - **Wallbox-Tab: Vorrang-SoC direkt beim Schalter.** Ist der Wallbox-Vorrang an, steht „Vorrang ab Akku-SoC“ als Zahlenfeld gleich darunter. Die Erklärungen zu Vorrang, Netzschutz und „Akku darf Auto mitversorgen“ sagen jetzt, in welchen Modi sie gelten und wie Netzschutz und Akku-Mitversorgung zusammenspielen.
