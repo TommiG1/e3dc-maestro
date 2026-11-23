@@ -13,6 +13,17 @@ _(nichts offen)_
 
 ---
 
+## [0.6.0-rc.3] – SoC-Aussetzer, Astro und Prognose (2026-11-23)
+
+Dritter Release Candidate für 0.6.0 mit drei Korrekturen aus Discussion #42. Ausführlich: [docs/release-notes/v0.6.0-rc.3.md](docs/release-notes/v0.6.0-rc.3.md).
+
+### Behoben
+- **Kurze Aussetzer des SoC-Sensors lösen keine Notladung mehr aus.** Ein SoC-Sprung von mehr als 10 % innerhalb eines Takts muss im nächsten Takt bestätigt werden, bevor Maestro darauf reagiert.
+- **Astro-Wartezeit weicht an schwachen PV-Tagen**, wie das Morning-Cap.
+- **Prognose zeigt keine falsche Einspeisung mehr**, wenn der Akku beim Prognoselauf kurz entladen hat und PV-Überschuss da ist.
+
+---
+
 ## [0.6.0-rc.2] – Preisplan und Entladesperre (2026-11-21)
 
 Zweiter Release Candidate für 0.6.0 mit zwei Preisplan-Korrekturen aus Discussion #50 und Issue #62. Ausführlich: [docs/release-notes/v0.6.0-rc.2.md](docs/release-notes/v0.6.0-rc.2.md).
