@@ -364,10 +364,15 @@ def simulate_next_24h(
         if battery_anchor_w is not None:
             if q == 0:
                 battery_anchor_delta_w = float(battery_anchor_w) - bat_net_w
+            model_bat_w = bat_net_w
             bat_net_w += battery_anchor_delta_w * math.exp(
                 -(elapsed_h - _STEP_H) / battery_anchor_tau_h
             )
             bat_net_w = max(-max_disch_w, min(params.max_charge_power, bat_net_w))
+            # A momentary discharge (load spike) must not be carried into
+            # surplus steps, else the forecast exports PV while the SoC falls.
+            if pv_surplus_w > 0 and model_bat_w >= 0:
+                bat_net_w = max(0.0, bat_net_w)
 
         # The real loop runs every ~30 s and stops grid charging exactly at the
         # reserve; one 15-min step at full power would overshoot it by several

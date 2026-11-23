@@ -62,6 +62,13 @@ class TestSimulateNext24h:
         # Anker fließt konsistent in die SoC-Integration ein.
         assert anch.trajectory_soc[3] > base.trajectory_soc[3]
 
+    def test_battery_anchor_discharge_not_carried_into_pv_surplus(self):
+        # Gemessene Entladung (Lastspitze) bei PV-Überschuss: Die Prognose darf
+        # nicht weiter entladen und dabei den Überschuss einspeisen.
+        anch = _simulate(soc=40.0, cons=1000.0, pv=2500.0, battery_anchor_w=-800.0)
+        assert anch.trajectory_battery_w[0] >= 0
+        assert anch.trajectory_soc[3] >= 40.0
+
     def test_deficit_is_reported_as_negative_grid_to_engine(self):
         # Vorzeichen-Regression: State.grid_power ist + = Einspeisung. Ein
         # Defizit darf nicht als Einspeisung über dem Limit erscheinen.
