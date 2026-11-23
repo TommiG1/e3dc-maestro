@@ -24,8 +24,22 @@ from custom_components.e3dc_maestro.coordinator import (
     _open_cap_ramp_reference_w,
     _ramp_bypass_due_to_resync,
     _ramp_bypass_for_phase,
+    _soc_jump_unconfirmed,
 )
 from custom_components.e3dc_maestro.control_engine import MaestroDecision
+
+
+def test_soc_single_zero_glitch_is_discarded():
+    assert _soc_jump_unconfirmed(0.0, 35.0, 35.0) is True
+
+
+def test_soc_jump_confirmed_on_second_cycle():
+    assert _soc_jump_unconfirmed(0.0, 35.0, 0.0) is False
+
+
+def test_soc_normal_change_passes():
+    assert _soc_jump_unconfirmed(33.0, 35.0, 34.0) is False
+    assert _soc_jump_unconfirmed(35.0, None, None) is False
 
 
 def test_slow_ramp_from_previous_tick_does_not_resend():

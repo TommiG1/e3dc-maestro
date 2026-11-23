@@ -2392,6 +2392,8 @@ def _decide_core(
     # ── 6.75 Astro-Wait: Ladestart-Sperre bis Sonnenaufgang + Offset ────────────────
     # NORMAL + 1 W: blockt Laden, lässt Entladung zur Hausabdeckung zu (sonst würde
     # der Akku nachts unnötig auf 100 % bleiben oder gar Netzbezug verursachen).
+    # Weicht an schwachen PV-Tagen wie das Morning-Cap: ohne Mittagsspitze gibt es
+    # keinen Grund, Platz freizuhalten – der Morgen-Überschuss ginge nur ins Netz.
     gate = eval_gate(
         "6.75.astro_wait",
         term("astro_enabled", params.astro_enabled, op=is_true),
@@ -2403,6 +2405,7 @@ def _decide_core(
             setting_key="charge_target",
         ),
         term("grid_charge_pending", _grid_charge_pending, op=is_false),
+        term("weak_pv_day", _morning_cap_yields, op=is_false),
     )
     trace.record(gate)
     if gate.result:

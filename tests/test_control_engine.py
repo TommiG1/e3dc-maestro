@@ -2135,6 +2135,32 @@ class TestAstroModus:
         d = decide(state, p, _now(6, 21, 4))
         assert d.phase == "emergency"
 
+    def _weak_day_params(self):
+        return self._astro_params(
+            installed_kwp=10.0,
+            low_yield_priority_enabled=True,
+            low_yield_threshold=0.5,
+            low_yield_reference_kwh_per_kwp=5.5,
+        )
+
+    def test_astro_wait_yields_on_weak_pv_day(self):
+        """Weak PV day: astro_wait must not block, morning surplus goes into the battery."""
+        state = MaestroState(
+            soc=50.0, pv_power=3000, house_power=1000, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=15.0,  # 15 / 55 ≈ 0.27 ≤ 0.5
+        )
+        d = decide(state, self._weak_day_params(), _now(6, 21, 4))
+        assert d.phase != PHASE_ASTRO_WAIT
+        assert d.charge_power_limit != 1
+
+    def test_astro_wait_still_blocks_on_sunny_day(self):
+        state = MaestroState(
+            soc=50.0, pv_power=3000, house_power=1000, grid_power=0, battery_power=0,
+            pv_forecast_today_kwh=50.0,  # 50 / 55 ≈ 0.91 > 0.5
+        )
+        d = decide(state, self._weak_day_params(), _now(6, 21, 4))
+        assert d.phase == PHASE_ASTRO_WAIT
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────

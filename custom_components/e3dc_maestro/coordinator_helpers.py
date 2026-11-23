@@ -153,6 +153,24 @@ def _ewma_update(
     return prev + alpha * (new_val - prev)
 
 
+# Even at full power a home battery moves well under 1 %/cycle; a bigger jump
+# is treated as a sensor glitch (e.g. a single SoC 0 via RSCP) until confirmed.
+SOC_MAX_JUMP_PERCENT: float = 10.0
+
+
+def _soc_jump_unconfirmed(
+    raw: float, stable: float | None, prev_raw: float | None
+) -> bool:
+    """True, wenn ein SoC-Sprung > SOC_MAX_JUMP_PERCENT noch unbestätigt ist.
+
+    Bestätigt ist der Sprung, sobald der vorige Rohwert schon in derselben
+    Gegend lag (zwei Takte hintereinander).
+    """
+    if stable is None or abs(raw - stable) <= SOC_MAX_JUMP_PERCENT:
+        return False
+    return prev_raw is None or abs(raw - prev_raw) > SOC_MAX_JUMP_PERCENT
+
+
 
 # How much a power limit must change to trigger a new service call (W)
 POWER_DEBOUNCE_W = 50

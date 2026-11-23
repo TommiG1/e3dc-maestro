@@ -111,6 +111,7 @@ from .coordinator_helpers import (
     _action_history_changed,
     _apply_gentle_charge,
     _build_power_mode_data,
+    _soc_jump_unconfirmed,
     _FULL_POWER_PHASES,
     _effective_discharge_limit_w,
     energy_interval_hours as _energy_interval_hours,
@@ -339,6 +340,7 @@ class E3DCMaestroCoordinator(
 
         # A1: SoC hysteresis – dampened SoC for rule engine
         self._stable_soc: float | None = None
+        self._last_raw_soc: float | None = None
 
         # A2: Charge-power ramp – last ramped target (internal, not RSCP)
         self._last_applied_charge_power: int = 0
@@ -736,6 +738,16 @@ class E3DCMaestroCoordinator(
 
         # C1: Append house power to rolling window for autonomy calculation
         self._house_power_window.append(state_data.house_power)
+
+        _raw_soc = state_data.soc
+        _prev_raw_soc = self._last_raw_soc
+        self._last_raw_soc = _raw_soc
+        if _soc_jump_unconfirmed(_raw_soc, self._stable_soc, _prev_raw_soc):
+            self._log(
+                f"SoC-Sprung {self._stable_soc:.0f}% → {_raw_soc:.0f}% verworfen "
+                f"(unbestätigt, vermutlich Sensor-Aussetzer)"
+            )
+            state_data = dataclasses.replace(state_data, soc=self._stable_soc)
 
         # A1: SoC hysteresis – only update _stable_soc when change exceeds dead-band
         hysteresis = self._params.soc_hysteresis_percent
