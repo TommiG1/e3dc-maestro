@@ -1023,8 +1023,12 @@ class MaestroPanel extends LitElement {
     if (this._screen === "decision") await run("timeline", async () => void (this._timeline = await loadTimeline(hass)));
     if (this._screen === "wallbox") {
       await run("wallbox", async () => {
-        const [series, days] = await Promise.all([loadPowerSeriesMany(hass, [E.pv, E.house, E.wallboxPower]), loadWallboxDays(hass)]);
-        this._wallboxHist = { surplus: surplusPoints(series[E.pv] ?? [], series[E.house] ?? []), power: series[E.wallboxPower] ?? [], days };
+        const [series, days] = await Promise.all([loadPowerSeriesMany(hass, [E.pv, E.house, E.battery, E.wallboxPower]), loadWallboxDays(hass)]);
+        this._wallboxHist = {
+          surplus: surplusPoints(series[E.pv] ?? [], series[E.house] ?? [], series[E.battery] ?? []),
+          power: series[E.wallboxPower] ?? [],
+          days,
+        };
       });
     }
     await this._loadPhaseHistory();

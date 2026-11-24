@@ -888,7 +888,7 @@ export function wallboxDayOptions(input: { surplus: Point[]; wallbox: Point[]; s
       { name: names[1], type: "line", data: toKw(wallbox) },
     ],
     colors: [COLORS.pv, WALLBOX_COLOR],
-    stroke: { width: [1.5, 2.5], curve: "smooth" },
+    stroke: { width: [1.5, 2.5], curve: "stepline" },
     fill: { type: ["gradient", "solid"], gradient: { opacityFrom: 0.3, opacityTo: 0.03 } },
     legend: { show: true, position: "top", horizontalAlign: "left" },
     annotations:

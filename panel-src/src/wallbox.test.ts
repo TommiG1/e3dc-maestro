@@ -106,6 +106,13 @@ describe("surplusPoints", () => {
     expect(surplusPoints(pv, house)).toEqual([[5, 2500], [10, 500]]);
     expect(surplusPoints([[0, 200]], [[0, 900]])).toEqual([[0, 0]]);
   });
+
+  it("subtracts battery charging but not discharging, like the control loop", () => {
+    const pv: [number, number][] = [[0, 4500], [20, 4500]];
+    const house: [number, number][] = [[0, 2300]];
+    const battery: [number, number][] = [[0, 1900], [10, -500]];
+    expect(surplusPoints(pv, house, battery)).toEqual([[0, 300], [10, 2200], [20, 2200]]);
+  });
 });
 
 describe("energyPeriodSums", () => {

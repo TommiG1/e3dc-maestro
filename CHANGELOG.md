@@ -9,7 +9,12 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
-_(nichts offen)_
+### Geändert
+- **Wallbox-Tab: Lademodus als Knöpfe.** Solar, Solar + Netz, Sofort und Aus stehen nebeneinander, der aktive Modus ist hervorgehoben. Das Dropdown entfällt (Discussion #57).
+
+### Behoben
+- **Wallbox-Diagramm zeigt den Überschuss, mit dem Maestro regelt.** Die Fläche ist jetzt PV minus Haus minus Akkuladung. Bisher zählte die Akkuladung als Überschuss, obwohl die Wallbox davon nichts bekam (Discussion #57).
+- **Wallbox-Leistung als Stufenlinie.** Die geglättete Kurve zeigte lange Rampen, wo die Wallbox in Wirklichkeit stundenlang aus war (Discussion #57).
 
 ---
 

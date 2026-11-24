@@ -110,18 +110,21 @@ export function parseWallboxStatus(attrs: Record<string, unknown> | undefined): 
   };
 }
 
-/** PV surplus over the house load (W, never negative), holding each series' last value between samples. */
-export function surplusPoints(pv: readonly Point[], house: readonly Point[]): Point[] {
-  const times = [...new Set([...pv.map((p) => p[0]), ...house.map((p) => p[0])])].sort((a, b) => a - b);
+/** Wallbox surplus like the control loop: PV − house − battery charge (W, never negative), holding each series' last value between samples. */
+export function surplusPoints(pv: readonly Point[], house: readonly Point[], battery: readonly Point[] = []): Point[] {
+  const times = [...new Set([...pv, ...house, ...battery].map((p) => p[0]))].sort((a, b) => a - b);
   const out: Point[] = [];
   let i = 0;
   let j = 0;
+  let k = 0;
   let pvNow: number | undefined;
   let houseNow: number | undefined;
+  let batNow = 0;
   for (const ts of times) {
     while (i < pv.length && pv[i]![0] <= ts) pvNow = pv[i++]![1];
     while (j < house.length && house[j]![0] <= ts) houseNow = house[j++]![1];
-    if (pvNow !== undefined && houseNow !== undefined) out.push([ts, Math.max(0, pvNow - houseNow)]);
+    while (k < battery.length && battery[k]![0] <= ts) batNow = battery[k++]![1];
+    if (pvNow !== undefined && houseNow !== undefined) out.push([ts, Math.max(0, pvNow - houseNow - Math.max(0, batNow))]);
   }
   return out;
 }
@@ -348,14 +351,18 @@ export function wallboxView(c: Ctx): TemplateResult {
     ${modeId && modeEntity
       ? html`<div class="ctrl setting-row stack">
           <div class="txt"><span class="name"><b>${t("wbSwChargeMode")}</b></span><span>${t("wbSwChargeModeHint")}</span></div>
-          <select
-            .value=${modeEntity.state ?? ""}
-            aria-label=${t("wbSwChargeMode")}
-            ?disabled=${modeEntity.state === "unavailable" || !modeOptions.length || c.pending.has(modeId)}
-            @change=${(e: Event) => c.onSelect(modeId, (e.target as HTMLSelectElement).value)}
-          >
-            ${modeOptions.map((option) => html`<option value=${option} ?selected=${option === modeEntity.state}>${c.i18n.option(option)}</option>`)}
-          </select>
+          <div class="seg wb-modes" role="group" aria-label=${t("wbSwChargeMode")}>
+            ${modeOptions.map((option) => {
+              const active = option === modeEntity.state;
+              return html`<button
+                type="button"
+                class=${active ? "on" : ""}
+                aria-pressed=${active}
+                ?disabled=${modeEntity.state === "unavailable" || c.pending.has(modeId)}
+                @click=${() => active || c.onSelect(modeId, option)}
+              >${c.i18n.option(option)}</button>`;
+            })}
+          </div>
         </div>`
       : nothing}
     ${showPrice ? numberRow(c, S.wallbox_max_price, "wbSwMaxPrice", "wbSwMaxPriceHint", "€/kWh", { min: 0, max: 1, step: 0.005 }) : nothing}
