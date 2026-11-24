@@ -9,6 +9,14 @@ einen eigenen Versionsabschnitt verschieben.
 
 ## [Unreleased]
 
+_(nichts offen)_
+
+---
+
+## [0.6.0-rc.4] – Wallbox-Diagramm und Lademodus-Knöpfe (2026-11-24)
+
+Vierter Release Candidate für 0.6.0 mit Panel-Korrekturen aus Discussion #57. Ausführlich: [docs/release-notes/v0.6.0-rc.4.md](docs/release-notes/v0.6.0-rc.4.md).
+
 ### Geändert
 - **Wallbox-Tab: Lademodus als Knöpfe.** Solar, Solar + Netz, Sofort und Aus stehen nebeneinander, der aktive Modus ist hervorgehoben. Das Dropdown entfällt (Discussion #57).
 
