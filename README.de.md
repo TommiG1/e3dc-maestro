@@ -51,6 +51,7 @@
 | **Entscheidung erklären** | Warum gerade diese Phase aktiv ist |
 | **Schnellsteuerung** | Reserve, Pause, Overrides direkt im Panel |
 | **Lokal** | Priorisierte Phasen, Abregelschutz, Wallbox- und WP-Logik |
+| **Wallbox** | Eigener Tab mit Lademodi (Solar, Solar + Netz, Sofort, Aus), Überschuss-Diagramm, Vorrang vor dem Hausakku, Netzschutz, Verlauf und Energiebilanz sowie empfohlenen Einstellungen je Wallbox-Typ |
 
 ---
 

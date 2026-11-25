@@ -51,6 +51,7 @@
 | **Decision explained** | Why this rule phase is active |
 | **Quick controls** | Reserve, pause, overrides in the panel |
 | **Local** | Prioritised phases, curtailment guard, wallbox & heat-pump logic |
+| **Wallbox** | Own tab with charging modes (Solar, Solar + grid, Now, Off), surplus chart, priority over the home battery, grid guard, history and energy totals, plus recommended settings per wallbox type |
 
 ---
 
