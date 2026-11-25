@@ -13,6 +13,28 @@ _(nichts offen)_
 
 ---
 
+## [0.6.0] – Wallbox, Modul 3 und Preisplan (2026-11-25)
+
+Stabiles Release nach 0.5.8. Enthält 0.5.9-beta.1 bis beta.13 und 0.6.0-rc.1 bis rc.4. Fortlaufende Notes: [docs/release-notes/v0.6.0.md](docs/release-notes/v0.6.0.md).
+
+### Neu
+- **Wallbox-Tab** mit Lademodi (Solar, Solar + Netz, Sofort, Aus), Knöpfen, Überschuss-Diagramm, Vorrang, Netzschutz, empfohlenen Einstellungen und Verlauf.
+- **Modul 3 nach Quartalen**, optional eigene Zeiten und Preise pro Quartal, Tarif-Slots live daraus.
+- **Preisplan für feste Tarife** mit Modul 3 (Festpreis plus Netzentgelte).
+- **Tagesrampe aus**, Phasenzahl zur Laufzeit, „Akku darf Auto mitversorgen“, Sofort nach Abstecken zurücksetzen.
+
+### Behoben
+- **Wallbox-Stopp** prüft echte Leistung und Ladestatus; kein Start ohne Auto; Akku bleibt beim Haus bis zum Stopp.
+- **Preisplan hält** zwischen Ladeslots; Entladesperre blockiert geplante Netzladung nicht mehr.
+- **SoC-Aussetzer** lösen keine Notladung; Astro weicht an schwachen PV-Tagen; Prognose ohne falsche Einspeisung.
+- **Wallbox-Diagramm** zeigt den Regel-Überschuss; Leistung als Stufenlinie.
+
+### Hinweise
+- Hilfe und Handbuch sind für die Serie vervollständigt.
+- Wer Modul 3 nutzt: Quartale, Zeiten und Preise prüfen. Wer den Preisplan mit festem Tarif fährt: Strategie „Dynamisch“ und „Preisplan steuert Akku“.
+
+---
+
 ## [0.6.0-rc.4] – Wallbox-Diagramm und Lademodus-Knöpfe (2026-11-24)
 
 Vierter Release Candidate für 0.6.0 mit Panel-Korrekturen aus Discussion #57. Ausführlich: [docs/release-notes/v0.6.0-rc.4.md](docs/release-notes/v0.6.0-rc.4.md).
