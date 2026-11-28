@@ -30,6 +30,18 @@ MARKET_ZONES = (
 # Freie Pläne decken 2 Tage; Pro bis 6 – genug Spielraum hinter Tibber.
 MAX_HORIZON_HOURS = 96.0
 _GAP_TOLERANCE_S = 90.0
+# EPEX-Day-Ahead für morgen erscheint gegen 12:45 (Auktion 12:00 CET).
+DAY_AHEAD_PUBLISHED_AT = _dt.time(12, 45)
+
+
+def day_ahead_known_until(now: _dt.datetime) -> _dt.datetime:
+    """Spätestes Ende echter Börsenpreise: vor der Auktion heute 24:00, danach morgen 24:00.
+
+    Liefert der Preis-Sensor mehr (z. B. EPEX-Spot mit Quelle Energyforecast),
+    ist der Rest Prognose, auch wenn der Sensor das nicht kennzeichnet.
+    """
+    days = 1 if now.time() < DAY_AHEAD_PUBLISHED_AT else 2
+    return (now + _dt.timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def slots_from_payload(payload: Any) -> list[PriceSlot]:

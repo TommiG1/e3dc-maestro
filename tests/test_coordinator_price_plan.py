@@ -94,6 +94,22 @@ def test_plan_computed_and_cached():
     assert c.price_plan is snap
 
 
+def test_tomorrow_before_auction_is_marked_forecast():
+    """EPEX-Spot mit Quelle Energyforecast liefert morgen schon vormittags, ohne Kennzeichnung."""
+    attrs = {"raw_today": _raw(9, [0.30] * 24), "raw_tomorrow": _raw(10, [0.25] * 24)}
+    morning = dt.datetime(2026, 10, 9, 10, 0, tzinfo=TZ)
+    c = _Fake(attrs=attrs)
+    asyncio.run(_update(c, morning))
+    snap = c.price_plan
+    assert snap.provider_until == dt.datetime(2026, 10, 10, 0, 0, tzinfo=TZ)
+    assert all(r["forecast"] == r["start"].startswith("2026-10-10") for r in snap.rows)
+
+    c2 = _Fake(attrs=attrs)
+    asyncio.run(_update(c2))
+    assert c2.price_plan.provider_until is None
+    assert not any(r["forecast"] for r in c2.price_plan.rows)
+
+
 def test_disabling_clears_plan():
     c = _Fake(attrs={"raw_today": _raw(9, [0.3] * 24)})
     asyncio.run(_update(c))

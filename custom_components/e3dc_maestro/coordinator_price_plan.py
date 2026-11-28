@@ -14,7 +14,7 @@ from .const import (
     CONF_PRICE_SENSOR,
     DEFAULT_ENERGYFORECAST_MARKET_ZONE,
 )
-from .energyforecast import API_URL, extend_horizon, slots_from_payload
+from .energyforecast import API_URL, day_ahead_known_until, extend_horizon, slots_from_payload
 from .grid_charge_strategy import plan_tuning
 from .control_engine import PricePlanAction, reserve_floor_soc as _reserve_floor_soc
 from .modul3 import add_modul3_to_horizon, fixed_price_horizon, parse_modul3_profile
@@ -138,10 +138,15 @@ class CoordinatorPricePlanMixin:
                 horizon = read_price_horizon(tibber_attrs, now)
         if horizon is None:
             return None
+        provider_end = horizon.known_until
+        provider_until = None
         forecast = await self._async_energyforecast_slots(now)
         if forecast:
             horizon, provider_until = extend_horizon(horizon, forecast, now)
-            self._price_provider_until = provider_until
+        cutoff = day_ahead_known_until(now)
+        if provider_end > cutoff:
+            provider_until = cutoff
+        self._price_provider_until = provider_until
         # §14a Modul 3: Netzentgelt-Schicht auf die fertige Kurve (inkl. Forecast).
         modul3 = parse_modul3_profile(self.entry.options)
         return add_modul3_to_horizon(horizon, modul3, now)

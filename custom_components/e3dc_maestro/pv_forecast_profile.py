@@ -1,4 +1,4 @@
-"""Pure PV forecast profile extraction (Solcast / Forecast.Solar).
+"""Pure PV forecast profile extraction (Solcast / Forecast.Solar / Helios).
 
 Kept free of Home Assistant imports so unit tests can cover timezone and
 attribute-shape edge cases without stubs.
@@ -106,14 +106,17 @@ def extract_pv_profile(
             if not ignore_date and period_calendar_date(ts) != target_date:
                 continue
             utc_hour, utc_minute = to_utc_slot(ts)
-            val = (
-                item.get("pv_estimate")
-                or item.get("value")
-                or item.get("pv_estimate90")
-                or 0.0
-            )
             try:
-                val_w = float(val) * 1000.0  # kW → W
+                if "watts" in item:  # Helios Forecast: W
+                    val_w = float(item["watts"] or 0.0)
+                else:
+                    val = (
+                        item.get("pv_estimate")
+                        or item.get("value")
+                        or item.get("pv_estimate90")
+                        or 0.0
+                    )
+                    val_w = float(val) * 1000.0  # kW → W
             except (TypeError, ValueError):
                 continue
             slot = utc_hour * 2 + (1 if utc_minute >= 30 else 0)

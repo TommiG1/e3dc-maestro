@@ -2,7 +2,7 @@
 
 The allow-list mirrors the config-flow schemas. Live parameters (fields on
 ``MaestroParams``) go through ``update_param`` and do not reload. Soft options
-(price sensor, Energyforecast, Modul 3, tariff slots) live only on the config
+(price sensor, Energyforecast, Modul 3, tariff slots, PV forecast sensors) live only on the config
 entry and are written without a reload — a full reload drops the cockpit
 websocket mid-click. Entity wiring still reloads the integration.
 """
@@ -257,6 +257,11 @@ _SOFT_OPTIONS = frozenset({
     "modul3_tariff_slots",
     "modul3_slots_migrated",
     "tariff_slots",
+    "pv_forecast_sensor",
+    "pv_forecast_today_sensor",
+    "tomorrow_pv_sensor",
+    "pv_forecast_sensor_day2",
+    "pv_forecast_sensor_day3",
 })
 _CONSUMER_ICONS = frozenset({"wallbox", "heater", "climate", "heatpump", "meter"})
 _CONSUMER_ENTITY = re.compile(r"wallbox|evcc|easee|go-?e", re.IGNORECASE)
@@ -558,6 +563,12 @@ def apply_panel_options(hass: HomeAssistant, values: dict[str, Any]) -> dict[str
         if any(key.startswith("modul3_") for key in soft):
             soft = {**soft, "modul3_apply_vat": None}
         _store_options(hass, entry, coordinator, soft, reload=False)
+        if coordinator is not None and any(key.startswith(("pv_forecast", "tomorrow_pv")) for key in soft):
+            coordinator._forecast_fingerprint = None
+            # The weak-day latch only moves down within a day; a new
+            # day-forecast sensor must be able to set it fresh.
+            if "pv_forecast_today_sensor" in soft:
+                coordinator._low_yield_latch_date = None
         # Slot list and Modul 3 (live slots, quarters) feed the schedule the
         # engine uses this tick; a stale copy would keep charging in old
         # windows. The optimizer override is a separate params copy.

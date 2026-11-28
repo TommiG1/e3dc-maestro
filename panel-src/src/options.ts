@@ -275,8 +275,8 @@ const labels: Record<string, { de: string; en: string }> = {
   pv_forecast_today_sensor: { de: "Tagesprognose", en: "Today's forecast" },
   tomorrow_pv_sensor: { de: "Prognose morgen (Tagessumme)", en: "Tomorrow's forecast (daily total)" },
   pv_forecast_sensor_day2: {
-    de: "Prognose morgen (Stundenprofil), optional, bei Solcast leer lassen",
-    en: "Tomorrow's forecast (hourly profile), optional, leave empty for Solcast",
+    de: "Stundenprofil (morgen, bei mehrtägiger Kurve auch heute), optional, bei Solcast leer lassen",
+    en: "Hourly profile (tomorrow, also today for multi-day curves), optional, leave empty for Solcast",
   },
   pv_forecast_sensor_day3: {
     de: "Prognose übermorgen (Stundenprofil), optional, nur Anzeige",

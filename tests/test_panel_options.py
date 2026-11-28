@@ -133,6 +133,37 @@ def test_modul3_zones_and_price_sensor_are_soft_options():
     assert entry.options["modul3_zones"]["nt"]["price_ct_kwh"] == 2.0
 
 
+def test_pv_forecast_sensors_are_soft_options_and_reset_the_weak_day_latch():
+    params = SimpleNamespace()
+    hass, entry, written, _ = _hass(
+        {"pv_forecast_sensor": "sensor.old"},
+        {"sensor.rest", "sensor.today", "sensor.helios"},
+        params,
+    )
+    coordinator = hass.data[DOMAIN]["e1"]
+    coordinator._low_yield_latch_date = "2026-11-28"
+    coordinator._forecast_fingerprint = ("old",)
+    result = apply_panel_options(
+        hass,
+        {
+            "pv_forecast_sensor": "sensor.rest",
+            "pv_forecast_today_sensor": "sensor.today",
+            "pv_forecast_sensor_day2": "sensor.helios",
+            "pv_forecast_sensor_day3": None,
+        },
+    )
+    assert result["reloaded"] is False
+    assert written == []
+    assert entry.options["pv_forecast_sensor"] == "sensor.rest"
+    assert entry.options["pv_forecast_sensor_day2"] == "sensor.helios"
+    assert coordinator._low_yield_latch_date is None
+    assert coordinator._forecast_fingerprint is None
+
+    cleared = apply_panel_options(hass, {"pv_forecast_sensor": None})
+    assert cleared["reloaded"] is False
+    assert "pv_forecast_sensor" not in entry.options
+
+
 def test_modul3_quarters_and_tariff_slots_are_soft_options():
     params = SimpleNamespace(tariff_schedule=None)
     hass, entry, written, _ = _hass({}, set(), params)

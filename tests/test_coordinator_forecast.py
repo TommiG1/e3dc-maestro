@@ -84,6 +84,62 @@ class TestIgnoreDateGuard:
         assert max(d1_only) == 1000.0
 
 
+class TestHeliosForecast:
+    @staticmethod
+    def _quarter_days(*days_watts: tuple[date, float]) -> list[dict]:
+        cet = timezone(timedelta(hours=1))
+        items = []
+        for day, watts in days_watts:
+            for q in range(96):
+                ts = datetime(day.year, day.month, day.day, tzinfo=cet) + timedelta(minutes=15 * q)
+                w = watts if 40 <= q < 64 else 0  # 10:00–16:00 local
+                items.append({"datetime": ts.isoformat(), "watts": w, "p10": None, "p90": None})
+        return items
+
+    def test_watts_are_read_as_watts_per_day(self):
+        d1, d2 = date(2026, 11, 28), date(2026, 11, 29)
+        attrs = {"forecast": self._quarter_days((d1, 1500.0), (d2, 3000.0))}
+        today = extract_pv_profile(attrs, target_date=d1)
+        tomorrow = extract_pv_profile(attrs, target_date=d2)
+        assert today is not None and len(today) == 48
+        assert max(today) == 1500.0
+        assert tomorrow is not None and max(tomorrow) == 3000.0
+        # 10:00 CET = 09:00 UTC → half-hour slot 18
+        assert today[17] == 0.0 and today[18] == 1500.0
+
+    def test_profile_field_also_serves_today(self):
+        from types import SimpleNamespace
+
+        from custom_components.e3dc_maestro.coordinator_forecast import CoordinatorForecastMixin
+
+        d1, d2 = date(2026, 11, 28), date(2026, 11, 29)
+        helios = SimpleNamespace(
+            state="1576.7",
+            attributes={"forecast": self._quarter_days((d1, 1500.0), (d2, 3000.0))},
+        )
+        day_total = SimpleNamespace(state="6.2", attributes={})
+        states = {"sensor.helios_power_now": helios, "sensor.helios_day_1": day_total}
+        fake = SimpleNamespace(
+            entry=SimpleNamespace(options={
+                "pv_forecast_today_sensor": "sensor.helios_day_1",
+                "pv_forecast_sensor_day2": "sensor.helios_power_now",
+            }),
+            hass=SimpleNamespace(states=SimpleNamespace(get=states.get)),
+            _pv_profile_sensor_ids={},
+        )
+        now = datetime(2026, 11, 28, 9, 0, tzinfo=timezone(timedelta(hours=1)))
+        today = CoordinatorForecastMixin._read_pv_forecast_profile(fake, now, 0, ignore_enabled=True)
+        tomorrow = CoordinatorForecastMixin._read_pv_forecast_profile(fake, now, 1, ignore_enabled=True)
+        assert today is not None and max(today) == 1500.0
+        assert tomorrow is not None and max(tomorrow) == 3000.0
+        assert fake._pv_profile_sensor_ids == {0: "sensor.helios_power_now", 1: "sensor.helios_power_now"}
+
+    def test_all_zero_watts_is_no_profile(self):
+        d1 = date(2026, 11, 28)
+        attrs = {"forecast": self._quarter_days((d1, 0.0))}
+        assert extract_pv_profile(attrs, target_date=d1) is None
+
+
 class TestHourlyShapes:
     def test_plain_24_list(self):
         attrs = {"hourly_wh": [float(i * 100) for i in range(24)]}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 from custom_components.e3dc_maestro.energyforecast import (
+    day_ahead_known_until,
     extend_horizon,
     slots_from_payload,
 )
@@ -16,6 +17,16 @@ NOW = dt.datetime(2026, 10, 22, 12, 0, tzinfo=TZ)
 def _slot(hour: int, price: float, day: int = 22) -> PriceSlot:
     start = dt.datetime(2026, 10, day, hour, tzinfo=TZ)
     return PriceSlot(start=start, end=start + dt.timedelta(hours=1), price=price)
+
+
+class TestDayAheadKnownUntil:
+    def test_before_auction_only_today_is_real(self):
+        now = dt.datetime(2026, 11, 28, 12, 27, tzinfo=TZ)
+        assert day_ahead_known_until(now) == dt.datetime(2026, 11, 29, 0, 0, tzinfo=TZ)
+
+    def test_after_publication_tomorrow_is_real(self):
+        now = dt.datetime(2026, 11, 28, 12, 45, tzinfo=TZ)
+        assert day_ahead_known_until(now) == dt.datetime(2026, 11, 30, 0, 0, tzinfo=TZ)
 
 
 class TestSlotsFromPayload:

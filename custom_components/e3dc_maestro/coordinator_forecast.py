@@ -405,9 +405,13 @@ class CoordinatorForecastMixin:
                 opts.get(CONF_PV_FORECAST_SENSOR),
             ]
         else:
+            # The hourly-profile sensor last: multi-day curves (Helios
+            # power_now) carry today too; Solcast day-2 sensors miss the
+            # date filter and are skipped.
             candidate_ids = [
                 opts.get(CONF_PV_FORECAST_TODAY_SENSOR),
                 opts.get(CONF_PV_FORECAST_SENSOR),
+                opts.get(CONF_PV_FORECAST_SENSOR_DAY2),
             ]
 
         seen: set[str] = set()
