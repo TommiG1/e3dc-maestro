@@ -13,6 +13,17 @@ _(nichts offen)_
 
 ---
 
+## [0.6.1-beta.1] – Prognose-Sensoren, Helios und Preisprognose (2026-11-28)
+
+Beta nach 0.6.0 mit drei Korrekturen aus Discussion #50. Ausführlich: [docs/release-notes/v0.6.1-beta.1.md](docs/release-notes/v0.6.1-beta.1.md).
+
+### Behoben
+- **PV-Prognose-Sensoren** speichern ohne Neuladen der Integration.
+- **Helios Forecast** liefert Stundenprofile über `watts` im Feld Stundenprofil.
+- **Preise für morgen vor 12:45 Uhr** erscheinen blass als Prognose.
+
+---
+
 ## [0.6.0] – Wallbox, Modul 3 und Preisplan (2026-11-25)
 
 Stabiles Release nach 0.5.8. Enthält 0.5.9-beta.1 bis beta.13 und 0.6.0-rc.1 bis rc.4. Fortlaufende Notes: [docs/release-notes/v0.6.0.md](docs/release-notes/v0.6.0.md).
