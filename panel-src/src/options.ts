@@ -351,6 +351,17 @@ export function entityChoices(ids: readonly string[], domains: readonly string[]
   return out;
 }
 
+/**
+ * What a typed value in an entity field may do on blur. A half-typed search
+ * text must never be saved: a click on a suggestion blurs the input first and
+ * would otherwise send the fragment to the backend (unknown_entity).
+ */
+export function entityInputAction(raw: string, exists: (id: string) => boolean): { kind: "clear" } | { kind: "set"; id: string } | { kind: "ignore" } {
+  const id = raw.trim();
+  if (!id) return { kind: "clear" };
+  return exists(id) ? { kind: "set", id } : { kind: "ignore" };
+}
+
 export function slotsFrom(value: unknown): Slot[] {
   if (!Array.isArray(value)) return [];
   const slots: Slot[] = [];

@@ -1923,7 +1923,10 @@ class MaestroPanel extends LitElement {
       if (value === null) delete next[key];
       else next[key] = value;
       this._storedOptions = next;
-      if (!quiet) this._optionNotice = res.reloaded ? "reload" : "saved";
+      if (!quiet) {
+        this._optionNotice = res.reloaded ? "reload" : "saved";
+        this._optionError = undefined;
+      }
       if (key === "tariff_slots") this._slotsDirty = false;
       if (key === "modul3_zones") this._modul3Dirty = false;
       if (res.reloaded) {
@@ -1932,6 +1935,7 @@ class MaestroPanel extends LitElement {
       }
     } catch (err) {
       this._optionError = this._fault(err);
+      this._optionNotice = undefined;
     } finally {
       this._pending.delete(key);
       this.requestUpdate();

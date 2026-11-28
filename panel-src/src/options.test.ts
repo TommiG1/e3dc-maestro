@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { actionTo, entityChoices, selectValue, slotsFrom } from "./options";
+import { actionTo, entityChoices, entityInputAction, selectValue, slotsFrom } from "./options";
+
+describe("entityInputAction", () => {
+  const exists = (id: string) => id === "sensor.helios_forecast_power_now";
+
+  it("never saves a half-typed search text", () => {
+    expect(entityInputAction("helios", exists)).toEqual({ kind: "ignore" });
+    expect(entityInputAction("sensor.helios_forecast_power", exists)).toEqual({ kind: "ignore" });
+  });
+
+  it("saves a pasted id that exists and clears an empty field", () => {
+    expect(entityInputAction(" sensor.helios_forecast_power_now ", exists)).toEqual({
+      kind: "set",
+      id: "sensor.helios_forecast_power_now",
+    });
+    expect(entityInputAction("  ", exists)).toEqual({ kind: "clear" });
+  });
+});
 
 describe("entityChoices", () => {
   const ids = ["sensor.soc", "sensor.price", "switch.pump", "binary_sensor.car"];

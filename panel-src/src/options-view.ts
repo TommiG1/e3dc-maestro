@@ -12,6 +12,7 @@ import {
   blocksFor,
   emptySlot,
   entityChoices,
+  entityInputAction,
   fieldLabel,
   modul3HasOwnPrices,
   modul3HasOwnWindows,
@@ -137,14 +138,16 @@ function entityField(c: OptionCtx, field: OptionField, label: string, multiple: 
       ?disabled=${!c.isAdmin}
       @input=${(e: Event) => c.onQuery(field.key, (e.target as HTMLInputElement).value)}
       @change=${(e: Event) => {
-        const value = (e.target as HTMLInputElement).value.trim();
+        const action = entityInputAction((e.target as HTMLInputElement).value, (id) => id in c.hass.states);
         if (multiple) {
-          if (value && !selected.includes(value)) c.onChange(field.key, [...selected, value]);
-          c.onQuery(field.key, "");
+          if (action.kind === "set" && !selected.includes(action.id)) {
+            c.onChange(field.key, [...selected, action.id]);
+            c.onQuery(field.key, "");
+          }
           return;
         }
-        if (!value && field.required) return;
-        c.onChange(field.key, value || null);
+        if (action.kind === "set") c.onChange(field.key, action.id);
+        else if (action.kind === "clear" && !field.required && single) c.onChange(field.key, null);
       }}
     />
     ${choices.length
