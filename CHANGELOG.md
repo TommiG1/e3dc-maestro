@@ -13,6 +13,17 @@ _(nichts offen)_
 
 ---
 
+## [0.6.1-beta.2] – Entity-Felder und Wallbox-Hinweis (2026-11-28)
+
+Beta nach 0.6.1-beta.1 mit zwei Korrekturen aus Discussion #50. Ausführlich: [docs/release-notes/v0.6.1-beta.2.md](docs/release-notes/v0.6.1-beta.2.md).
+
+### Behoben
+- **Entity-Felder** speichern keinen halb getippten Suchtext mehr; kein roter `unknown_entity`-Text beim Anklicken eines Vorschlags.
+- **Meldungen** „Gespeichert“ und Fehler stehen nicht mehr gleichzeitig da.
+- **Wallbox-Hinweis** nennt den E3DC-Schalter „Ladepriorität“.
+
+---
+
 ## [0.6.1-beta.1] – Prognose-Sensoren, Helios und Preisprognose (2026-11-28)
 
 Beta nach 0.6.0 mit drei Korrekturen aus Discussion #50. Ausführlich: [docs/release-notes/v0.6.1-beta.1.md](docs/release-notes/v0.6.1-beta.1.md).
